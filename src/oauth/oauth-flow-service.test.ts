@@ -7,6 +7,7 @@ import type { IOAuthStateStore, OAuthAuthorizationState } from "./oauth-flow-ser
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCatalogStore } from "../catalog-store.ts";
 import { ConnectionService } from "../connection-service.ts";
+import { provider as githubProvider } from "../providers/github/definition.ts";
 import { OAuthClientConfigService } from "./oauth-client-config-service.ts";
 import { OAuthFlowService } from "./oauth-flow-service.ts";
 
@@ -197,6 +198,19 @@ describe("OAuthFlowService", () => {
       service: "example",
       connectionName: "work",
     });
+  });
+
+  it("asks GitHub to show the account picker for every authorization", async () => {
+    const services = createServices([{ ...githubProvider, actions: [] }]);
+    await services.clientConfigs.upsertConfig({
+      service: "github",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+    });
+
+    const started = await services.flow.startAuthorization({ service: "github" });
+
+    expect(new URL(started.authorizationUrl).searchParams.get("prompt")).toBe("select_account");
   });
 
   it("requires OAuth client config before authorization", async () => {

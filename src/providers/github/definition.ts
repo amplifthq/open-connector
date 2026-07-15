@@ -21,6 +21,9 @@ export const provider: ProviderDefinition = {
       type: "oauth2",
       authorizationUrl: "https://github.com/login/oauth/authorize",
       tokenUrl: "https://github.com/login/oauth/access_token",
+      authorizationParams: {
+        prompt: "select_account",
+      },
       scopes: githubOAuthScopes,
       tokenEndpointAuthMethod: "client_secret_post",
     },
