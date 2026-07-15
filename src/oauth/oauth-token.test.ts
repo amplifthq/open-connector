@@ -5,7 +5,7 @@ const authorizationCodeRequest = {
   clientId: "client-id",
   clientSecret: "client-secret",
   code: "authorization-code",
-  createError: (message: string) => new Error(message),
+  createError: (message: string, cause?: unknown) => new Error(message, cause === undefined ? undefined : { cause }),
   redirectUri: "https://runtime.example.com/oauth/callback",
   tokenEndpointAuthMethod: "client_secret_post" as const,
   tokenUrl: "https://provider.example.com/oauth/token",
@@ -22,9 +22,10 @@ describe("OAuth token requests", () => {
     });
     vi.stubGlobal("fetch", fetcher);
 
-    await expect(requestAuthorizationCodeToken({ ...authorizationCodeRequest })).rejects.toThrow(
-      "OAuth token request failed.",
-    );
+    const request = requestAuthorizationCodeToken({ ...authorizationCodeRequest });
+
+    await expect(request).rejects.toThrow("OAuth token request failed.");
+    await expect(request).rejects.toHaveProperty("cause", expect.any(Error));
 
     expect(fetcher).toHaveBeenCalledOnce();
     const init = fetcher.mock.calls[0]?.[1];

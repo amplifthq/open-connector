@@ -34,7 +34,7 @@ interface TokenRequest extends OAuthTokenRequestOptions {
   createError: OAuthTokenErrorFactory;
 }
 
-export type OAuthTokenErrorFactory = (message: string) => Error;
+export type OAuthTokenErrorFactory = (message: string, cause?: unknown) => Error;
 
 export async function requestAuthorizationCodeToken(
   input: AuthorizationCodeTokenRequest,
@@ -101,6 +101,7 @@ async function requestToken(input: TokenRequest): Promise<Extract<ResolvedCreden
       error instanceof Error && error.name === "TimeoutError"
         ? "OAuth token request timed out."
         : "OAuth token request failed.",
+      error,
     );
   }
   const rawPayload = await readTokenPayload(response, input.createError);

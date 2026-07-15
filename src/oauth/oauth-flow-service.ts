@@ -140,7 +140,7 @@ export class OAuthFlowService {
       tokenRequestFormat: auth.tokenRequestFormat,
       tokenUrl: this.clientConfigs.resolveEndpointUrl(pending.service, auth.tokenUrl, config),
       extraFields: createTokenExtraFields(pending),
-      createError: (message) => new OAuthFlowError("oauth_token_exchange_failed", message),
+      createError: (message, cause) => new OAuthFlowError("oauth_token_exchange_failed", message, cause),
     });
     const oauthCredential = {
       ...tokenResponse,
@@ -204,8 +204,8 @@ function encodeBase64Url(value: Uint8Array): string {
 export class OAuthFlowError extends Error {
   readonly code: string;
 
-  constructor(code: string, message: string) {
-    super(message);
+  constructor(code: string, message: string, cause?: unknown) {
+    super(message, cause === undefined ? undefined : { cause });
     this.code = code;
   }
 }

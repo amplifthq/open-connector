@@ -860,6 +860,7 @@ export class ConnectServer {
         this.options.logger?.warn(
           {
             ...logContext,
+            err: error,
             errorCode: error.code,
           },
           "oauth callback failed",
