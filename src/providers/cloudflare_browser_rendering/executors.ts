@@ -95,7 +95,7 @@ export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const apiToken = input.apiKey;
     const accountId = requireAccountId(input.values);
-    const validationEndpoint = `/accounts/${encodeURIComponent(accountId)}/tokens/verify`;
+    const validationEndpoint = "/user/tokens/verify";
     const envelope = await cloudflareRequestEnvelope(
       apiToken,
       {
