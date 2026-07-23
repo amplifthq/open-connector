@@ -37,6 +37,8 @@ describe("GitHub App authentication", () => {
         Response.json({
           id: 987,
           account: {
+            avatar_url: "https://avatars.githubusercontent.com/u/42?v=4",
+            html_url: "https://github.com/amplifthq",
             id: 42,
             login: "amplifthq",
             type: "Organization",
@@ -74,6 +76,8 @@ describe("GitHub App authentication", () => {
       accessToken: "ghs_installation_token",
       expiresAt: "2026-07-23T13:00:00Z",
       installation: {
+        accountAvatarUrl: "https://avatars.githubusercontent.com/u/42?v=4",
+        accountHtmlUrl: "https://github.com/amplifthq",
         accountId: "42",
         accountLogin: "amplifthq",
         accountType: "Organization",
@@ -102,6 +106,8 @@ describe("GitHub App authentication", () => {
       Response.json({
         id: 987,
         account: {
+          avatar_url: "https://avatars.githubusercontent.com/u/42?v=4",
+          html_url: "https://github.com/amplifthq",
           id: 42,
           login: "amplifthq",
           type: "Organization",
@@ -131,6 +137,8 @@ describe("GitHub App authentication", () => {
           {
             id: 987,
             account: {
+              avatar_url: "https://avatars.githubusercontent.com/u/42?v=4",
+              html_url: "https://github.com/amplifthq",
               id: 42,
               login: "amplifthq",
               type: "Organization",

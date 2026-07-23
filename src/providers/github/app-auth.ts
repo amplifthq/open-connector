@@ -14,6 +14,8 @@ const MAX_USER_INSTALLATION_PAGES = 10;
 
 type GitHubAppInstallationPayload = {
   account?: {
+    avatar_url?: string;
+    html_url?: string;
     id?: number | string;
     login?: string;
     type?: string;
@@ -33,6 +35,8 @@ type GitHubAppInstallationTokenPayload = {
 };
 
 export type GitHubAppInstallation = {
+  accountAvatarUrl: string;
+  accountHtmlUrl: string;
   accountId: string;
   accountLogin: string;
   accountType: "Organization" | "User";
@@ -178,8 +182,22 @@ function normalizeInstallation(input: {
     throw providerResponseError("GitHub App installation account type is missing.");
   }
   return {
-    accountId: requiredString(
-      input.installation.account?.id === undefined ? undefined : String(input.installation.account.id),
+    accountAvatarUrl: requiredString(
+      input.installation.account?.avatar_url,
+      "GitHub App installation account avatar URL",
+      providerResponseError,
+    ),
+    accountHtmlUrl: requiredString(
+      input.installation.account?.html_url,
+      "GitHub App installation account URL",
+      providerResponseError,
+    ),
+    accountId: requirePositiveIntegerText(
+      requiredString(
+        input.installation.account?.id === undefined ? undefined : String(input.installation.account.id),
+        "GitHub App installation account id",
+        providerResponseError,
+      ),
       "GitHub App installation account id",
       providerResponseError,
     ),
@@ -241,11 +259,15 @@ function normalizePrivateKey(value: string): string {
   return value.trim().replace(/\\n/gu, "\n");
 }
 
-function requirePositiveIntegerText(value: string, fieldName: string): string {
+function requirePositiveIntegerText(
+  value: string,
+  fieldName: string,
+  createError: (message: string) => ProviderRequestError = (message) => new ProviderRequestError(400, message),
+): string {
   const normalized = value.trim();
   const parsed = Number(normalized);
   if (!/^[1-9][0-9]*$/u.test(normalized) || !Number.isSafeInteger(parsed)) {
-    throw new ProviderRequestError(400, `${fieldName} must be a positive integer.`);
+    throw createError(`${fieldName} must be a positive integer.`);
   }
   return normalized;
 }
