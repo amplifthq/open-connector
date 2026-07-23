@@ -293,6 +293,15 @@ export interface TransitFileStore {
 export type TransitFileWriter = TransitFileStore;
 
 /**
+ * Read one host-owned runtime configuration value.
+ *
+ * Provider credentials contain tenant-specific identity only. Deployment-wide
+ * secrets such as a GitHub App private key stay in the host environment and
+ * are resolved at execution time through this narrow boundary.
+ */
+export type RuntimeConfigReader = (name: string) => string | undefined;
+
+/**
  * Runtime services available to action executors.
  *
  * Executors receive resolved credentials through this interface instead of
@@ -301,6 +310,8 @@ export type TransitFileWriter = TransitFileStore;
 export interface ExecutionContext {
   /** Resolve the credential currently configured for a provider service id. */
   getCredential(service: string): Promise<ResolvedCredential | undefined>;
+  /** Resolve deployment-wide provider configuration without storing it in every connection. */
+  runtimeConfig?: RuntimeConfigReader;
   /** Optional local temporary file storage for actions that produce downloadable files. */
   transitFiles?: TransitFileWriter;
   /** Optional cancellation signal propagated from the HTTP request or runner. */
@@ -341,6 +352,7 @@ export type CredentialValidationResult = {
 
 export interface CredentialValidatorOptions {
   fetcher: typeof fetch;
+  runtimeConfig?: RuntimeConfigReader;
   signal?: AbortSignal;
   logger?: RuntimeLogger;
 }
