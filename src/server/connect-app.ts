@@ -1,5 +1,6 @@
 import type { CatalogStore } from "../catalog-store.ts";
 import type { ActionPolicyService } from "../core/action-policy.ts";
+import type { RuntimeConfigReader } from "../core/types.ts";
 import type { IProviderLoader } from "../providers/provider-loader.ts";
 import type { RuntimeJwtVerifier } from "./api/runtime-jwt.ts";
 import type { ITransitFileService } from "./files/transit-file-store.ts";
@@ -12,6 +13,7 @@ import { ConnectionService } from "../connection-service.ts";
 import { OAuthClientConfigService } from "../oauth/oauth-client-config-service.ts";
 import { OAuthCredentialRefreshService } from "../oauth/oauth-credential-refresh-service.ts";
 import { OAuthFlowService } from "../oauth/oauth-flow-service.ts";
+import { GitHubAppInstallationService } from "../providers/github/installation-service.ts";
 import { ActionRunner } from "./actions/action-runner.ts";
 import { ConnectServer } from "./connect-server.ts";
 import { RuntimeTokenService } from "./storage/runtime-token-service.ts";
@@ -25,6 +27,7 @@ export interface ConnectAppOptions {
   secretCodec: ISecretCodec;
   adminToken?: string;
   runtimeToken?: string;
+  runtimeConfig?: RuntimeConfigReader;
   verifyRuntimeJwt?: RuntimeJwtVerifier;
   actionPolicy?: ActionPolicyService;
   registerStaticRoutes?: (app: Hono) => void;
@@ -49,6 +52,7 @@ export async function createConnectApp(options: ConnectAppOptions): Promise<Conn
     catalog: options.catalog,
     oauthCredentials: new OAuthCredentialRefreshService(oauthClientConfigs),
     providerLoader: options.providerLoader,
+    runtimeConfig: options.runtimeConfig,
     store: options.runtimeDatabase.connectionStore,
     logger: options.logger,
   });
@@ -57,6 +61,7 @@ export async function createConnectApp(options: ConnectAppOptions): Promise<Conn
     providerLoader: options.providerLoader,
     connections,
     runs: options.runtimeDatabase.runLogStore,
+    runtimeConfig: options.runtimeConfig,
     transitFiles: options.transitFiles,
     actionPolicy: options.actionPolicy,
     logger: options.logger,
@@ -67,6 +72,10 @@ export async function createConnectApp(options: ConnectAppOptions): Promise<Conn
       catalog: options.catalog,
       providerLoader: options.providerLoader,
       connections,
+      githubAppInstallations: new GitHubAppInstallationService({
+        connections,
+        runtimeConfig: options.runtimeConfig,
+      }),
       oauthClientConfigs,
       oauthFlow: new OAuthFlowService({
         clientConfigs: oauthClientConfigs,

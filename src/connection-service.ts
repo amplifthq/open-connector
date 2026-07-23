@@ -8,6 +8,7 @@ import type {
   CustomCredentialAuthDefinition,
   ProviderDefinition,
   ResolvedCredential,
+  RuntimeConfigReader,
   RuntimeLogger,
 } from "./core/types.ts";
 import type { IOAuthCredentialRefresher } from "./oauth/oauth-credential-refresh-service.ts";
@@ -48,6 +49,7 @@ export interface ConnectionServiceOptions {
   catalog: CatalogStore;
   oauthCredentials?: IOAuthCredentialRefresher;
   providerLoader: IProviderLoader;
+  runtimeConfig?: RuntimeConfigReader;
   store: IConnectionStore;
   logger?: RuntimeLogger;
 }
@@ -118,6 +120,7 @@ export class ConnectionService {
   private readonly catalog: CatalogStore;
   private readonly oauthCredentials?: IOAuthCredentialRefresher;
   private readonly providerLoader: IProviderLoader;
+  private readonly runtimeConfig?: RuntimeConfigReader;
   private readonly store: IConnectionStore;
   private readonly logger?: RuntimeLogger;
 
@@ -125,6 +128,7 @@ export class ConnectionService {
     this.catalog = input.catalog;
     this.oauthCredentials = input.oauthCredentials;
     this.providerLoader = input.providerLoader;
+    this.runtimeConfig = input.runtimeConfig;
     this.store = input.store;
     this.logger = input.logger;
   }
@@ -487,6 +491,7 @@ export class ConnectionService {
     return {
       fetcher: providerFetch,
       logger: this.logger,
+      runtimeConfig: this.runtimeConfig,
     };
   }
 

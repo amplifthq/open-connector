@@ -1,7 +1,7 @@
 import type { CatalogStore } from "../../catalog-store.ts";
 import type { ConnectionService, ExecutionConnection } from "../../connection-service.ts";
 import type { ActionPolicyService } from "../../core/action-policy.ts";
-import type { ExecutionContext, ExecutionResult, TransitFileWriter } from "../../core/types.ts";
+import type { ExecutionContext, ExecutionResult, RuntimeConfigReader, TransitFileWriter } from "../../core/types.ts";
 import type { IProviderLoader } from "../../providers/provider-loader.ts";
 import type { Logger } from "../logger.ts";
 import type { IRunLogStore, RunLog, RunLogCaller, RunLogListInput, RunLogPage } from "../storage/runtime-store.ts";
@@ -16,6 +16,7 @@ export interface ActionRunnerOptions {
   connections: ConnectionService;
   runs: IRunLogStore;
   transitFiles?: TransitFileWriter;
+  runtimeConfig?: RuntimeConfigReader;
   actionPolicy?: ActionPolicyService;
   logger?: Logger;
 }
@@ -155,6 +156,9 @@ export class ActionRunner {
     };
     if (this.options.transitFiles) {
       context.transitFiles = this.options.transitFiles;
+    }
+    if (this.options.runtimeConfig) {
+      context.runtimeConfig = this.options.runtimeConfig;
     }
     return context;
   }

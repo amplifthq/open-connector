@@ -65,6 +65,7 @@ const { app, runtimeAuthConfigured } = await createConnectApp({
   secretCodec,
   adminToken,
   runtimeToken,
+  runtimeConfig: (name) => process.env[name],
   verifyRuntimeJwt,
   actionPolicy,
   registerStaticRoutes: (app) => registerStaticRoutes(app, staticRoot),
