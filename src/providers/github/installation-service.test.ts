@@ -46,6 +46,8 @@ describe("GitHubAppInstallationService", () => {
       getCredential: vi.fn(async () => oauthCredential),
     };
     const verifyUserInstallation = vi.fn(async () => ({
+      accountAvatarUrl: "https://avatars.githubusercontent.com/u/42?v=4",
+      accountHtmlUrl: "https://github.com/amplifthq",
       accountId: "42",
       accountLogin: "amplifthq",
       accountType: "Organization" as const,
