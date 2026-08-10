@@ -25,13 +25,12 @@ export const provider: ProviderDefinition = {
       type: "oauth2",
       authorizationUrl: "https://www.figma.com/oauth",
       tokenUrl: "https://api.figma.com/v1/oauth/token",
-      refreshTokenUrl: "https://api.figma.com/v1/oauth/refresh",
       scopes: figmaPublicOAuthScopes,
       tokenEndpointAuthMethod: "client_secret_basic",
       tokenRequestFields: {
         clientId: false,
         refresh: {
-          grantType: false,
+          grantType: "grant_type",
         },
       },
       pkce: {

@@ -9,7 +9,6 @@ describe("Figma provider definition", () => {
     expect(oauth).toMatchObject({
       authorizationUrl: "https://www.figma.com/oauth",
       tokenUrl: "https://api.figma.com/v1/oauth/token",
-      refreshTokenUrl: "https://api.figma.com/v1/oauth/refresh",
       scopes: [
         "current_user:read",
         "file_metadata:read",
@@ -26,9 +25,10 @@ describe("Figma provider definition", () => {
       pkce: { method: "S256" },
       tokenRequestFields: {
         clientId: false,
-        refresh: { grantType: false },
+        refresh: { grantType: "grant_type" },
       },
     });
+    expect(oauth).not.toHaveProperty("refreshTokenUrl");
     expect(oauth?.scopes).not.toContain("projects:read");
     expect(oauth?.scopes).not.toContain("project_metadata:read");
   });
