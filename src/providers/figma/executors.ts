@@ -27,7 +27,7 @@ import {
   readProviderProxyResponse,
   toProviderProxyError,
 } from "../provider-runtime.ts";
-import { figmaProviderScopes } from "./scopes.ts";
+import { figmaPersonalAccessTokenScopes } from "./scopes.ts";
 
 const service = "figma";
 const figmaApiBaseUrl = "https://api.figma.com";
@@ -216,7 +216,7 @@ export const credentialValidators: CredentialValidators = {
 
     return {
       profile: normalizeFigmaCurrentAccount(user),
-      grantedScopes: [...figmaProviderScopes],
+      grantedScopes: [...figmaPersonalAccessTokenScopes],
       metadata: {
         apiBaseUrl: figmaApiBaseUrl,
         validationEndpoint: "/v1/me",
