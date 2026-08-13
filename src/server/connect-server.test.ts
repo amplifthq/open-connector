@@ -87,6 +87,7 @@ const echoAction: ActionDefinition = {
   service: "example",
   name: "echo",
   description: "Echo input.",
+  effect: "read",
   requiredScopes: [],
   providerPermissions: [],
   inputSchema: { type: "object" },
@@ -2274,6 +2275,7 @@ describe("ConnectServer", () => {
         service: string;
         name: string;
         description: string;
+        effect: "read" | "write" | "destructive";
         authenticated: boolean;
         inputSchema: Record<string, unknown>;
         outputSchema: Record<string, unknown>;
@@ -2285,6 +2287,7 @@ describe("ConnectServer", () => {
       service: "example",
       name: "echo",
       description: "Echo input.",
+      effect: "read",
       authenticated: true,
       inputSchema: { type: "object" },
       outputSchema: { type: "object" },
