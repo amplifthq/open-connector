@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildActionSearchIndex, searchActions } from "../../core/action-search.ts";
 import { provider } from "./definition.ts";
 
 const gmailSettingsSharingScope = "https://www.googleapis.com/auth/gmail.settings.sharing";
@@ -20,5 +21,16 @@ describe("Gmail provider definition", () => {
     for (const action of forwardingReadActions) {
       expect(action.requiredScopes).toEqual([gmailSettingsBasicScope]);
     }
+  });
+
+  it("makes unread inbox counts discoverable from natural language", () => {
+    const index = buildActionSearchIndex(provider.actions);
+
+    expect(
+      searchActions(index, "unread inbox count", {
+        limit: 10,
+        service: "gmail",
+      }).map((action) => action.id),
+    ).toContain("gmail.fetch_emails");
   });
 });
