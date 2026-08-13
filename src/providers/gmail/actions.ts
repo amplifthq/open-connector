@@ -213,7 +213,7 @@ export const gmailActions: ActionDefinition[] = [
   action({
     name: "fetch_emails",
     description:
-      "List Gmail messages with optional query, label, and pagination filters. Use detail to choose IDs, summaries, or full messages.",
+      "List or count Gmail messages with optional Gmail search, label, and pagination filters. For an unread inbox count, use query `is:unread in:inbox`; resultSizeEstimate contains the approximate count. Use detail to choose IDs, summaries, or full messages.",
     requiredScopes: gmailReadScopes,
     properties: pageFields({
       query,
