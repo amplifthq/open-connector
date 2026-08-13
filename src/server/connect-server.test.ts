@@ -1211,9 +1211,7 @@ describe("ConnectServer", () => {
     expect(callbackText).not.toContain("window.opener");
     expect(callbackText).not.toContain('postMessage(message,"*"');
     expect(callbackText).toContain("Connection complete");
-    expect(callbackText).toContain(
-      "Close this window to continue where you started."
-    );
+    expect(callbackText).toContain("Close this window to continue where you started.");
     expect(callbackText).not.toContain("OOMOL Connect");
     expect(callbackText).toContain("card");
     expect(callbackText).toContain("badge");
