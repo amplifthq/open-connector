@@ -3,7 +3,7 @@ import type { ResolvedCredential, RuntimeConfigReader } from "../../core/types.t
 import type { GitHubAppInstallation, verifyGitHubUserInstallation } from "./app-auth.ts";
 
 import { ConnectionError } from "../../connection-service.ts";
-import { providerFetch } from "../provider-runtime.ts";
+import { ProviderRequestError, providerFetch } from "../provider-runtime.ts";
 import { verifyGitHubUserInstallation as verifyGitHubUserInstallationDefault } from "./app-auth.ts";
 
 type GitHubConnectionManager = {
@@ -63,13 +63,12 @@ export class GitHubAppInstallationService {
       installationId,
     });
 
-    // Remove the user token before creating the installation credential so a
-    // crash or retry cannot leave two usable authorities for the same flow.
-    await this.connections.disconnect("github", verificationConnectionName);
-    return await this.connections.connectWithCustomCredential("github", {
+    const connection = await this.connections.connectWithCustomCredential("github", {
       connectionName: targetConnectionName,
       values: { installationId },
     });
+    await this.connections.disconnect("github", verificationConnectionName);
+    return connection;
   }
 
   private async verifyInstallationAccess(input: {
@@ -84,10 +83,10 @@ export class GitHubAppInstallationService {
         runtimeConfig: this.runtimeConfig,
       });
     } catch (error) {
-      throw new ConnectionError(
-        "credential_verification_failed",
-        error instanceof Error ? error.message : "GitHub App installation verification failed.",
-      );
+      if (!(error instanceof ProviderRequestError && (error.status === 401 || error.status === 403))) {
+        throw error;
+      }
+      throw new ConnectionError("credential_verification_failed", error.message);
     }
   }
 }
