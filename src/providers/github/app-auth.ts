@@ -11,6 +11,25 @@ export const githubAppPrivateKeyConfigName = "OOMOL_CONNECT_GITHUB_APP_PRIVATE_K
 const GITHUB_APP_JWT_LIFETIME_SECONDS = 9 * 60;
 const GITHUB_APP_JWT_CLOCK_SKEW_SECONDS = 60;
 const MAX_USER_INSTALLATION_PAGES = 10;
+const PKCS1_PRIVATE_KEY_HEADER = "-----BEGIN RSA PRIVATE KEY-----";
+const PKCS1_PRIVATE_KEY_FOOTER = "-----END RSA PRIVATE KEY-----";
+const RSA_ALGORITHM_IDENTIFIER = Uint8Array.of(
+  0x30,
+  0x0d,
+  0x06,
+  0x09,
+  0x2a,
+  0x86,
+  0x48,
+  0x86,
+  0xf7,
+  0x0d,
+  0x01,
+  0x01,
+  0x01,
+  0x05,
+  0x00,
+);
 
 type GitHubAppInstallationPayload = {
   account?: {
@@ -64,7 +83,7 @@ export async function createGitHubAppJwt(input: {
   } catch {
     throw new ProviderRequestError(
       503,
-      `${githubAppPrivateKeyConfigName} must be an unencrypted PKCS8 RSA private key in PEM format.`,
+      `${githubAppPrivateKeyConfigName} must be an unencrypted RSA private key in PEM format.`,
     );
   }
   const nowSeconds = Math.floor((input.nowMs ?? Date.now()) / 1000);
@@ -256,7 +275,61 @@ function requireRuntimeConfig(runtimeConfig: RuntimeConfigReader | undefined, na
 }
 
 function normalizePrivateKey(value: string): string {
-  return value.trim().replace(/\\n/gu, "\n");
+  const normalized = value.trim().replace(/\\n/gu, "\n");
+  if (!normalized.startsWith(PKCS1_PRIVATE_KEY_HEADER)) {
+    return normalized;
+  }
+  return convertPkcs1PemToPkcs8(normalized);
+}
+
+function convertPkcs1PemToPkcs8(value: string): string {
+  const encodedPkcs1 = value
+    .replace(PKCS1_PRIVATE_KEY_HEADER, "")
+    .replace(PKCS1_PRIVATE_KEY_FOOTER, "")
+    .replace(/\s/gu, "");
+  const pkcs1 = Uint8Array.from(atob(encodedPkcs1), (character) => character.charCodeAt(0));
+  const privateKeyInfo = encodeDerElement(
+    0x30,
+    concatenateBytes(Uint8Array.of(0x02, 0x01, 0x00), RSA_ALGORITHM_IDENTIFIER, encodeDerElement(0x04, pkcs1)),
+  );
+  const encodedPkcs8 = encodeBase64(privateKeyInfo);
+  const lines = encodedPkcs8.match(/.{1,64}/gu) ?? [];
+  return `-----BEGIN PRIVATE KEY-----\n${lines.join("\n")}\n-----END PRIVATE KEY-----`;
+}
+
+function encodeDerElement(tag: number, value: Uint8Array): Uint8Array {
+  return concatenateBytes(Uint8Array.of(tag), encodeDerLength(value.length), value);
+}
+
+function encodeDerLength(length: number): Uint8Array {
+  if (length < 0x80) {
+    return Uint8Array.of(length);
+  }
+  const octets: number[] = [];
+  let remaining = length;
+  while (remaining > 0) {
+    octets.unshift(remaining & 0xff);
+    remaining >>>= 8;
+  }
+  return Uint8Array.of(0x80 | octets.length, ...octets);
+}
+
+function concatenateBytes(...parts: Uint8Array[]): Uint8Array {
+  const output = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.length;
+  }
+  return output;
+}
+
+function encodeBase64(value: Uint8Array): string {
+  let binary = "";
+  for (let offset = 0; offset < value.length; offset += 0x8000) {
+    binary += String.fromCharCode(...value.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
 }
 
 function requirePositiveIntegerText(
