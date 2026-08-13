@@ -1,4 +1,5 @@
 import { exportPKCS8, generateKeyPair, jwtVerify } from "jose";
+import { createPrivateKey } from "node:crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { createGitHubAppJwt, resolveGitHubAppInstallation, verifyGitHubUserInstallation } from "./app-auth.ts";
 
@@ -28,6 +29,22 @@ describe("GitHub App authentication", () => {
       iat: Date.parse("2026-07-23T11:59:00.000Z") / 1000,
       iss: "12345",
     });
+  });
+
+  it("accepts the PKCS1 private key format downloaded from GitHub", async () => {
+    const pkcs1PrivateKeyPem = createPrivateKey(privateKeyPem).export({ format: "pem", type: "pkcs1" }).toString();
+
+    const token = await createGitHubAppJwt({
+      appId: "12345",
+      nowMs: Date.parse("2026-07-23T12:00:00.000Z"),
+      privateKeyPem: pkcs1PrivateKeyPem,
+    });
+
+    const verified = await jwtVerify(token, publicKey, {
+      algorithms: ["RS256"],
+      currentDate: new Date("2026-07-23T12:00:00.000Z"),
+    });
+    expect(verified.payload.iss).toBe("12345");
   });
 
   it("validates an active installation and mints a one-hour installation token", async () => {
