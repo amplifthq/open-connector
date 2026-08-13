@@ -1210,7 +1210,11 @@ describe("ConnectServer", () => {
     expect(callbackText).toContain('"service":"oauth_example"');
     expect(callbackText).not.toContain("window.opener");
     expect(callbackText).not.toContain('postMessage(message,"*"');
-    expect(callbackText).toContain("Connection ready");
+    expect(callbackText).toContain("Connection complete");
+    expect(callbackText).toContain(
+      "Close this window to continue where you started."
+    );
+    expect(callbackText).not.toContain("OOMOL Connect");
     expect(callbackText).toContain("card");
     expect(callbackText).toContain("badge");
     expect(callbackText).toContain("Automatically closing in 5 seconds.");
