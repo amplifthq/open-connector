@@ -1,6 +1,7 @@
 import type { ResolvedCredential } from "../../core/types.ts";
 
 import { describe, expect, it, vi } from "vitest";
+import { ProviderRequestError } from "../provider-runtime.ts";
 import { GitHubAppInstallationService } from "./installation-service.ts";
 
 describe("GitHubAppInstallationService", () => {
@@ -77,11 +78,61 @@ describe("GitHubAppInstallationService", () => {
         installationId: "987",
       }),
     );
-    expect(calls).toEqual(["disconnect:github-install-verifier:state-1", "connect:organization:org-1:github"]);
+    expect(calls).toEqual(["connect:organization:org-1:github", "disconnect:github-install-verifier:state-1"]);
     expect(connections.connectWithCustomCredential).toHaveBeenCalledWith("github", {
       connectionName: "organization:org-1:github",
       values: { installationId: "987" },
     });
+  });
+
+  it("keeps the temporary user authorization when storing the installation fails", async () => {
+    const connections = {
+      connectWithCustomCredential: vi.fn(async () => {
+        throw new Error("credential store unavailable");
+      }),
+      disconnect: vi.fn(),
+      getCredential: vi.fn(async () => githubUserCredential),
+    };
+    const service = new GitHubAppInstallationService({
+      connections,
+      runtimeConfig: githubAppRuntimeConfig,
+      verifyUserInstallation: vi.fn(async () => githubInstallation),
+    });
+
+    await expect(
+      service.complete({
+        installationId: "987",
+        targetConnectionName: "organization:org-1:github",
+        verificationConnectionName: "github-install-verifier:state-1",
+      }),
+    ).rejects.toThrow("credential store unavailable");
+    expect(connections.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("preserves a GitHub service failure instead of presenting it as an authorization failure", async () => {
+    const providerError = new ProviderRequestError(502, "GitHub request failed");
+    const connections = {
+      connectWithCustomCredential: vi.fn(),
+      disconnect: vi.fn(),
+      getCredential: vi.fn(async () => githubUserCredential),
+    };
+    const service = new GitHubAppInstallationService({
+      connections,
+      runtimeConfig: githubAppRuntimeConfig,
+      verifyUserInstallation: vi.fn(async () => {
+        throw providerError;
+      }),
+    });
+
+    await expect(
+      service.complete({
+        installationId: "987",
+        targetConnectionName: "organization:org-1:github",
+        verificationConnectionName: "github-install-verifier:state-1",
+      }),
+    ).rejects.toBe(providerError);
+    expect(connections.connectWithCustomCredential).not.toHaveBeenCalled();
+    expect(connections.disconnect).not.toHaveBeenCalled();
   });
 
   it("fails before changing connections when the verifier is not a GitHub user token", async () => {
@@ -138,6 +189,29 @@ describe("GitHubAppInstallationService", () => {
     ).rejects.toThrow("The target GitHub connection must differ from the verification connection");
   });
 });
+
+const githubUserCredential: Extract<ResolvedCredential, { authType: "oauth2" }> = {
+  accessToken: "ghu_user_token",
+  authType: "oauth2",
+  metadata: {},
+  profile: {
+    accountId: "felix",
+    displayName: "Felix",
+    grantedScopes: [],
+  },
+  tokenType: "Bearer",
+};
+
+const githubInstallation = {
+  accountAvatarUrl: "https://avatars.githubusercontent.com/u/42?v=4",
+  accountHtmlUrl: "https://github.com/amplifthq",
+  accountId: "42",
+  accountLogin: "amplifthq",
+  accountType: "Organization" as const,
+  installationId: "987",
+  permissions: { metadata: "read" },
+  repositorySelection: "selected" as const,
+};
 
 function githubAppRuntimeConfig(name: string): string | undefined {
   if (name === "OOMOL_CONNECT_GITHUB_APP_ID") {
