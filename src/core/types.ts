@@ -13,6 +13,9 @@ export type JsonSchema = {
  */
 export type AuthType = "no_auth" | "api_key" | "custom_credential" | "oauth2";
 
+/** User-visible side-effect category used by clients to make safe execution decisions. */
+export type ActionEffect = "read" | "write" | "destructive";
+
 /**
  * A single credential field that users can configure for a provider.
  */
@@ -171,6 +174,8 @@ export type ActionDefinition = {
   name: string;
   /** Human-readable action summary for catalogs, docs, and tool descriptions. */
   description: string;
+  /** Whether this action only reads data, writes data, or can perform destructive changes. */
+  effect?: ActionEffect;
   /** Provider-native OAuth scopes, permission names, or capability strings needed for this action. */
   requiredScopes: string[];
   /** Provider-native permissions or scopes users must grant. */

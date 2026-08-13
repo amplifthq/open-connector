@@ -18,6 +18,7 @@ describe("runtime action metadata", () => {
         service: "example",
         name: "echo",
         description: "Echo the provided value.",
+        effect: "read",
         requiredScopes: [],
         providerPermissions: [],
         inputSchema: { type: "object" },
@@ -31,6 +32,7 @@ describe("runtime action metadata", () => {
         },
       }),
     ).toMatchObject({
+      effect: "read",
       execution: {
         locallyExecutable: true,
         catalogOnly: false,
