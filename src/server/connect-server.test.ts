@@ -11,6 +11,7 @@ import type {
 } from "../core/types.ts";
 import type { IOAuthClientConfigStore, OAuthClientConfig } from "../oauth/oauth-client-config-service.ts";
 import type { IOAuthStateStore, OAuthAuthorizationState } from "../oauth/oauth-flow-service.ts";
+import type { GitHubAppInstallationService } from "../providers/github/installation-service.ts";
 import type { IProviderLoader } from "../providers/provider-loader.ts";
 import type { RuntimeActionHttpResult } from "./api/runtime-api.ts";
 import type { RuntimeJwtVerifier } from "./api/runtime-jwt.ts";
@@ -86,6 +87,7 @@ const echoAction: ActionDefinition = {
   service: "example",
   name: "echo",
   description: "Echo input.",
+  effect: "read",
   requiredScopes: [],
   providerPermissions: [],
   inputSchema: { type: "object" },
@@ -1210,7 +1212,9 @@ describe("ConnectServer", () => {
     expect(callbackText).toContain('"service":"oauth_example"');
     expect(callbackText).not.toContain("window.opener");
     expect(callbackText).not.toContain('postMessage(message,"*"');
-    expect(callbackText).toContain("Connection ready");
+    expect(callbackText).toContain("Connection complete");
+    expect(callbackText).toContain("Close this window to continue where you started.");
+    expect(callbackText).not.toContain("OOMOL Connect");
     expect(callbackText).toContain("card");
     expect(callbackText).toContain("badge");
     expect(callbackText).toContain("Automatically closing in 5 seconds.");
@@ -1225,6 +1229,49 @@ describe("ConnectServer", () => {
         configured: true,
       },
     ]);
+  });
+
+  it("completes a verified GitHub App installation through the admin API", async () => {
+    const complete = vi.fn(async () => ({
+      authType: "custom_credential" as const,
+      configured: true as const,
+      connectionName: "organization:org-1:github",
+      default: false,
+      id: "connection-1",
+      profile: {
+        accountId: "organization:42",
+        displayName: "amplifthq (GitHub App)",
+        grantedScopes: ["metadata:read"],
+      },
+      service: "github",
+      virtual: false,
+    }));
+    const app = createTestServer([apiKeyProvider], {
+      githubAppInstallations: { complete },
+    }).createApp();
+
+    const response = await app.request("/api/providers/github/installations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        installationId: "987",
+        targetConnectionName: "organization:org-1:github",
+        verificationConnectionName: "github-install-verifier:state-1",
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      authType: "custom_credential",
+      configured: true,
+      connectionName: "organization:org-1:github",
+      service: "github",
+    });
+    expect(complete).toHaveBeenCalledWith({
+      installationId: "987",
+      targetConnectionName: "organization:org-1:github",
+      verificationConnectionName: "github-install-verifier:state-1",
+    });
   });
 
   it("keeps the console shell public while protecting admin APIs", async () => {
@@ -2228,6 +2275,7 @@ describe("ConnectServer", () => {
         service: string;
         name: string;
         description: string;
+        effect: "read" | "write" | "destructive";
         authenticated: boolean;
         inputSchema: Record<string, unknown>;
         outputSchema: Record<string, unknown>;
@@ -2239,6 +2287,7 @@ describe("ConnectServer", () => {
       service: "example",
       name: "echo",
       description: "Echo input.",
+      effect: "read",
       authenticated: true,
       inputSchema: { type: "object" },
       outputSchema: { type: "object" },
@@ -3150,6 +3199,7 @@ interface CreateTestServerOptions {
   providerLoader?: IProviderLoader;
   logger?: Logger;
   idempotency?: IIdempotencyStore;
+  githubAppInstallations?: Pick<GitHubAppInstallationService, "complete">;
   runtimeTokens?: RuntimeTokenService;
   runtimePolicyStore?: IRuntimePolicyStore;
   runs?: MemoryRunLogStore;
@@ -3214,6 +3264,7 @@ function createTestServer(providers: ProviderDefinition[], options: CreateTestSe
       secretCodec: options.secretCodec,
       isCustomClientConfigAllowed,
     }),
+    githubAppInstallations: options.githubAppInstallations,
     actions: actionRunner,
     idempotency,
     transitFiles,

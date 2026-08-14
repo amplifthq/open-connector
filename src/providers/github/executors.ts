@@ -2,6 +2,7 @@ import type { CredentialValidators, ProviderExecutors } from "../../core/types.t
 import type { GitHubActionContext } from "./runtime-shared.ts";
 
 import { defineProviderExecutors, requireBearerCredential } from "../provider-runtime.ts";
+import { resolveGitHubAppInstallation } from "./app-auth.ts";
 import { activityActionHandlers } from "./runtime-activity.ts";
 import { issueActionHandlers } from "./runtime-issue.ts";
 import { pullRequestActionHandlers } from "./runtime-pull-request.ts";
@@ -24,6 +25,19 @@ export const executors: ProviderExecutors = defineProviderExecutors<GitHubAction
     searchActionHandlers,
   ),
   async createContext(context, fetcher): Promise<GitHubActionContext> {
+    const configuredCredential = await context.getCredential(service);
+    if (configuredCredential?.authType === "custom_credential") {
+      const installation = await resolveGitHubAppInstallation({
+        fetcher,
+        installationId: configuredCredential.values.installationId ?? "",
+        runtimeConfig: context.runtimeConfig,
+      });
+      return {
+        accessToken: installation.accessToken,
+        fetcher,
+        installation: installation.installation,
+      };
+    }
     const credential = await requireBearerCredential(context, service);
     return {
       accessToken: credential.accessToken,
@@ -38,6 +52,26 @@ export const credentialValidators: CredentialValidators = {
   },
   async oauth2(input, { fetcher }) {
     return validateGitHubToken(input.accessToken, fetcher);
+  },
+  async customCredential(input, { fetcher, runtimeConfig }) {
+    const installation = await resolveGitHubAppInstallation({
+      fetcher,
+      installationId: input.values.installationId ?? "",
+      runtimeConfig,
+    });
+    return {
+      grantedScopes: Object.entries(installation.installation.permissions).map(
+        ([name, permission]) => `${name}:${permission}`,
+      ),
+      metadata: {
+        expiresAt: installation.expiresAt,
+        installation: installation.installation,
+      },
+      profile: {
+        accountId: `${installation.installation.accountType.toLowerCase()}:${installation.installation.accountId}`,
+        displayName: `${installation.installation.accountLogin} (GitHub App)`,
+      },
+    };
   },
 };
 

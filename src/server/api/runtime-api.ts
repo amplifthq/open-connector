@@ -52,6 +52,7 @@ export interface RuntimeActionMetadata {
   service: string;
   name: string;
   description: string;
+  effect?: RuntimeActionDefinition["effect"];
   requiredScopes: string[];
   providerPermissions: string[];
   inputSchema: RuntimeActionDefinition["inputSchema"];
@@ -118,6 +119,7 @@ export function serializeRuntimeAction(action: RuntimeActionDefinition): Runtime
     service: action.service,
     name: action.name,
     description: action.description,
+    effect: action.effect,
     requiredScopes: action.requiredScopes,
     providerPermissions: action.providerPermissions,
     inputSchema: action.inputSchema,
