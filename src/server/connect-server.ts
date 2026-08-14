@@ -3,7 +3,6 @@ import type { ConnectionService } from "../connection-service.ts";
 import type { ActionPolicySnapshot } from "../core/action-policy.ts";
 import type { ActionSearchIndexProvider, ActionSearchResult } from "../core/action-search.ts";
 import type { OAuthClientConfigInput } from "../oauth/oauth-client-config-service.ts";
-import type { GitHubAppInstallationService } from "../providers/github/installation-service.ts";
 import type { IProviderLoader } from "../providers/provider-loader.ts";
 import type { LocalAuthOptions } from "./api/auth.ts";
 import type { RuntimeActionHttpResult } from "./api/runtime-api.ts";
@@ -57,10 +56,6 @@ import { createTransitFileResponse, TransitFileError } from "./files/transit-fil
 import { ProxyRunner } from "./proxy/proxy-runner.ts";
 import { decodeRunLogCursor } from "./storage/runtime-store.ts";
 
-function connectionInputError(message: string): ConnectionError {
-  return new ConnectionError("invalid_input", message);
-}
-
 /**
  * Dependencies required to construct the local connector server.
  */
@@ -70,7 +65,6 @@ export interface IConnectServerOptions {
   connections: ConnectionService;
   oauthClientConfigs: OAuthClientConfigService;
   oauthFlow: OAuthFlowService;
-  githubAppInstallations?: Pick<GitHubAppInstallationService, "complete">;
   runtimeTokens: RuntimeTokenService;
   actions: ActionRunner;
   idempotency: IIdempotencyStore;
@@ -212,7 +206,6 @@ export class ConnectServer {
       this.deleteOAuthConfig(context, context.req.param("service")),
     );
     app.post("/api/oauth/authorizations", (context) => this.createOAuthAuthorization(context));
-    app.post("/api/providers/github/installations", (context) => this.completeGitHubAppInstallation(context));
     app.get("/oauth/callback", (context) => this.completeOAuth(context));
     app.post("/mcp", (context) => this.handleMcp(context));
     app.get("/mcp", (context) => this.rejectMcpMethod(context));
@@ -477,7 +470,7 @@ export class ConnectServer {
     if (!policy.evaluate(action).allowed) {
       return writeRuntimeActionHttpResult(
         context,
-        await this.executeRuntimeAction(action, input, connectionName, policy, runtimeGrant),
+        await this.executeRuntimeAction(actionId, input, connectionName, policy, runtimeGrant),
       );
     }
     const idempotencyKey = readIdempotencyKey(context.req.header("idempotency-key"));
@@ -493,7 +486,7 @@ export class ConnectServer {
     if (!idempotencyKey.key) {
       return writeRuntimeActionHttpResult(
         context,
-        await this.executeRuntimeAction(action, input, connectionName, policy, runtimeGrant),
+        await this.executeRuntimeAction(actionId, input, connectionName, policy, runtimeGrant),
       );
     }
 
@@ -547,7 +540,7 @@ export class ConnectServer {
       return writeRuntimeActionHttpResult(context, claim.response);
     }
 
-    const result = await this.executeRuntimeAction(action, input, connectionName, policy, runtimeGrant);
+    const result = await this.executeRuntimeAction(actionId, input, connectionName, policy, runtimeGrant);
     const completed = await this.options.idempotency.complete({
       keyHash,
       requestHash,
@@ -563,7 +556,7 @@ export class ConnectServer {
   }
 
   private async executeRuntimeAction(
-    action: RuntimeActionDefinition,
+    actionId: string,
     input: unknown,
     connectionName: string | undefined,
     policy: ActionPolicySnapshot,
@@ -571,7 +564,7 @@ export class ConnectServer {
   ): Promise<RuntimeActionHttpResult> {
     try {
       const run = await this.options.actions.run({
-        actionId: action.id,
+        actionId,
         input,
         caller: "http",
         connectionName,
@@ -582,16 +575,15 @@ export class ConnectServer {
         return serializeRuntimeFailure({
           status: 404,
           errorCode: "invalid_input",
-          message: `unknown action: ${action.id}`,
-          meta: { actionId: action.id },
+          message: `unknown action: ${actionId}`,
+          meta: { actionId },
         });
       }
 
       return serializeRuntimeActionResult({
-        actionId: action.id,
+        actionId,
         executionId: run.executionId,
         auditPersisted: run.auditPersisted,
-        outputSchema: action.outputSchema,
         result: run.result,
       });
     } catch (error) {
@@ -600,7 +592,7 @@ export class ConnectServer {
           status: mapConnectionErrorStatus(error),
           errorCode: error.code,
           message: error.message,
-          meta: { actionId: action.id },
+          meta: { actionId },
         });
       }
 
@@ -786,35 +778,6 @@ export class ConnectServer {
       "connection rejected",
     );
     return jsonError(context, 400, "unsupported_auth_type", `${service} does not support ${authType}.`);
-  }
-
-  private async completeGitHubAppInstallation(context: Context): Promise<Response> {
-    if (!this.options.githubAppInstallations) {
-      return jsonError(context, 503, "provider_unavailable", "GitHub App installation support is not configured.");
-    }
-    const body = await readJsonBody(context);
-    try {
-      const result = await this.options.githubAppInstallations.complete({
-        installationId: requiredString(body.installationId, "installationId", connectionInputError),
-        targetConnectionName: requiredString(body.targetConnectionName, "targetConnectionName", connectionInputError),
-        verificationConnectionName: requiredString(
-          body.verificationConnectionName,
-          "verificationConnectionName",
-          connectionInputError,
-        ),
-      });
-      return context.json(result);
-    } catch (error) {
-      if (error instanceof ConnectionError) {
-        return jsonError(
-          context,
-          error.code === "credential_verification_failed" ? 403 : 400,
-          error.code,
-          error.message,
-        );
-      }
-      throw error;
-    }
   }
 
   private async disconnect(context: Context, service: string): Promise<Response> {
@@ -1205,7 +1168,6 @@ interface RuntimeActionSearchResult {
   service: string;
   name: string;
   description: string;
-  effect?: RuntimeActionDefinition["effect"];
   authenticated: boolean;
   inputSchema: RuntimeActionDefinition["inputSchema"];
   outputSchema: RuntimeActionDefinition["outputSchema"];
@@ -1221,7 +1183,6 @@ function serializeActionSearchResult(
     service: result.service,
     name: result.name,
     description: result.description,
-    effect: action.effect,
     authenticated,
     inputSchema: action.inputSchema,
     outputSchema: action.outputSchema,

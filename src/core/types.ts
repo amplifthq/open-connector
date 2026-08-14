@@ -13,9 +13,6 @@ export type JsonSchema = {
  */
 export type AuthType = "no_auth" | "api_key" | "custom_credential" | "oauth2";
 
-/** User-visible side-effect category used by clients to make safe execution decisions. */
-export type ActionEffect = "read" | "write" | "destructive";
-
 /**
  * A single credential field that users can configure for a provider.
  */
@@ -174,8 +171,6 @@ export type ActionDefinition = {
   name: string;
   /** Human-readable action summary for catalogs, docs, and tool descriptions. */
   description: string;
-  /** Whether this action only reads data, writes data, or can perform destructive changes. */
-  effect?: ActionEffect;
   /** Provider-native OAuth scopes, permission names, or capability strings needed for this action. */
   requiredScopes: string[];
   /** Provider-native permissions or scopes users must grant. */
@@ -298,15 +293,6 @@ export interface TransitFileStore {
 export type TransitFileWriter = TransitFileStore;
 
 /**
- * Read one host-owned runtime configuration value.
- *
- * Provider credentials contain tenant-specific identity only. Deployment-wide
- * secrets such as a GitHub App private key stay in the host environment and
- * are resolved at execution time through this narrow boundary.
- */
-export type RuntimeConfigReader = (name: string) => string | undefined;
-
-/**
  * Runtime services available to action executors.
  *
  * Executors receive resolved credentials through this interface instead of
@@ -315,8 +301,6 @@ export type RuntimeConfigReader = (name: string) => string | undefined;
 export interface ExecutionContext {
   /** Resolve the credential currently configured for a provider service id. */
   getCredential(service: string): Promise<ResolvedCredential | undefined>;
-  /** Resolve deployment-wide provider configuration without storing it in every connection. */
-  runtimeConfig?: RuntimeConfigReader;
   /** Optional local temporary file storage for actions that produce downloadable files. */
   transitFiles?: TransitFileWriter;
   /** Optional cancellation signal propagated from the HTTP request or runner. */
@@ -357,7 +341,6 @@ export type CredentialValidationResult = {
 
 export interface CredentialValidatorOptions {
   fetcher: typeof fetch;
-  runtimeConfig?: RuntimeConfigReader;
   signal?: AbortSignal;
   logger?: RuntimeLogger;
 }

@@ -612,14 +612,14 @@ const issueCommentPaginationFields = {
 export const githubActions: ActionDefinition[] = [
   action({
     name: "get_current_user",
-    description: "Get the GitHub account represented by the current credential.",
+    description: "Get the current authenticated GitHub user profile.",
     requiredScopes: githubUserReadScopes,
     inputSchema: s.object({}),
     outputSchema: githubCurrentUserSchema,
   }),
   action({
     name: "list_my_repositories",
-    description: "List repositories visible to the current GitHub user or App installation.",
+    description: "List repositories visible to the authenticated GitHub user.",
     requiredScopes: githubRepoScopes,
     inputSchema: s.object({
       visibility: s.stringEnum(["all", "public", "private"]),

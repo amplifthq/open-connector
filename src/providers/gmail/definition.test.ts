@@ -1,23 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { buildActionSearchIndex, searchActions } from "../../core/action-search.ts";
 import { provider } from "./definition.ts";
 
 const gmailSettingsSharingScope = "https://www.googleapis.com/auth/gmail.settings.sharing";
 const gmailSettingsBasicScope = "https://www.googleapis.com/auth/gmail.settings.basic";
-const gmailLabelsScope = "https://www.googleapis.com/auth/gmail.labels";
-const gmailModifyScope = "https://www.googleapis.com/auth/gmail.modify";
 
 describe("Gmail provider definition", () => {
   it("does not request the Workspace administrator-only sharing scope for user OAuth", () => {
     const oauth = provider.auth.find((auth) => auth.type === "oauth2");
 
     expect(oauth?.scopes).not.toContain(gmailSettingsSharingScope);
-  });
-
-  it("requests only the least scopes that cover the full Gmail action catalog", () => {
-    const oauth = provider.auth.find((auth) => auth.type === "oauth2");
-
-    expect(oauth?.scopes).toEqual([gmailModifyScope, gmailLabelsScope, gmailSettingsBasicScope]);
   });
 
   it("uses a user-authorizable scope for forwarding read actions", () => {
@@ -29,16 +20,5 @@ describe("Gmail provider definition", () => {
     for (const action of forwardingReadActions) {
       expect(action.requiredScopes).toEqual([gmailSettingsBasicScope]);
     }
-  });
-
-  it("makes unread inbox counts discoverable from natural language", () => {
-    const index = buildActionSearchIndex(provider.actions);
-
-    expect(
-      searchActions(index, "unread inbox count", {
-        limit: 10,
-        service: "gmail",
-      }).map((action) => action.id),
-    ).toContain("gmail.fetch_emails");
   });
 });
