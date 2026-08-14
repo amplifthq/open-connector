@@ -146,7 +146,12 @@ export const credentialValidators: CredentialValidators = {
     };
   },
   async oauth2(input, { fetcher, signal }) {
-    const result = await requestAccounts(input.accessToken, { fetcher, signal }, { page: 1, perPage: 50 });
+    const result = await requestOAuthAccounts(
+      input.accessToken,
+      { fetcher, signal },
+      { page: 1, perPage: 50 },
+      "validate",
+    );
     if (result.accounts.length === 0) {
       throw new ProviderRequestError(400, "Cloudflare OAuth cannot access any accounts.");
     }
@@ -164,7 +169,7 @@ export const credentialValidators: CredentialValidators = {
         grantedScopes: input.profile.grantedScopes,
         metadata: compactObject({
           apiBaseUrl: cloudflareBrowserRenderingApiBaseUrl,
-          validationEndpoint: "/accounts?page=1&per_page=50",
+          validationEndpoint: "/memberships?page=1&per_page=50&status=accepted",
           accountId,
           accountName,
           accountType: optionalString(account.type),
@@ -180,7 +185,7 @@ export const credentialValidators: CredentialValidators = {
       grantedScopes: input.profile.grantedScopes,
       metadata: {
         apiBaseUrl: cloudflareBrowserRenderingApiBaseUrl,
-        validationEndpoint: "/accounts?page=1&per_page=50",
+        validationEndpoint: "/memberships?page=1&per_page=50&status=accepted",
         availableAccounts: result.accounts,
       },
     };
@@ -191,10 +196,39 @@ async function listAccounts(
   input: Record<string, unknown>,
   context: CloudflareBrowserRenderingContext,
 ): Promise<unknown> {
-  return requestAccounts(context.accessToken, context, {
+  const pagination = {
     page: optionalInteger(input.page),
     perPage: optionalInteger(input.perPage),
-  });
+  };
+  return context.authType === "oauth2"
+    ? requestOAuthAccounts(context.accessToken, context, pagination)
+    : requestAccounts(context.accessToken, context, pagination);
+}
+
+async function requestOAuthAccounts(
+  accessToken: string,
+  context: Pick<CloudflareBrowserRenderingContext, "fetcher" | "signal">,
+  input: { page?: number; perPage?: number } = {},
+  phase: CloudflareRequestPhase = "execute",
+): Promise<{ accounts: Array<Record<string, unknown>>; resultInfo: Record<string, unknown> }> {
+  const envelope = await cloudflareRequestEnvelope(
+    accessToken,
+    {
+      path: "/memberships",
+      query: {
+        page: input.page ?? 1,
+        per_page: input.perPage ?? 50,
+        status: "accepted",
+      },
+    },
+    context,
+    phase,
+  );
+
+  return {
+    accounts: normalizeMembershipAccountList(envelope.result),
+    resultInfo: normalizeResultInfo(envelope.result_info),
+  };
 }
 
 async function requestAccounts(
@@ -563,6 +597,16 @@ function normalizeAccountList(value: unknown): Array<Record<string, unknown>> {
     throw new ProviderRequestError(502, "malformed cloudflare accounts response");
   }
   return value.map((item) => normalizeAccount(item));
+}
+
+function normalizeMembershipAccountList(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) {
+    throw new ProviderRequestError(502, "malformed cloudflare memberships response");
+  }
+  return value.map((item) => {
+    const membership = readObject(item, "cloudflare membership");
+    return normalizeAccount(membership.account);
+  });
 }
 
 function normalizeAccount(value: unknown): Record<string, unknown> {
