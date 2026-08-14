@@ -2424,6 +2424,7 @@ describe("ConnectServer", () => {
     expect(first.status).toBe(200);
     expect(replay.status).toBe(200);
     expect(replay.headers.get("cache-control")).toBe("no-store");
+    expect(firstBody).toMatchObject({ outputSchema: echoAction.outputSchema });
     await expect(replay.json()).resolves.toEqual(firstBody);
     expect(executions).toBe(3);
     expect((await runs.list()).items).toHaveLength(3);
