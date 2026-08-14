@@ -12,7 +12,7 @@ function oauthCredential(metadata: Record<string, unknown>): Extract<ResolvedCre
     profile: {
       accountId: "cloudflare:test",
       displayName: "Cloudflare Browser Run",
-      grantedScopes: ["browser-rendering.read", "browser-rendering.write"],
+      grantedScopes: ["memberships.read", "browser-rendering.read", "browser-rendering.write"],
     },
     metadata,
   };
@@ -46,7 +46,13 @@ describe("Cloudflare Browser Run OAuth", () => {
     const fetch = vi.fn(async () =>
       Response.json({
         success: true,
-        result: [{ id: "account-1", name: "Amplift", type: "standard" }],
+        result: [
+          {
+            id: "membership-1",
+            account: { id: "account-1", name: "Amplift", type: "standard" },
+            status: "accepted",
+          },
+        ],
         result_info: { page: 1, per_page: 50, count: 1, total_count: 1, total_pages: 1 },
       }),
     );
@@ -54,13 +60,48 @@ describe("Cloudflare Browser Run OAuth", () => {
     const result = await credentialValidators.oauth2!(oauthCredential({}), { fetcher: fetch });
 
     expect(fetch).toHaveBeenCalledWith(
-      "https://api.cloudflare.com/client/v4/accounts?page=1&per_page=50",
+      "https://api.cloudflare.com/client/v4/memberships?page=1&per_page=50&status=accepted",
       expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer oauth-access-token" }) }),
     );
     expect(result).toMatchObject({
       profile: { accountId: "account-1", displayName: "Amplift" },
       metadata: { accountId: "account-1", accountName: "Amplift", accountType: "standard" },
     });
+  });
+
+  it("lists OAuth accounts through Cloudflare memberships", async () => {
+    const fetch = vi.fn(async () =>
+      Response.json({
+        success: true,
+        result: [
+          {
+            id: "membership-1",
+            account: { id: "account-1", name: "Amplift", type: "standard" },
+            status: "accepted",
+          },
+        ],
+        result_info: { page: 1, per_page: 50, count: 1, total_count: 1 },
+      }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    setDefaultGuardedFetchDnsLookup(null);
+
+    const result = await executors["cloudflare_browser_rendering.list_accounts"]!(
+      {},
+      executionContext(oauthCredential({ accountId: "account-1" })),
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      output: {
+        accounts: [{ id: "account-1", name: "Amplift", type: "standard" }],
+        resultInfo: { page: 1, perPage: 50, count: 1, totalCount: 1 },
+      },
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.cloudflare.com/client/v4/memberships?page=1&per_page=50&status=accepted",
+      expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer oauth-access-token" }) }),
+    );
   });
 
   it("executes Browser Run with the OAuth bearer token and resolved account", async () => {
