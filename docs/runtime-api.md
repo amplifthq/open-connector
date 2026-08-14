@@ -275,8 +275,5 @@ These endpoints power the Web Console, examples, and setup scripts:
 `caller` identifies the runtime entry point (`http`, `mcp`, or `web`), not an end-user identity. Each run uses
 its `executionId` as the stable run ID; `GET /api/runs/:id` returns that single redacted audit record.
 
-Successful Action execution responses include the `outputSchema` used to interpret
-`data`, including when an idempotency key replays the stored response. They also
-include `meta.executionId`, `meta.actionId`, and `meta.auditPersisted` once
-execution has started. `auditPersisted: false` means the action result is valid
-but its audit record could not be stored.
+Action execution responses include `meta.executionId`, `meta.actionId`, and `meta.auditPersisted` once execution
+has started. `auditPersisted: false` means the action result is valid but its audit record could not be stored.

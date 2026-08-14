@@ -82,15 +82,6 @@ async function createCloudflareApp(env: CloudflareEnv, publicOrigin: string): Pr
     secretCodec,
     adminToken: env.OOMOL_CONNECT_ADMIN_TOKEN,
     runtimeToken: env.OOMOL_CONNECT_RUNTIME_TOKEN,
-    runtimeConfig: (name) => {
-      if (name === "OOMOL_CONNECT_GITHUB_APP_ID") {
-        return env.OOMOL_CONNECT_GITHUB_APP_ID;
-      }
-      if (name === "OOMOL_CONNECT_GITHUB_APP_PRIVATE_KEY") {
-        return env.OOMOL_CONNECT_GITHUB_APP_PRIVATE_KEY;
-      }
-      return undefined;
-    },
     actionPolicy: new ActionPolicyService({
       allowedActions: parseActionPolicyList(env.OOMOL_CONNECT_ALLOWED_ACTIONS),
       blockedActions: parseActionPolicyList(env.OOMOL_CONNECT_BLOCKED_ACTIONS),
@@ -158,8 +149,6 @@ function createCacheKey(env: CloudflareEnv, publicOrigin: string): string {
     transitFileTtlSeconds: env.OOMOL_CONNECT_TRANSIT_FILE_TTL_SECONDS ?? "",
     transitFileMaxBytes: env.OOMOL_CONNECT_TRANSIT_FILE_MAX_BYTES ?? "",
     runLimit: env.OOMOL_CONNECT_RUN_LIMIT ?? "",
-    githubAppId: env.OOMOL_CONNECT_GITHUB_APP_ID ?? "",
-    githubAppPrivateKey: env.OOMOL_CONNECT_GITHUB_APP_PRIVATE_KEY ?? "",
   });
 }
 

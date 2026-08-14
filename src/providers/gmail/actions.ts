@@ -138,7 +138,6 @@ const filter = s.object(
 const action = (input: {
   name: string;
   description: string;
-  effect?: ActionDefinition["effect"];
   requiredScopes: string[];
   properties?: Record<string, JsonSchema>;
   required?: string[];
@@ -147,7 +146,6 @@ const action = (input: {
   defineProviderAction(service, {
     name: input.name,
     description: input.description,
-    effect: input.effect,
     requiredScopes: input.requiredScopes,
     inputSchema: s.object(input.properties ?? {}, {
       required: input.required,
@@ -215,8 +213,7 @@ export const gmailActions: ActionDefinition[] = [
   action({
     name: "fetch_emails",
     description:
-      "List or count Gmail messages with optional Gmail search, label, and pagination filters. For an unread inbox count, use query `is:unread in:inbox`; resultSizeEstimate contains the approximate count. Use detail to choose IDs, summaries, or full messages.",
-    effect: "read",
+      "List Gmail messages with optional query, label, and pagination filters. Use detail to choose IDs, summaries, or full messages.",
     requiredScopes: gmailReadScopes,
     properties: pageFields({
       query,

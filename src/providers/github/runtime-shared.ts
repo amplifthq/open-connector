@@ -1,5 +1,3 @@
-import type { GitHubAppInstallation } from "./app-auth.ts";
-
 import { compactObject, optionalInteger, optionalString, optionalRawString } from "../../core/cast.ts";
 import { ProviderRequestError } from "../provider-runtime.ts";
 
@@ -13,7 +11,6 @@ export const githubUserAgent = "oomol-connect";
 export type GitHubActionContext = {
   accessToken: string;
   fetcher: typeof fetch;
-  installation?: GitHubAppInstallation;
 };
 
 export type GitHubActionHandler = (input: Record<string, unknown>, context: GitHubActionContext) => Promise<unknown>;

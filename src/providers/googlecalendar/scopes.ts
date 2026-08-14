@@ -1,3 +1,4 @@
+export const googleCalendarFullScope = "https://www.googleapis.com/auth/calendar";
 export const googleCalendarReadonlyScope = "https://www.googleapis.com/auth/calendar.readonly";
 export const googleCalendarEventsScope = "https://www.googleapis.com/auth/calendar.events";
 export const googleCalendarCalendarsScope = "https://www.googleapis.com/auth/calendar.calendars";
@@ -17,6 +18,7 @@ export const googlecalendarAclReadScopes: string[] = [googleCalendarAclsReadonly
 export const googlecalendarAclWriteScopes: string[] = [googleCalendarAclsScope];
 
 export const googlecalendarOAuthScopes: string[] = [
+  googleCalendarFullScope,
   googleCalendarReadonlyScope,
   googleCalendarEventsScope,
   googleCalendarCalendarsScope,
