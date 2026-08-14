@@ -484,7 +484,7 @@ export class ConnectServer {
     if (!policy.evaluate(action).allowed) {
       return writeRuntimeActionHttpResult(
         context,
-        await this.executeRuntimeAction(actionId, input, connectionName, policy, runtimeGrant),
+        await this.executeRuntimeAction(action, input, connectionName, policy, runtimeGrant),
       );
     }
     const idempotencyKey = readIdempotencyKey(context.req.header("idempotency-key"));
@@ -500,7 +500,7 @@ export class ConnectServer {
     if (!idempotencyKey.key) {
       return writeRuntimeActionHttpResult(
         context,
-        await this.executeRuntimeAction(actionId, input, connectionName, policy, runtimeGrant),
+        await this.executeRuntimeAction(action, input, connectionName, policy, runtimeGrant),
       );
     }
 
@@ -554,7 +554,7 @@ export class ConnectServer {
       return writeRuntimeActionHttpResult(context, claim.response);
     }
 
-    const result = await this.executeRuntimeAction(actionId, input, connectionName, policy, runtimeGrant);
+    const result = await this.executeRuntimeAction(action, input, connectionName, policy, runtimeGrant);
     const completed = await this.options.idempotency.complete({
       keyHash,
       requestHash,
@@ -570,7 +570,7 @@ export class ConnectServer {
   }
 
   private async executeRuntimeAction(
-    actionId: string,
+    action: RuntimeActionDefinition,
     input: unknown,
     connectionName: string | undefined,
     policy: ActionPolicySnapshot,
@@ -578,7 +578,7 @@ export class ConnectServer {
   ): Promise<RuntimeActionHttpResult> {
     try {
       const run = await this.options.actions.run({
-        actionId,
+        actionId: action.id,
         input,
         caller: "http",
         connectionName,
@@ -589,15 +589,16 @@ export class ConnectServer {
         return serializeRuntimeFailure({
           status: 404,
           errorCode: "invalid_input",
-          message: `unknown action: ${actionId}`,
-          meta: { actionId },
+          message: `unknown action: ${action.id}`,
+          meta: { actionId: action.id },
         });
       }
 
       return serializeRuntimeActionResult({
-        actionId,
+        actionId: action.id,
         executionId: run.executionId,
         auditPersisted: run.auditPersisted,
+        outputSchema: action.outputSchema,
         result: run.result,
       });
     } catch (error) {
@@ -606,7 +607,7 @@ export class ConnectServer {
           status: mapConnectionErrorStatus(error),
           errorCode: error.code,
           message: error.message,
-          meta: { actionId },
+          meta: { actionId: action.id },
         });
       }
 
