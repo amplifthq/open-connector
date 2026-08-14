@@ -4,12 +4,19 @@ import { provider } from "./definition.ts";
 
 const gmailSettingsSharingScope = "https://www.googleapis.com/auth/gmail.settings.sharing";
 const gmailSettingsBasicScope = "https://www.googleapis.com/auth/gmail.settings.basic";
+const gmailReadonlyScope = "https://www.googleapis.com/auth/gmail.readonly";
 
 describe("Gmail provider definition", () => {
   it("does not request the Workspace administrator-only sharing scope for user OAuth", () => {
     const oauth = provider.auth.find((auth) => auth.type === "oauth2");
 
     expect(oauth?.scopes).not.toContain(gmailSettingsSharingScope);
+  });
+
+  it("requests only read-only Gmail access for the OpenMeld production baseline", () => {
+    const oauth = provider.auth.find((auth) => auth.type === "oauth2");
+
+    expect(oauth?.scopes).toEqual([gmailReadonlyScope]);
   });
 
   it("uses a user-authorizable scope for forwarding read actions", () => {

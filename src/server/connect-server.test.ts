@@ -2367,6 +2367,40 @@ describe("ConnectServer", () => {
     expect(runtimeBody.data[0]?.outputSchema).toEqual({ type: "object" });
   });
 
+  it("hides policy-blocked actions from runtime discovery", async () => {
+    const app = createTestServer(
+      [
+        {
+          ...apiKeyProvider,
+          actions: [echoAction, followUpAction],
+        },
+      ],
+      {
+        actionPolicy: new LocalActionPolicyService({
+          blockedActions: ["example.follow_up"],
+        }),
+      },
+    ).createApp();
+
+    const services = await app.request("/v1/actions");
+    await expect(services.json()).resolves.toMatchObject({
+      success: true,
+      data: [{ service: "example" }],
+    });
+
+    const actions = await app.request("/v1/actions?service=example");
+    await expect(actions.json()).resolves.toMatchObject({
+      success: true,
+      data: [{ id: "example.echo" }],
+    });
+
+    const search = await app.request("/v1/actions/search?q=follow");
+    await expect(search.json()).resolves.toMatchObject({
+      success: true,
+      data: [],
+    });
+  });
+
   it("serves v1 apps and authenticated service views without leaking credentials", async () => {
     const app = createTestServer(
       [

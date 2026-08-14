@@ -392,14 +392,16 @@ export class ConnectServer {
     return writeRuntimeSuccess(context, providers.map(serializeRuntimeProvider));
   }
 
-  private listRuntimeActions(context: Context): Response {
+  private async listRuntimeActions(context: Context): Promise<Response> {
+    const policy = await this.getPolicySnapshot(context);
+    const allowedActions = this.options.catalog.actions.filter((action) => policy.evaluate(action).allowed);
     const service = optionalString(context.req.query("service"));
     if (!service) {
-      const services = [...new Set(this.options.catalog.actions.map((action) => action.service))];
+      const services = [...new Set(allowedActions.map((action) => action.service))];
       return writeRuntimeSuccess(context, services.map(serializeRuntimeActionService));
     }
 
-    const actions = this.options.catalog.actions.filter((action) => action.service === service);
+    const actions = allowedActions.filter((action) => action.service === service);
     return writeRuntimeSuccess(context, actions.map(serializeRuntimeAction));
   }
 
@@ -418,7 +420,12 @@ export class ConnectServer {
       service: query.service,
       limit: query.limit,
     });
-    return writeRuntimeSuccess(context, await this.serializeSearchResults(results));
+    const policy = await this.getPolicySnapshot(context);
+    const allowedResults = results.filter((result) => {
+      const action = this.options.catalog.actionsById.get(result.id);
+      return action ? policy.evaluate(action).allowed : false;
+    });
+    return writeRuntimeSuccess(context, await this.serializeSearchResults(allowedResults));
   }
 
   private async serializeSearchResults(results: ActionSearchResult[]): Promise<RuntimeActionSearchResult[]> {

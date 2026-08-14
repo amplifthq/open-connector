@@ -17,13 +17,4 @@ export const googlecalendarSettingsReadScopes: string[] = [googleCalendarSetting
 export const googlecalendarAclReadScopes: string[] = [googleCalendarAclsReadonlyScope];
 export const googlecalendarAclWriteScopes: string[] = [googleCalendarAclsScope];
 
-export const googlecalendarOAuthScopes: string[] = [
-  googleCalendarFullScope,
-  googleCalendarReadonlyScope,
-  googleCalendarEventsScope,
-  googleCalendarCalendarsScope,
-  googleCalendarCalendarListScope,
-  googleCalendarSettingsReadonlyScope,
-  googleCalendarAclsScope,
-  googleCalendarAclsReadonlyScope,
-];
+export const googlecalendarOAuthScopes: string[] = [googleCalendarReadonlyScope];
