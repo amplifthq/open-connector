@@ -17,7 +17,6 @@ import {
   defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
-  requireApiKeyCredential,
 } from "../provider-runtime.ts";
 
 const service = "cloudflare_browser_rendering";
@@ -36,8 +35,10 @@ interface CloudflareEnvelope {
 }
 
 interface CloudflareBrowserRenderingContext {
-  apiToken: string;
-  accountId: string;
+  authType: "api_key" | "oauth2";
+  accessToken: string;
+  accountId?: string;
+  metadata: Record<string, unknown>;
   fetcher: ProviderFetch;
   signal?: AbortSignal;
 }
@@ -75,20 +76,35 @@ export const executors: ProviderExecutors = defineProviderExecutors<CloudflareBr
   service,
   handlers: cloudflareBrowserRenderingActionHandlers,
   async createContext(context, fetcher): Promise<CloudflareBrowserRenderingContext> {
-    const credential = await requireApiKeyCredential(context, service);
-    return {
-      apiToken: credential.apiKey,
-      accountId: requireAccountId(credential.values),
-      fetcher,
-      signal: context.signal,
-    };
+    const credential = await context.getCredential(service);
+    if (credential?.authType === "api_key") {
+      return {
+        authType: "api_key",
+        accessToken: credential.apiKey,
+        accountId: requireAccountId(credential.values),
+        metadata: credential.metadata,
+        fetcher,
+        signal: context.signal,
+      };
+    }
+    if (credential?.authType === "oauth2") {
+      return {
+        authType: "oauth2",
+        accessToken: credential.accessToken,
+        accountId: optionalString(credential.metadata.accountId),
+        metadata: credential.metadata,
+        fetcher,
+        signal: context.signal,
+      };
+    }
+    throw new ProviderRequestError(401, "Connect Cloudflare Browser Run first.");
   },
 });
 
 export const proxy: ProviderProxyExecutor = defineProviderProxy({
   service,
   baseUrl: cloudflareBrowserRenderingApiBaseUrl,
-  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  auth: { type: "bearer" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -129,20 +145,71 @@ export const credentialValidators: CredentialValidators = {
       }),
     };
   },
+  async oauth2(input, { fetcher, signal }) {
+    const result = await requestAccounts(input.accessToken, { fetcher, signal }, { page: 1, perPage: 50 });
+    if (result.accounts.length === 0) {
+      throw new ProviderRequestError(400, "Cloudflare OAuth cannot access any accounts.");
+    }
+
+    const totalCount = optionalInteger(result.resultInfo.totalCount);
+    if (result.accounts.length === 1 && totalCount === 1) {
+      const account = result.accounts[0]!;
+      const accountId = readRequiredString(account, "id");
+      const accountName = readRequiredString(account, "name");
+      return {
+        profile: {
+          accountId,
+          displayName: accountName,
+        },
+        grantedScopes: input.profile.grantedScopes,
+        metadata: compactObject({
+          apiBaseUrl: cloudflareBrowserRenderingApiBaseUrl,
+          validationEndpoint: "/accounts?page=1&per_page=50",
+          accountId,
+          accountName,
+          accountType: optionalString(account.type),
+        }),
+      };
+    }
+
+    return {
+      profile: {
+        accountId: input.profile.accountId,
+        displayName: "Cloudflare Browser Run",
+      },
+      grantedScopes: input.profile.grantedScopes,
+      metadata: {
+        apiBaseUrl: cloudflareBrowserRenderingApiBaseUrl,
+        validationEndpoint: "/accounts?page=1&per_page=50",
+        availableAccounts: result.accounts,
+      },
+    };
+  },
 };
 
 async function listAccounts(
   input: Record<string, unknown>,
   context: CloudflareBrowserRenderingContext,
 ): Promise<unknown> {
+  return requestAccounts(context.accessToken, context, {
+    page: optionalInteger(input.page),
+    perPage: optionalInteger(input.perPage),
+  });
+}
+
+async function requestAccounts(
+  accessToken: string,
+  context: Pick<CloudflareBrowserRenderingContext, "fetcher" | "signal">,
+  input: { page?: number; perPage?: number } = {},
+): Promise<{ accounts: Array<Record<string, unknown>>; resultInfo: Record<string, unknown> }> {
   const envelope = await cloudflareRequestEnvelope(
-    context.apiToken,
+    accessToken,
     {
       path: "/accounts",
-      query: compactObject({
-        page: optionalInteger(input.page),
-        per_page: optionalInteger(input.perPage),
-      }),
+      query: {
+        page: input.page ?? 1,
+        per_page: input.perPage ?? 50,
+      },
     },
     context,
     "execute",
@@ -251,11 +318,13 @@ async function runQuickAction(
     assertJsonExtractionInstruction(input);
   }
 
+  const accountId = resolveAccountId(input, context);
+
   return cloudflareRequestEnvelope(
-    context.apiToken,
+    context.accessToken,
     {
       method: "POST",
-      path: `/accounts/${encodeURIComponent(context.accountId)}/browser-rendering/${endpoint}`,
+      path: `/accounts/${encodeURIComponent(accountId)}/browser-rendering/${endpoint}`,
       query: compactObject({
         cacheTTL: optionalNumber(input.cacheTtl),
       }),
@@ -264,6 +333,37 @@ async function runQuickAction(
     context,
     "execute",
   );
+}
+
+function resolveAccountId(input: Record<string, unknown>, context: CloudflareBrowserRenderingContext): string {
+  const inputAccountId = optionalString(input.accountId);
+  const accountId = context.accountId ?? optionalString(context.metadata.accountId) ?? inputAccountId;
+  if (!accountId) {
+    throw new ProviderRequestError(
+      400,
+      Array.isArray(context.metadata.availableAccounts)
+        ? "accountId is required for this Cloudflare Browser Run action because the OAuth connection can access multiple accounts."
+        : "accountId is required in the connected Cloudflare Browser Run credential.",
+    );
+  }
+  if (context.authType === "api_key" && inputAccountId && inputAccountId !== accountId) {
+    throw new ProviderRequestError(400, "accountId must match the connected Cloudflare Browser Run credential.");
+  }
+  ensureAccountIsAvailable(accountId, context.metadata);
+  return accountId;
+}
+
+function ensureAccountIsAvailable(accountId: string, metadata: Record<string, unknown>): void {
+  if (!Array.isArray(metadata.availableAccounts)) {
+    return;
+  }
+  const matched = metadata.availableAccounts.some((item) => optionalString(optionalRecord(item)?.id) === accountId);
+  if (!matched) {
+    throw new ProviderRequestError(
+      400,
+      "accountId must be one of the Cloudflare accounts accessible through this OAuth connection.",
+    );
+  }
 }
 
 function buildQuickActionBody(input: Record<string, unknown>): Record<string, unknown> {
