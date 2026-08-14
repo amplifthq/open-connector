@@ -885,6 +885,7 @@ function createRunPath(): Record<string, unknown> {
           runtimeSuccessSchema(
             jsonSchema.unknown("Action output matching the catalog schema."),
             actionResultMetaSchema,
+            true,
           ),
         ),
         400: jsonResponse(runtimeFailureSchema(actionFailureMetaSchema)),
@@ -1194,7 +1195,7 @@ function createConcreteRunOperation(action: ActionDefinition): Record<string, un
       },
     },
     responses: {
-      200: jsonResponse(runtimeSuccessSchema(action.outputSchema, actionResultMetaSchema)),
+      200: jsonResponse(runtimeSuccessSchema(action.outputSchema, actionResultMetaSchema, true)),
       400: jsonResponse(runtimeFailureSchema(actionFailureMetaSchema)),
       403: jsonResponse(runtimeFailureSchema(actionFailureMetaSchema)),
       404: jsonResponse(runtimeFailureSchema(actionFailureMetaSchema)),
@@ -1208,19 +1209,25 @@ function createConcreteRunOperation(action: ActionDefinition): Record<string, un
 function runtimeSuccessSchema(
   data: JsonSchema,
   meta: JsonSchema = { type: "object", additionalProperties: true },
+  includeOutputSchema = false,
 ): JsonSchema {
-  return jsonSchema.object(
-    {
-      success: { const: true, type: "boolean" },
-      message: { const: "OK", type: "string" },
-      data,
-      meta,
-    },
-    {
-      required: ["success", "message", "data", "meta"],
-      description: "Runtime success envelope.",
-    },
-  );
+  const properties: Record<string, JsonSchema> = {
+    success: { const: true, type: "boolean" },
+    message: { const: "OK", type: "string" },
+    data,
+    meta,
+  };
+  const required = ["success", "message", "data", "meta"];
+  if (includeOutputSchema) {
+    properties.outputSchema = jsonSchema.unknownObject(
+      "The action output contract used for this execution and any idempotent replay.",
+    );
+    required.push("outputSchema");
+  }
+  return jsonSchema.object(properties, {
+    required,
+    description: "Runtime success envelope.",
+  });
 }
 
 function runtimeFailureSchema(meta: JsonSchema = { type: "object", additionalProperties: true }): JsonSchema {

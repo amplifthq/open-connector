@@ -13,7 +13,13 @@ interface RunOperation {
     schema: Record<string, unknown>;
     description: string;
   }>;
-  responses: Record<string, { description: string }>;
+  responses: Record<
+    string,
+    {
+      description: string;
+      content?: { "application/json"?: { schema?: Record<string, unknown> } };
+    }
+  >;
 }
 
 const provider: ProviderDefinition = {
@@ -65,6 +71,15 @@ describe("action execution OpenAPI", () => {
       );
       expect(path.post.responses["403"]).toBeDefined();
       expect(path.post.responses["429"]).toBeDefined();
+      expect(path.post.responses["200"]?.content?.["application/json"]?.schema).toMatchObject({
+        properties: {
+          outputSchema: {
+            type: "object",
+            description: expect.stringContaining("idempotent replay"),
+          },
+        },
+        required: expect.arrayContaining(["outputSchema"]),
+      });
       expect(path.post.description).toContain("24-hour replay window");
       expect(path.post.description).toContain("original HTTP status and body");
       expect(path.post.description).toContain("completed successes and failures");

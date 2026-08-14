@@ -14,6 +14,7 @@ export interface RuntimeSuccessEnvelope<TData> {
   message: "OK";
   data: TData;
   meta: RuntimeResponseMeta;
+  outputSchema?: RuntimeActionDefinition["outputSchema"];
 }
 
 export interface RuntimeFailureEnvelope<TData = unknown> {
@@ -85,6 +86,7 @@ export interface RuntimeActionResultInput {
   actionId: string;
   executionId: string;
   auditPersisted: boolean;
+  outputSchema: RuntimeActionDefinition["outputSchema"];
   result: ExecutionResult;
 }
 
@@ -174,7 +176,7 @@ export function serializeRuntimeFailure(input: RuntimeFailureInput): RuntimeActi
 
 /** Build the persistable HTTP response for a completed action execution. */
 export function serializeRuntimeActionResult(input: RuntimeActionResultInput): RuntimeActionHttpResult {
-  const { actionId, executionId, auditPersisted, result } = input;
+  const { actionId, executionId, auditPersisted, outputSchema, result } = input;
   const meta = { executionId, actionId, auditPersisted };
   if (result.ok) {
     return {
@@ -184,6 +186,7 @@ export function serializeRuntimeActionResult(input: RuntimeActionResultInput): R
         message: "OK",
         data: result.output ?? null,
         meta,
+        outputSchema,
       },
     };
   }

@@ -45,12 +45,13 @@ describe("runtime action metadata", () => {
 });
 
 describe("runtime action HTTP results", () => {
-  it("serializes a successful execution without changing its wire shape", () => {
+  it("serializes a successful execution with its output contract", () => {
     expect(
       serializeRuntimeActionResult({
         actionId: "example.echo",
         executionId: "execution-1",
         auditPersisted: true,
+        outputSchema: { type: "object" },
         result: { ok: true, output: { value: "hello" } },
       }),
     ).toEqual({
@@ -64,6 +65,7 @@ describe("runtime action HTTP results", () => {
           actionId: "example.echo",
           auditPersisted: true,
         },
+        outputSchema: { type: "object" },
       },
     });
   });
@@ -82,6 +84,7 @@ describe("runtime action HTTP results", () => {
         actionId: "example.echo",
         executionId: "execution-1",
         auditPersisted: false,
+        outputSchema: { type: "object" },
         result: {
           ok: false,
           error: { code, message: "Action failed.", details: { reason: "example" } },
