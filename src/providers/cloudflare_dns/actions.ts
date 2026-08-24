@@ -209,6 +209,7 @@ export type CloudflareDnsActionName =
 export const cloudflareDnsActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_accounts",
+    effect: "read",
     description: "List Cloudflare accounts visible to the current credential.",
     requiredScopes: [zoneReadScope],
     providerPermissions: [zoneReadPermission],
@@ -224,6 +225,7 @@ export const cloudflareDnsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_zones",
+    effect: "read",
     description: "List the Cloudflare zones visible to the current API token.",
     requiredScopes: [zoneReadScope],
     providerPermissions: [zoneReadPermission],
@@ -251,6 +253,7 @@ export const cloudflareDnsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_zone",
+    effect: "read",
     description: "Get one Cloudflare zone by zone ID.",
     requiredScopes: [zoneReadScope],
     providerPermissions: [zoneReadPermission],
@@ -259,6 +262,7 @@ export const cloudflareDnsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_dns_records",
+    effect: "read",
     description: "List DNS records inside one Cloudflare zone.",
     requiredScopes: [zoneReadScope, dnsReadScope],
     providerPermissions: [dnsReadPermission],
@@ -291,6 +295,7 @@ export const cloudflareDnsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_dns_record",
+    effect: "read",
     description: "Get one DNS record from a Cloudflare zone.",
     requiredScopes: [zoneReadScope, dnsReadScope],
     providerPermissions: [dnsReadPermission],
@@ -306,6 +311,7 @@ export const cloudflareDnsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_dns_record",
+    effect: "write",
     description: "Create a DNS record inside a Cloudflare zone.",
     requiredScopes: [zoneReadScope, dnsReadScope, dnsWriteScope],
     providerPermissions: [dnsWritePermission],
@@ -314,6 +320,7 @@ export const cloudflareDnsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_dns_record",
+    effect: "write",
     description: "Patch one DNS record inside a Cloudflare zone.",
     requiredScopes: [zoneReadScope, dnsReadScope, dnsWriteScope],
     providerPermissions: [dnsWritePermission],
@@ -322,6 +329,7 @@ export const cloudflareDnsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_dns_record",
+    effect: "destructive",
     description: "Delete one DNS record from a Cloudflare zone.",
     requiredScopes: [zoneReadScope, dnsReadScope, dnsWriteScope],
     providerPermissions: [dnsWritePermission],
