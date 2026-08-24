@@ -146,6 +146,7 @@ const scrapeResultSchema = s.requiredObject("One Cloudflare Browser Run scrape s
 export const cloudflareBrowserRenderingActions: ProviderActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_accounts",
+    effect: "read",
     description:
       "List Cloudflare accounts accessible to the API token so callers can confirm account IDs used by Browser Run actions.",
     inputSchema: paginationInputSchema,
@@ -159,6 +160,7 @@ export const cloudflareBrowserRenderingActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_html_content",
+    effect: "read",
     description: "Render a URL or raw HTML with Cloudflare Browser Run and return the fully rendered HTML content.",
     inputSchema: quickActionInputSchema("Input parameters for the Browser Run content endpoint."),
     outputSchema: s.object(
@@ -172,6 +174,7 @@ export const cloudflareBrowserRenderingActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_markdown",
+    effect: "read",
     description: "Render a URL or raw HTML with Cloudflare Browser Run and return the page content as Markdown.",
     inputSchema: quickActionInputSchema("Input parameters for the Browser Run markdown endpoint."),
     outputSchema: s.actionOutput(
@@ -183,6 +186,7 @@ export const cloudflareBrowserRenderingActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_links",
+    effect: "read",
     description: "Render a URL or raw HTML with Cloudflare Browser Run and return links discovered on the page.",
     inputSchema: quickActionInputSchema(
       "Input parameters for the Browser Run links endpoint.",
@@ -201,6 +205,7 @@ export const cloudflareBrowserRenderingActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_json",
+    effect: "read",
     description: "Render a URL or raw HTML with Cloudflare Browser Run and extract structured JSON from the page.",
     inputSchema: jsonQuickActionInputSchema(),
     outputSchema: s.actionOutput(
@@ -212,6 +217,7 @@ export const cloudflareBrowserRenderingActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "scrape_elements",
+    effect: "read",
     description: "Render a URL or raw HTML with Cloudflare Browser Run and scrape selected HTML elements.",
     inputSchema: quickActionInputSchema(
       "Input parameters for the Browser Run scrape endpoint.",
