@@ -8,6 +8,7 @@ const service = "googledrive";
 interface GoogledriveActionSource {
   name: string;
   description: string;
+  effect: ActionDefinition["effect"];
   requiredScopes: string[];
   inputSchema: JsonSchema;
   outputSchema: JsonSchema;
@@ -16,6 +17,7 @@ interface GoogledriveActionSource {
 const actionSources: GoogledriveActionSource[] = [
   {
     name: "about.get",
+    effect: "read",
     description: "Get Drive account information such as user details, quota, and supported capabilities.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -38,6 +40,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "apps.get",
+    effect: "read",
     description: "Get metadata for a specific Google Drive app by app ID.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -62,6 +65,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "changes.getStartPageToken",
+    effect: "read",
     description: "Get the page token for monitoring future Drive changes.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -110,6 +114,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "changes.list",
+    effect: "read",
     description: "List file and drive changes for incremental sync workflows.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -438,6 +443,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "comments.get",
+    effect: "read",
     description: "Get a specific comment on a Drive file by comment ID.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -775,6 +781,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "comments.list",
+    effect: "read",
     description: "List comments on a Drive file with pagination.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -1149,6 +1156,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.get",
+    effect: "read",
     description: "Get a shared drive by drive ID.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -1268,6 +1276,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.list",
+    effect: "read",
     description: "List shared drives accessible to the connected account.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -1419,6 +1428,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.export",
+    effect: "read",
     description:
       "Export a Google Workspace file to the requested MIME type and return a transit URL for the exported content.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
@@ -1508,6 +1518,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.get",
+    effect: "read",
     description: "Get metadata for a Drive file by ID.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -1680,6 +1691,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.list",
+    effect: "read",
     description: "List Google Drive files using the official Drive query and pagination parameters.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -1922,6 +1934,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.listLabels",
+    effect: "read",
     description: "List the Drive labels currently applied to a file.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -2117,6 +2130,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "permissions.get",
+    effect: "read",
     description: "Get a specific permission on a Drive file or shared drive by permission ID.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -2311,6 +2325,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "permissions.list",
+    effect: "read",
     description: "List permissions on a Drive file or shared drive.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -2548,6 +2563,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "replies.get",
+    effect: "read",
     description: "Get a specific reply under a Drive file comment.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -2728,6 +2744,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "replies.list",
+    effect: "read",
     description: "List replies under a Drive file comment with pagination.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -2940,6 +2957,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "revisions.get",
+    effect: "read",
     description: "Get metadata for a specific Drive file revision.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -3159,6 +3177,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "revisions.list",
+    effect: "read",
     description: "List revision metadata for a Drive file.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -3406,6 +3425,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "accessproposals.list",
+    effect: "read",
     description: "List pending access proposals for a specific Drive file.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -3560,6 +3580,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "approvals.list",
+    effect: "read",
     description: "List approvals associated with a specific Drive file.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -3674,6 +3695,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "comments.create",
+    effect: "write",
     description: "Create a comment on a Drive file, optionally with anchor or quoted file content.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4021,6 +4043,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "comments.delete",
+    effect: "destructive",
     description: "Permanently delete a comment thread from a Drive file.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4064,6 +4087,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "comments.update",
+    effect: "write",
     description: "Update the content of an existing Drive file comment.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4410,6 +4434,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.create",
+    effect: "write",
     description: "Create a new shared drive.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4576,6 +4601,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.delete",
+    effect: "destructive",
     description: "Permanently delete a shared drive.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4619,6 +4645,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.hide",
+    effect: "write",
     description: "Hide a shared drive from the default Drive view.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4738,6 +4765,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.unhide",
+    effect: "write",
     description: "Unhide a shared drive and restore it to the default Drive view.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4857,6 +4885,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.update",
+    effect: "write",
     description: "Update metadata or restrictions on a shared drive.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5057,6 +5086,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.copy",
+    effect: "write",
     description: "Copy a Drive file and optionally override official File metadata.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5273,6 +5303,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.create",
+    effect: "write",
     description: "Create a Drive file with official File metadata and optional connector media upload content.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5497,6 +5528,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.delete",
+    effect: "destructive",
     description: "Permanently delete a Drive file or folder by ID.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5535,6 +5567,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.emptyTrash",
+    effect: "destructive",
     description: "Permanently empty the user's trash or a shared drive's trash.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5565,6 +5598,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.generateIds",
+    effect: "read",
     description: "Generate one or more Drive file IDs for later create or copy requests.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5616,6 +5650,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.modifyLabels",
+    effect: "write",
     description: "Add, update, or remove Drive labels on a file.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5891,6 +5926,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.update",
+    effect: "write",
     description:
       "Patch a Drive file with official metadata, parent query parameters, and optional connector media upload content.",
     requiredScopes: [googleDriveFullScope],
@@ -6122,6 +6158,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "permissions.create",
+    effect: "write",
     description: "Create a permission on a Drive file or shared drive.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -6353,6 +6390,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "permissions.delete",
+    effect: "destructive",
     description: "Delete a permission from a Drive file or shared drive.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -6404,6 +6442,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "permissions.update",
+    effect: "write",
     description: "Update an existing Drive permission using Google Drive v3 patch semantics.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -6623,6 +6662,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "replies.create",
+    effect: "write",
     description: "Create a reply under an existing Drive file comment.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -6808,6 +6848,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "replies.delete",
+    effect: "destructive",
     description: "Permanently delete a specific reply from a Drive file comment thread.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -6860,6 +6901,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "replies.update",
+    effect: "write",
     description: "Update the content of an existing reply on a Drive file comment.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -7046,6 +7088,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "revisions.delete",
+    effect: "destructive",
     description: "Permanently delete a specific revision from a Drive file.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -7089,6 +7132,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "revisions.update",
+    effect: "write",
     description: "Update revision metadata flags on a specific Drive file revision.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
