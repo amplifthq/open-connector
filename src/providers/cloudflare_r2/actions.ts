@@ -111,6 +111,7 @@ export type CloudflareR2ActionName =
 export const cloudflareR2Actions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_accounts",
+    effect: "read",
     description: "List Cloudflare accounts visible to the current credential.",
     requiredScopes: [r2ReadScope],
     providerPermissions: [r2ReadPermission],
@@ -133,6 +134,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_buckets",
+    effect: "read",
     description: "List the R2 buckets in a Cloudflare account.",
     requiredScopes: [r2ReadScope],
     providerPermissions: [r2ReadPermission],
@@ -159,6 +161,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_bucket",
+    effect: "read",
     description: "Get one R2 bucket by name.",
     requiredScopes: [r2ReadScope],
     providerPermissions: [r2ReadPermission],
@@ -175,6 +178,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_bucket",
+    effect: "write",
     description: "Create an R2 bucket in a Cloudflare account.",
     requiredScopes: [r2WriteScope],
     providerPermissions: [r2WritePermission],
@@ -193,6 +197,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_bucket",
+    effect: "write",
     description: "Update mutable R2 bucket properties such as default storage class or jurisdiction.",
     requiredScopes: [r2WriteScope],
     providerPermissions: [r2WritePermission],
@@ -201,6 +206,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_bucket",
+    effect: "destructive",
     description: "Delete an R2 bucket by name.",
     requiredScopes: [r2WriteScope],
     providerPermissions: [r2WritePermission],
@@ -220,6 +226,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_bucket_cors_policy",
+    effect: "read",
     description: "Fetch the bucket-level CORS policy for an R2 bucket.",
     requiredScopes: [r2ReadScope],
     providerPermissions: [r2ReadPermission],
@@ -242,6 +249,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_bucket_cors_policy",
+    effect: "write",
     description: "Replace the bucket-level CORS policy for an R2 bucket.",
     requiredScopes: [r2WriteScope],
     providerPermissions: [r2WritePermission],
@@ -262,6 +270,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_bucket_cors_policy",
+    effect: "destructive",
     description: "Delete the bucket-level CORS policy for an R2 bucket.",
     requiredScopes: [r2WriteScope],
     providerPermissions: [r2WritePermission],

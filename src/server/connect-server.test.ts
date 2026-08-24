@@ -2252,6 +2252,7 @@ describe("ConnectServer", () => {
       id: string;
       service: string;
       name: string;
+      effect: string;
       authenticated: boolean;
       inputSchema: Record<string, unknown>;
       outputSchema: Record<string, unknown>;
@@ -2260,6 +2261,7 @@ describe("ConnectServer", () => {
       id: "example.echo",
       service: "example",
       name: "echo",
+      effect: "read",
       authenticated: true,
       inputSchema: { type: "object" },
       outputSchema: { type: "object" },
