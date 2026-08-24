@@ -37,6 +37,22 @@ const provider: ProviderDefinition = {
 };
 
 describe("action execution OpenAPI", () => {
+  it("documents the declared effect in both action search response shapes", () => {
+    const document = createOpenApiDocument([provider]);
+    const expectedEffectSchema = {
+      description: "The provider-declared effect: read, write, or destructive when specified.",
+      enum: ["read", "write", "destructive"],
+      type: "string",
+    };
+
+    expect(document.components.schemas.ActionSearchResult).toMatchObject({
+      properties: { effect: expectedEffectSchema },
+    });
+    expect(document.components.schemas.ActionSearchRuntimeResult).toMatchObject({
+      properties: { effect: expectedEffectSchema },
+    });
+  });
+
   it.each([
     ["generic", {}],
     ["concrete", { actionId: "example.echo" }],
