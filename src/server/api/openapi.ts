@@ -292,6 +292,11 @@ export function createOpenApiDocument(
             service: jsonSchema.string({ description: "The provider service that owns the action." }),
             name: jsonSchema.string({ description: "The provider-scoped action name." }),
             description: jsonSchema.string({ description: "The action description." }),
+            effect: {
+              type: "string",
+              enum: ["read", "write", "destructive"],
+              description: "The provider-declared effect: read, write, or destructive when specified.",
+            },
             authenticated: jsonSchema.boolean({
               description: "Whether the provider service has an authenticated local connection.",
             }),

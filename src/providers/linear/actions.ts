@@ -365,7 +365,7 @@ const actions: LinearActionSource[] = [
   ),
   action(
     "remove_reaction",
-    "write",
+    "destructive",
     "Delete an existing Linear reaction.",
     [linearWriteScope],
     input({ reaction_id: stringId }, ["reaction_id"]),
