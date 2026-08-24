@@ -2274,10 +2274,10 @@ describe("ConnectServer", () => {
       success: boolean;
       data: Array<{
         id: string;
-          service: string;
-          name: string;
-          description: string;
-          effect: "read" | "write" | "destructive";
+        service: string;
+        name: string;
+        description: string;
+        effect: "read" | "write" | "destructive";
         authenticated: boolean;
         inputSchema: Record<string, unknown>;
         outputSchema: Record<string, unknown>;
