@@ -13,6 +13,7 @@ import {
   githubHeaders,
   githubRequestJson,
   githubRequestNoContent,
+  githubRequestTextTail,
   mapReviewComment,
   normalizeGitHubError,
   normalizeRequestedReviewersResponse,
@@ -294,6 +295,10 @@ export const pullRequestActionHandlers: Record<string, GitHubActionHandler> = {
 
   list_workflow_run_jobs(input, { accessToken, fetcher }) {
     return listWorkflowRunJobs(input, accessToken, fetcher);
+  },
+
+  get_workflow_job_logs(input, { accessToken, fetcher, signal }) {
+    return getWorkflowJobLogs(input, accessToken, fetcher, signal);
   },
 
   rerun_workflow(input, { accessToken, fetcher }) {
@@ -701,6 +706,30 @@ async function listWorkflowRunJobs(input: Record<string, unknown>, accessToken: 
   return {
     total_count: Number(response.total_count ?? 0),
     jobs: Array.isArray(response.jobs) ? (response.jobs as Record<string, unknown>[]) : [],
+  };
+}
+
+const workflowJobLogTailMaxBytes = 256 * 1024;
+
+async function getWorkflowJobLogs(
+  input: Record<string, unknown>,
+  accessToken: string,
+  fetcher: typeof fetch,
+  signal?: AbortSignal,
+) {
+  const result = await githubRequestTextTail({
+    path: `/repos/${encodeURIComponent(String(input.owner))}/${encodeURIComponent(String(input.repo))}/actions/jobs/${String(input.jobId)}/logs`,
+    accessToken,
+    fetcher,
+    maxBytes: workflowJobLogTailMaxBytes,
+    signal,
+  });
+
+  return {
+    logs: result.text,
+    sizeBytes: result.sizeBytes,
+    returnedBytes: result.returnedBytes,
+    truncated: result.truncated,
   };
 }
 

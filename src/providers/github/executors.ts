@@ -36,12 +36,14 @@ export const executors: ProviderExecutors = defineProviderExecutors<GitHubAction
         accessToken: installation.accessToken,
         fetcher,
         installation: installation.installation,
+        signal: context.signal,
       };
     }
     const credential = await requireBearerCredential(context, service);
     return {
       accessToken: credential.accessToken,
       fetcher,
+      signal: context.signal,
     };
   },
 });
