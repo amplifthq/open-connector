@@ -32,6 +32,7 @@ export interface CreateFeishuJsonRequestInput extends Pick<
   FeishuActionRuntimeContext,
   "accessToken" | "fetcher" | "signal"
 > {
+  readonly provider?: "feishu" | "lark";
   readonly phase?: "validate" | "execute";
 }
 
@@ -68,7 +69,8 @@ const feishuScopeMissingErrorCodes = new Set([10023, 11223, 11229, 11241, 999916
 
 export function createFeishuJsonRequest(input: CreateFeishuJsonRequestInput): FeishuJsonRequest {
   return async (request) => {
-    const url = new URL(`${feishuOpenBaseUrl}${request.path}`);
+    const baseUrl = input.provider === "lark" ? "https://open.larksuite.com/open-apis" : feishuOpenBaseUrl;
+    const url = new URL(`${baseUrl}${request.path}`);
     appendQuery(url, request.query);
 
     const timeout = createProviderTimeout(input.signal, feishuRequestTimeoutMs);
