@@ -68,6 +68,7 @@ const feishuCredentialExpiredErrorCodes = new Set([
 const feishuScopeMissingErrorCodes = new Set([10023, 11223, 11229, 11241, 99991672, 99991676, 99991679]);
 
 export function createFeishuJsonRequest(input: CreateFeishuJsonRequestInput): FeishuJsonRequest {
+  const providerName = input.provider === "lark" ? "Lark" : "Feishu";
   return async (request) => {
     const baseUrl = input.provider === "lark" ? "https://open.larksuite.com/open-apis" : feishuOpenBaseUrl;
     const url = new URL(`${baseUrl}${request.path}`);
@@ -91,6 +92,7 @@ export function createFeishuJsonRequest(input: CreateFeishuJsonRequestInput): Fe
       const code = typeof envelope.code === "number" ? envelope.code : 0;
       if (!response.ok || code !== 0) {
         throw normalizeFeishuError({
+          providerName,
           phase: input.phase ?? "execute",
           status: response.status,
           rawText,
@@ -104,7 +106,7 @@ export function createFeishuJsonRequest(input: CreateFeishuJsonRequestInput): Fe
       }
       throw new ProviderRequestError(
         502,
-        error instanceof Error ? `Feishu request failed: ${error.message}` : "Feishu request failed",
+        error instanceof Error ? `${providerName} request failed: ${error.message}` : `${providerName} request failed`,
       );
     } finally {
       timeout.cleanup();
@@ -238,6 +240,7 @@ function readFeishuEnvelope(rawText: string): FeishuEnvelope {
 }
 
 function normalizeFeishuError(input: {
+  readonly providerName?: "Feishu" | "Lark";
   readonly phase: "validate" | "execute";
   readonly status: number;
   readonly rawText: string;
@@ -245,8 +248,9 @@ function normalizeFeishuError(input: {
 }) {
   const code = typeof input.envelope.code === "number" ? input.envelope.code : null;
   const providerMessage = optionalString(input.envelope.msg);
-  const message = providerMessage ?? (input.rawText || `Feishu request failed with status ${input.status}`);
-  const detailedMessage = code ? `Feishu ${code}: ${message}` : message;
+  const providerName = input.providerName ?? "Feishu";
+  const message = providerMessage ?? (input.rawText || `${providerName} request failed with status ${input.status}`);
+  const detailedMessage = code ? `${providerName} ${code}: ${message}` : message;
   const errorData = {
     providerStatus: input.status,
     providerCode: code,
