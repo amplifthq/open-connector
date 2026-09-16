@@ -639,7 +639,7 @@ function readWorkflowDispatchRunDetails(payload: unknown): WorkflowDispatchRunDe
   const workflowRunId = optionalInteger(record?.workflow_run_id);
   const runUrl = optionalString(record?.run_url);
   const htmlUrl = optionalString(record?.html_url);
-  if (!workflowRunId || !runUrl || !htmlUrl) {
+  if (!workflowRunId || !Number.isSafeInteger(workflowRunId) || !runUrl || !htmlUrl) {
     return undefined;
   }
 
