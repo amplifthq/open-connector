@@ -29,6 +29,17 @@ describe("GitHub workflow dispatch", () => {
         run_identity_status: "unavailable",
       },
     },
+    {
+      name: "does not claim an exact identity for an unsafe int64 run ID",
+      response: new Response(
+        '{"workflow_run_id":9007199254740993,"run_url":"https://api.github.com/repos/acme/widget/actions/runs/9007199254740993","html_url":"https://github.com/acme/widget/actions/runs/9007199254740993"}',
+        { status: 200 },
+      ),
+      expected: {
+        dispatched: true,
+        run_identity_status: "unavailable",
+      },
+    },
   ])("$name", async ({ response, expected }) => {
     const fetcher = vi.fn(async () => response) as unknown as typeof fetch;
 
