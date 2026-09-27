@@ -1246,9 +1246,26 @@ describe("ConnectServer", () => {
       service: "github",
       virtual: false,
     }));
+    const findAccessibleInstallation = vi.fn(async () => ({
+      accountAvatarUrl: "https://github.com/avatar",
+      accountHtmlUrl: "https://github.com/amplifthq",
+      accountId: "42",
+      accountLogin: "amplifthq",
+      accountType: "Organization" as const,
+      installationId: "987",
+      permissions: {},
+      repositorySelection: "all" as const,
+    }));
     const app = createTestServer([apiKeyProvider], {
-      githubAppInstallations: { complete },
+      githubAppInstallations: { complete, findAccessibleInstallation },
     }).createApp();
+
+    const lookup = await app.request(
+      "/api/providers/github/installations?verificationConnectionName=github_verify_test",
+    );
+    expect(lookup.status).toBe(200);
+    await expect(lookup.json()).resolves.toEqual({ accountLogin: "amplifthq", installationId: "987" });
+    expect(findAccessibleInstallation).toHaveBeenCalledWith({ verificationConnectionName: "github_verify_test" });
 
     const response = await app.request("/api/providers/github/installations", {
       method: "POST",
@@ -3235,7 +3252,8 @@ interface CreateTestServerOptions {
   providerLoader?: IProviderLoader;
   logger?: Logger;
   idempotency?: IIdempotencyStore;
-  githubAppInstallations?: Pick<GitHubAppInstallationService, "complete">;
+  githubAppInstallations?: Pick<GitHubAppInstallationService, "complete"> &
+    Partial<Pick<GitHubAppInstallationService, "findAccessibleInstallation">>;
   runtimeTokens?: RuntimeTokenService;
   runtimePolicyStore?: IRuntimePolicyStore;
   runs?: MemoryRunLogStore;
