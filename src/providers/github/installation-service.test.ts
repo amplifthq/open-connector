@@ -85,6 +85,112 @@ describe("GitHubAppInstallationService", () => {
     });
   });
 
+  it("rejects an installation for a different GitHub account before storing it", async () => {
+    const connections = {
+      connectWithCustomCredential: vi.fn(),
+      disconnect: vi.fn(),
+      getCredential: vi.fn(async () => githubUserCredential),
+    };
+    const service = new GitHubAppInstallationService({
+      connections,
+      runtimeConfig: githubAppRuntimeConfig,
+      verifyUserInstallation: vi.fn(async () => githubInstallation),
+    });
+    await expect(
+      service.complete({
+        expectedAccountLogin: "other-org",
+        installationId: "987",
+        targetConnectionName: "org_target",
+        verificationConnectionName: "github_verify_test",
+      }),
+    ).rejects.toThrow("different account");
+    expect(connections.connectWithCustomCredential).not.toHaveBeenCalled();
+  });
+
+  it("selects only an unambiguous organization installation of the configured App", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        installations: [
+          { id: 111, app_id: 99999, account: { id: 1, login: "wrong-app", type: "Organization" } },
+          {
+            id: 987,
+            app_id: 12345,
+            account: {
+              id: 42,
+              login: "amplifthq",
+              type: "Organization",
+              avatar_url: "https://github.com/avatar",
+              html_url: "https://github.com/amplifthq",
+            },
+            repository_selection: "all",
+          },
+        ],
+      }),
+    );
+    const service = new GitHubAppInstallationService({
+      connections: {
+        connectWithCustomCredential: vi.fn(),
+        disconnect: vi.fn(),
+        getCredential: vi.fn(async () => githubUserCredential),
+      },
+      fetcher,
+      runtimeConfig: githubAppRuntimeConfig,
+    });
+    await expect(
+      service.findAccessibleInstallation({ verificationConnectionName: "github_verify_test" }),
+    ).resolves.toMatchObject({ accountLogin: "amplifthq", installationId: "987" });
+    expect(fetcher).toHaveBeenCalledWith(expect.stringContaining("/user/installations"), expect.anything());
+  });
+
+  it.each([
+    ["another App", [{ id: 987, app_id: 99999, account: { id: 42, login: "amplifthq", type: "Organization" } }]],
+    ["no accessible installation", []],
+  ])("rejects %s during reconnect", async (_case, installations) => {
+    const service = new GitHubAppInstallationService({
+      connections: {
+        connectWithCustomCredential: vi.fn(),
+        disconnect: vi.fn(),
+        getCredential: vi.fn(async () => githubUserCredential),
+      },
+      fetcher: vi.fn<typeof fetch>().mockResolvedValue(Response.json({ installations })),
+      runtimeConfig: githubAppRuntimeConfig,
+    });
+    await expect(
+      service.findAccessibleInstallation({ verificationConnectionName: "github_verify_test" }),
+    ).rejects.toThrow("cannot access an organization installation");
+  });
+
+  it("refuses to guess when the user can access two organization installations", async () => {
+    const makeInstallation = (id: number, login: string) => ({
+      id,
+      app_id: 12345,
+      account: {
+        id,
+        login,
+        type: "Organization",
+        avatar_url: "https://github.com/avatar",
+        html_url: `https://github.com/${login}`,
+      },
+      repository_selection: "all",
+    });
+    const service = new GitHubAppInstallationService({
+      connections: {
+        connectWithCustomCredential: vi.fn(),
+        disconnect: vi.fn(),
+        getCredential: vi.fn(async () => githubUserCredential),
+      },
+      fetcher: vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          Response.json({ installations: [makeInstallation(987, "amplifthq"), makeInstallation(988, "another-org")] }),
+        ),
+      runtimeConfig: githubAppRuntimeConfig,
+    });
+    await expect(
+      service.findAccessibleInstallation({ verificationConnectionName: "github_verify_test" }),
+    ).rejects.toThrow("More than one organization installation");
+  });
+
   it("keeps the temporary user authorization when storing the installation fails", async () => {
     const connections = {
       connectWithCustomCredential: vi.fn(async () => {

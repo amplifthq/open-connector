@@ -4,7 +4,10 @@ import type { GitHubAppInstallation, verifyGitHubUserInstallation } from "./app-
 
 import { ConnectionError } from "../../connection-service.ts";
 import { ProviderRequestError, providerFetch } from "../provider-runtime.ts";
-import { verifyGitHubUserInstallation as verifyGitHubUserInstallationDefault } from "./app-auth.ts";
+import {
+  listGitHubUserInstallations,
+  verifyGitHubUserInstallation as verifyGitHubUserInstallationDefault,
+} from "./app-auth.ts";
 
 type GitHubConnectionManager = {
   connectWithCustomCredential(service: string, input: ConnectWithCredentialInput): Promise<ConnectionSummary>;
@@ -33,6 +36,7 @@ export class GitHubAppInstallationService {
   }
 
   async complete(input: {
+    expectedAccountLogin?: string;
     installationId: string;
     targetConnectionName: string;
     verificationConnectionName: string;
@@ -58,10 +62,19 @@ export class GitHubAppInstallationService {
       );
     }
 
-    await this.verifyInstallationAccess({
+    const installation = await this.verifyInstallationAccess({
       accessToken: verificationCredential.accessToken,
       installationId,
     });
+    if (
+      input.expectedAccountLogin &&
+      installation.accountLogin.toLowerCase() !== input.expectedAccountLogin.toLowerCase()
+    ) {
+      throw new ConnectionError(
+        "credential_verification_failed",
+        "The GitHub App installation belongs to a different account.",
+      );
+    }
 
     const connection = await this.connections.connectWithCustomCredential("github", {
       connectionName: targetConnectionName,
@@ -69,6 +82,38 @@ export class GitHubAppInstallationService {
     });
     await this.connections.disconnect("github", verificationConnectionName);
     return connection;
+  }
+
+  async findAccessibleInstallation(input: {
+    accountLogin?: string;
+    verificationConnectionName: string;
+  }): Promise<GitHubAppInstallation> {
+    const credential = await this.connections.getCredential(
+      "github",
+      requireText(input.verificationConnectionName, "GitHub verification connection name"),
+    );
+    if (credential?.authType !== "oauth2") {
+      throw new ConnectionError("credential_verification_failed", "GitHub user authorization is not complete.");
+    }
+    const installations = await listGitHubUserInstallations({
+      accessToken: credential.accessToken,
+      fetcher: this.fetcher,
+      runtimeConfig: this.runtimeConfig,
+    });
+    const organizations = installations.filter(
+      (installation) =>
+        installation.accountType === "Organization" &&
+        (!input.accountLogin || installation.accountLogin.toLowerCase() === input.accountLogin.trim().toLowerCase()),
+    );
+    if (organizations.length !== 1) {
+      throw new ConnectionError(
+        "credential_verification_failed",
+        organizations.length === 0
+          ? "This GitHub user cannot access an organization installation of this App."
+          : "More than one organization installation is accessible. OpenMeld cannot choose an account safely.",
+      );
+    }
+    return organizations[0]!;
   }
 
   private async verifyInstallationAccess(input: {
