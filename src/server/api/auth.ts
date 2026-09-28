@@ -36,6 +36,12 @@ export function readRuntimeGrant(context: Context): RuntimeGrant | undefined {
   return runtimeGrants.get(context.req.raw);
 }
 
+/** Require the configured administrator bearer for credentialed Git streaming. */
+export function hasConfiguredAdminBearer(context: Context, options: LocalAuthOptions): boolean {
+  const token = normalizeToken(options.adminToken);
+  return token !== undefined && matchesConfiguredToken(context, token);
+}
+
 export function createLocalAuthMiddleware(options: LocalAuthOptions): MiddlewareHandler {
   const adminToken = normalizeToken(options.adminToken);
   const runtimeToken = normalizeToken(options.runtimeToken);

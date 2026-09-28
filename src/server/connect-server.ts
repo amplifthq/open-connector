@@ -36,6 +36,7 @@ import { ActionRunner } from "./actions/action-runner.ts";
 import { renderActionMarkdown } from "./api/action-markdown.ts";
 import { clearLocalAuthCookie, createLocalAuthMiddleware, readLocalAuthSession, readRuntimeGrant } from "./api/auth.ts";
 import { getResponseCachePolicy } from "./api/cache-policy.ts";
+import { handleGitUploadPack } from "./api/git-upload-pack.ts";
 import { HttpRequestError, internalError, jsonError, notFound, readJsonBody } from "./api/http-utils.ts";
 import { renderOAuthCompletionPage } from "./api/oauth-completion-page.ts";
 import { createOpenApiDocument } from "./api/openapi.ts";
@@ -188,6 +189,29 @@ export class ConnectServer {
     app.get("/api/connections", (context) => this.listConnections(context));
     app.put("/api/connections/:service", (context) => this.upsertConnection(context, context.req.param("service")));
     app.delete("/api/connections/:service", (context) => this.disconnect(context, context.req.param("service")));
+
+    // The OpenMeld Gateway supplies the verified requester on each exchange.
+    // This administrator-only route never accepts a caller-selected connection.
+    app.get("/api/openmeld/git/:owner/:repo/info/refs", (context) =>
+      handleGitUploadPack(context, {
+        auth,
+        connections: this.options.connections,
+        logger: this.options.logger,
+        operation: "advertise",
+        owner: context.req.param("owner"),
+        repo: context.req.param("repo"),
+      }),
+    );
+    app.post("/api/openmeld/git/:owner/:repo/git-upload-pack", (context) =>
+      handleGitUploadPack(context, {
+        auth,
+        connections: this.options.connections,
+        logger: this.options.logger,
+        operation: "upload",
+        owner: context.req.param("owner"),
+        repo: context.req.param("repo"),
+      }),
+    );
 
     app.get("/api/runs", (context) => this.listRuns(context));
     app.get("/api/runs/:id", (context) => this.getRun(context, context.req.param("id")));
