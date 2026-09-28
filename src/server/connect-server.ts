@@ -142,25 +142,31 @@ export class ConnectServer {
       this.listRuntimeAppsByService(context, context.req.param("service")),
     );
     app.post("/v1/proxy/:service", (context) => this.createRuntimeProxyRequest(context, context.req.param("service")));
-    app.get("/v1/openmeld/git/:owner/:repo/info/refs", (context) =>
-      handleGitUploadPack(context, {
-        auth,
-        connections: this.options.connections,
-        logger: this.options.logger,
-        operation: "advertise",
-        owner: context.req.param("owner"),
-        repo: context.req.param("repo"),
-      }),
+    app.get(
+      "/v1/openmeld/git/:owner/:repo/info/refs",
+      async (context) =>
+        await handleGitUploadPack(context, {
+          auth,
+          connections: this.options.connections,
+          policy: await this.getPolicySnapshot(context),
+          logger: this.options.logger,
+          operation: "advertise",
+          owner: context.req.param("owner"),
+          repo: context.req.param("repo"),
+        }),
     );
-    app.post("/v1/openmeld/git/:owner/:repo/git-upload-pack", (context) =>
-      handleGitUploadPack(context, {
-        auth,
-        connections: this.options.connections,
-        logger: this.options.logger,
-        operation: "upload",
-        owner: context.req.param("owner"),
-        repo: context.req.param("repo"),
-      }),
+    app.post(
+      "/v1/openmeld/git/:owner/:repo/git-upload-pack",
+      async (context) =>
+        await handleGitUploadPack(context, {
+          auth,
+          connections: this.options.connections,
+          policy: await this.getPolicySnapshot(context),
+          logger: this.options.logger,
+          operation: "upload",
+          owner: context.req.param("owner"),
+          repo: context.req.param("repo"),
+        }),
     );
 
     app.get("/openapi.json", (context) =>

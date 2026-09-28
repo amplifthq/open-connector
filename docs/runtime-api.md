@@ -57,7 +57,8 @@ logging the credential. The GitHub credential stays inside OpenConnector. The ru
 must stay on the trusted Remote Agent host and must never be sent to an Agent Computer.
 
 The route constructs a fixed `github.com/:owner/:repo.git` target; it rejects other services,
-redirects, unexpected response types, and arbitrary URLs. It streams the request and response
+redirects, unexpected response types, and arbitrary URLs. The current deployment and runtime
+GitHub proxy policies are checked on every request. It streams the request and response
 bodies without the JSON proxy envelope or the Action timeout. `git-receive-pack` is unavailable.
 Git can advertise other readable refs in this repository; the caller must verify the fetched
 commit and tree against the pinned checkout after transfer. This endpoint does not itself enforce

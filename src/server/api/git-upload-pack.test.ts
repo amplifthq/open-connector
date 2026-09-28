@@ -2,6 +2,7 @@ import type { ConnectionService } from "../../connection-service.ts";
 
 import { Hono } from "hono";
 import { describe, expect, it, vi } from "vitest";
+import { ActionPolicyService } from "../../core/action-policy.ts";
 import { createLocalAuthMiddleware } from "./auth.ts";
 import { handleGitUploadPack } from "./git-upload-pack.ts";
 
@@ -20,6 +21,7 @@ function createApp(
     authType: "oauth2" as const,
     accessToken: "test-github-only",
   })),
+  policy = new ActionPolicyService().createSnapshot(),
 ) {
   const app = new Hono();
   const auth = { adminToken: "admin-token", runtimeToken };
@@ -29,6 +31,7 @@ function createApp(
     handleGitUploadPack(context, {
       auth,
       connections,
+      policy,
       fetcher,
       operation: "advertise",
       owner: context.req.param("owner"),
@@ -39,6 +42,7 @@ function createApp(
     handleGitUploadPack(context, {
       auth,
       connections,
+      policy,
       fetcher,
       operation: "upload",
       owner: context.req.param("owner"),
@@ -148,5 +152,20 @@ describe("OpenMeld Git upload-pack streaming", () => {
     expect(
       (await app.request("/v1/openmeld/git/a/b/info/refs?service=git-upload-pack", { headers: scopedHeaders })).status,
     ).toBe(404);
+  });
+
+  it("honors a GitHub proxy block before touching the connection", async () => {
+    const fetcher = vi.fn(async () => new Response("unexpected")) as unknown as typeof fetch;
+    const getCredential = vi.fn(async (_service: string, _connectionName: string) => ({
+      authType: "oauth2" as const,
+      accessToken: "test-github-only",
+    }));
+    const policy = new ActionPolicyService({ blockedProxies: ["github"] }).createSnapshot();
+    const { app } = createApp(fetcher, getCredential, policy);
+    const response = await app.request("/v1/openmeld/git/amplifthq/openmeld/info/refs?service=git-upload-pack", {
+      headers: requesterHeaders,
+    });
+    expect(response.status).toBe(403);
+    expect(getCredential).not.toHaveBeenCalled();
   });
 });

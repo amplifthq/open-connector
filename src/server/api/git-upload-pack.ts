@@ -1,4 +1,5 @@
 import type { ConnectionService } from "../../connection-service.ts";
+import type { ActionPolicySnapshot } from "../../core/action-policy.ts";
 import type { Logger } from "../logger.ts";
 import type { LocalAuthOptions } from "./auth.ts";
 import type { Context } from "hono";
@@ -12,6 +13,7 @@ type GitOperation = "advertise" | "upload";
 export interface GitUploadPackDependencies {
   auth: LocalAuthOptions;
   connections: ConnectionService;
+  policy: ActionPolicySnapshot;
   logger?: Logger;
   fetcher?: typeof fetch;
 }
@@ -33,6 +35,9 @@ export async function handleGitUploadPack(
 ): Promise<Response> {
   if (!hasConfiguredRuntimeBearer(context, input.auth)) {
     return jsonError(context, 401, "unauthorized", "The OpenMeld Git transfer requires runtime authentication.");
+  }
+  if (!input.policy.evaluateProxy("github").allowed) {
+    return jsonError(context, 403, "git_proxy_not_allowed", "GitHub transfer is blocked by connector policy.");
   }
 
   const organizationId = context.req.header("x-openmeld-organization-id") ?? "";
