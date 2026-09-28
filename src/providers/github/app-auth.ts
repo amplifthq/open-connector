@@ -144,6 +144,27 @@ export async function verifyGitHubUserInstallation(input: {
   const configuration = readGitHubAppRuntimeConfiguration(input.runtimeConfig);
   const installationId = requirePositiveIntegerText(input.installationId, "GitHub App installation id");
   for (let page = 1; page <= MAX_USER_INSTALLATION_PAGES; page += 1) {
+    const payload = await requestGitHubJson<{ installations?: GitHubAppInstallationPayload[] }>({
+      accessToken: input.accessToken,
+      fetcher: input.fetcher,
+      path: `/user/installations?per_page=100&page=${page}`,
+    });
+    const installations = Array.isArray(payload.installations) ? payload.installations : [];
+    const matching = installations.find((installation) => String(installation.id ?? "") === installationId);
+    if (matching) return normalizeInstallation({ appId: configuration.appId, installation: matching, installationId });
+    if (installations.length < 100) break;
+  }
+  throw new ProviderRequestError(403, "The authorizing GitHub user cannot access this GitHub App installation.");
+}
+
+export async function listGitHubUserInstallations(input: {
+  accessToken: string;
+  fetcher: typeof fetch;
+  runtimeConfig?: RuntimeConfigReader;
+}): Promise<GitHubAppInstallation[]> {
+  const configuration = readGitHubAppRuntimeConfiguration(input.runtimeConfig);
+  const result: GitHubAppInstallation[] = [];
+  for (let page = 1; page <= MAX_USER_INSTALLATION_PAGES; page += 1) {
     const payload = await requestGitHubJson<{
       installations?: GitHubAppInstallationPayload[];
     }>({
@@ -152,19 +173,21 @@ export async function verifyGitHubUserInstallation(input: {
       path: `/user/installations?per_page=100&page=${page}`,
     });
     const installations = Array.isArray(payload.installations) ? payload.installations : [];
-    const matching = installations.find((installation) => String(installation.id ?? "") === installationId);
-    if (matching) {
-      return normalizeInstallation({
-        appId: configuration.appId,
-        installation: matching,
-        installationId,
-      });
+    for (const installation of installations) {
+      if (String(installation.app_id ?? "") !== configuration.appId) continue;
+      result.push(
+        normalizeInstallation({
+          appId: configuration.appId,
+          installation,
+          installationId: requirePositiveIntegerText(String(installation.id ?? ""), "GitHub App installation id"),
+        }),
+      );
     }
     if (installations.length < 100) {
       break;
     }
   }
-  throw new ProviderRequestError(403, "The authorizing GitHub user cannot access this GitHub App installation.");
+  return result;
 }
 
 async function getGitHubAppInstallation(input: {

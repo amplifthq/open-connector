@@ -70,7 +70,8 @@ export interface IConnectServerOptions {
   connections: ConnectionService;
   oauthClientConfigs: OAuthClientConfigService;
   oauthFlow: OAuthFlowService;
-  githubAppInstallations?: Pick<GitHubAppInstallationService, "complete">;
+  githubAppInstallations?: Pick<GitHubAppInstallationService, "complete"> &
+    Partial<Pick<GitHubAppInstallationService, "findAccessibleInstallation">>;
   runtimeTokens: RuntimeTokenService;
   actions: ActionRunner;
   idempotency: IIdempotencyStore;
@@ -212,6 +213,7 @@ export class ConnectServer {
       this.deleteOAuthConfig(context, context.req.param("service")),
     );
     app.post("/api/oauth/authorizations", (context) => this.createOAuthAuthorization(context));
+    app.get("/api/providers/github/installations", (context) => this.findGitHubAppInstallation(context));
     app.post("/api/providers/github/installations", (context) => this.completeGitHubAppInstallation(context));
     app.get("/oauth/callback", (context) => this.completeOAuth(context));
     app.post("/mcp", (context) => this.handleMcp(context));
@@ -802,6 +804,7 @@ export class ConnectServer {
     const body = await readJsonBody(context);
     try {
       const result = await this.options.githubAppInstallations.complete({
+        expectedAccountLogin: optionalString(body.expectedAccountLogin),
         installationId: requiredString(body.installationId, "installationId", connectionInputError),
         targetConnectionName: requiredString(body.targetConnectionName, "targetConnectionName", connectionInputError),
         verificationConnectionName: requiredString(
@@ -811,6 +814,33 @@ export class ConnectServer {
         ),
       });
       return context.json(result);
+    } catch (error) {
+      if (error instanceof ConnectionError) {
+        return jsonError(
+          context,
+          error.code === "credential_verification_failed" ? 403 : 400,
+          error.code,
+          error.message,
+        );
+      }
+      throw error;
+    }
+  }
+
+  private async findGitHubAppInstallation(context: Context): Promise<Response> {
+    if (!this.options.githubAppInstallations?.findAccessibleInstallation) {
+      return jsonError(context, 503, "provider_unavailable", "GitHub App installation support is not configured.");
+    }
+    try {
+      const installation = await this.options.githubAppInstallations.findAccessibleInstallation({
+        accountLogin: optionalString(context.req.query("accountLogin")),
+        verificationConnectionName: requiredString(
+          context.req.query("verificationConnectionName"),
+          "verificationConnectionName",
+          connectionInputError,
+        ),
+      });
+      return context.json({ accountLogin: installation.accountLogin, installationId: installation.installationId });
     } catch (error) {
       if (error instanceof ConnectionError) {
         return jsonError(
