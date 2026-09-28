@@ -148,7 +148,7 @@ export class ConnectServer {
         await handleGitUploadPack(context, {
           auth,
           connections: this.options.connections,
-          policy: await this.getPolicySnapshot(context),
+          getPolicy: () => this.getPolicySnapshot(context),
           logger: this.options.logger,
           operation: "advertise",
           owner: context.req.param("owner"),
@@ -161,7 +161,7 @@ export class ConnectServer {
         await handleGitUploadPack(context, {
           auth,
           connections: this.options.connections,
-          policy: await this.getPolicySnapshot(context),
+          getPolicy: () => this.getPolicySnapshot(context),
           logger: this.options.logger,
           operation: "upload",
           owner: context.req.param("owner"),

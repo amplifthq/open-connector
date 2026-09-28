@@ -1,4 +1,5 @@
 import type { ConnectionService } from "../../connection-service.ts";
+import type { ActionPolicySnapshot } from "../../core/action-policy.ts";
 
 import { Hono } from "hono";
 import { describe, expect, it, vi } from "vitest";
@@ -22,6 +23,7 @@ function createApp(
     accessToken: "test-github-only",
   })),
   policy = new ActionPolicyService().createSnapshot(),
+  getPolicy: () => Promise<ActionPolicySnapshot> = async () => policy,
 ) {
   const app = new Hono();
   const auth = { adminToken: "admin-token", runtimeToken };
@@ -31,7 +33,7 @@ function createApp(
     handleGitUploadPack(context, {
       auth,
       connections,
-      policy,
+      getPolicy,
       fetcher,
       operation: "advertise",
       owner: context.req.param("owner"),
@@ -42,7 +44,7 @@ function createApp(
     handleGitUploadPack(context, {
       auth,
       connections,
-      policy,
+      getPolicy,
       fetcher,
       operation: "upload",
       owner: context.req.param("owner"),
@@ -151,7 +153,7 @@ describe("OpenMeld Git upload-pack streaming", () => {
     getCredential.mockRejectedValueOnce(new Error("disconnected"));
     expect(
       (await app.request("/v1/openmeld/git/a/b/info/refs?service=git-upload-pack", { headers: scopedHeaders })).status,
-    ).toBe(404);
+    ).toBe(503);
   });
 
   it("honors a GitHub proxy block before touching the connection", async () => {
@@ -167,5 +169,20 @@ describe("OpenMeld Git upload-pack streaming", () => {
     });
     expect(response.status).toBe(403);
     expect(getCredential).not.toHaveBeenCalled();
+  });
+
+  it("returns a controlled failure when runtime policy cannot be loaded", async () => {
+    const fetcher = vi.fn(async () => new Response("unexpected")) as unknown as typeof fetch;
+    const getCredential = vi.fn(async () => ({ authType: "oauth2" as const, accessToken: "test" }));
+    const policy = new ActionPolicyService().createSnapshot();
+    const getPolicy = vi.fn(() => Promise.reject(new Error("policy store unavailable")));
+    const { app } = createApp(fetcher, getCredential, policy, getPolicy);
+    const response = await app.request("/v1/openmeld/git/amplifthq/openmeld/info/refs?service=git-upload-pack", {
+      headers: requesterHeaders,
+    });
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "git_policy_unavailable" } });
+    expect(getCredential).not.toHaveBeenCalled();
+    expect(fetcher).not.toHaveBeenCalled();
   });
 });

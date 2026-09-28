@@ -4,6 +4,7 @@ import type { Logger } from "../logger.ts";
 import type { LocalAuthOptions } from "./auth.ts";
 import type { Context } from "hono";
 
+import { ConnectionError } from "../../connection-service.ts";
 import { providerFetch } from "../../providers/provider-runtime.ts";
 import { hasConfiguredRuntimeBearer } from "./auth.ts";
 import { jsonError } from "./http-utils.ts";
@@ -13,7 +14,7 @@ type GitOperation = "advertise" | "upload";
 export interface GitUploadPackDependencies {
   auth: LocalAuthOptions;
   connections: ConnectionService;
-  policy: ActionPolicySnapshot;
+  getPolicy: () => Promise<ActionPolicySnapshot>;
   logger?: Logger;
   fetcher?: typeof fetch;
 }
@@ -36,7 +37,13 @@ export async function handleGitUploadPack(
   if (!hasConfiguredRuntimeBearer(context, input.auth)) {
     return jsonError(context, 401, "unauthorized", "The OpenMeld Git transfer requires runtime authentication.");
   }
-  if (!input.policy.evaluateProxy("github").allowed) {
+  let policy: ActionPolicySnapshot;
+  try {
+    policy = await input.getPolicy();
+  } catch {
+    return jsonError(context, 503, "git_policy_unavailable", "GitHub transfer policy is temporarily unavailable.");
+  }
+  if (!policy.evaluateProxy("github").allowed) {
     return jsonError(context, 403, "git_proxy_not_allowed", "GitHub transfer is blocked by connector policy.");
   }
 
@@ -75,7 +82,25 @@ export async function handleGitUploadPack(
   }
 
   const connectionName = await requesterConnectionName(organizationId, requesterUserId);
-  const credential = await input.connections.getCredential("github", connectionName).catch(() => undefined);
+  let credential: Awaited<ReturnType<ConnectionService["getCredential"]>>;
+  try {
+    credential = await input.connections.getCredential("github", connectionName);
+  } catch (error) {
+    input.logger?.warn(
+      {
+        errorCode: error instanceof ConnectionError ? error.code : "unknown",
+        errorName: error instanceof Error ? error.name : "UnknownError",
+        operationId,
+      },
+      "OpenMeld Git connection lookup failed",
+    );
+    return jsonError(
+      context,
+      503,
+      "github_connection_lookup_unavailable",
+      "The requester's GitHub connection could not be checked right now.",
+    );
+  }
   if (!credential || (credential.authType !== "oauth2" && credential.authType !== "api_key")) {
     return jsonError(
       context,
