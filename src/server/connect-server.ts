@@ -142,6 +142,26 @@ export class ConnectServer {
       this.listRuntimeAppsByService(context, context.req.param("service")),
     );
     app.post("/v1/proxy/:service", (context) => this.createRuntimeProxyRequest(context, context.req.param("service")));
+    app.get("/v1/openmeld/git/:owner/:repo/info/refs", (context) =>
+      handleGitUploadPack(context, {
+        auth,
+        connections: this.options.connections,
+        logger: this.options.logger,
+        operation: "advertise",
+        owner: context.req.param("owner"),
+        repo: context.req.param("repo"),
+      }),
+    );
+    app.post("/v1/openmeld/git/:owner/:repo/git-upload-pack", (context) =>
+      handleGitUploadPack(context, {
+        auth,
+        connections: this.options.connections,
+        logger: this.options.logger,
+        operation: "upload",
+        owner: context.req.param("owner"),
+        repo: context.req.param("repo"),
+      }),
+    );
 
     app.get("/openapi.json", (context) =>
       context.json(
@@ -189,29 +209,6 @@ export class ConnectServer {
     app.get("/api/connections", (context) => this.listConnections(context));
     app.put("/api/connections/:service", (context) => this.upsertConnection(context, context.req.param("service")));
     app.delete("/api/connections/:service", (context) => this.disconnect(context, context.req.param("service")));
-
-    // The OpenMeld Gateway supplies the verified requester on each exchange.
-    // This administrator-only route never accepts a caller-selected connection.
-    app.get("/api/openmeld/git/:owner/:repo/info/refs", (context) =>
-      handleGitUploadPack(context, {
-        auth,
-        connections: this.options.connections,
-        logger: this.options.logger,
-        operation: "advertise",
-        owner: context.req.param("owner"),
-        repo: context.req.param("repo"),
-      }),
-    );
-    app.post("/api/openmeld/git/:owner/:repo/git-upload-pack", (context) =>
-      handleGitUploadPack(context, {
-        auth,
-        connections: this.options.connections,
-        logger: this.options.logger,
-        operation: "upload",
-        owner: context.req.param("owner"),
-        repo: context.req.param("repo"),
-      }),
-    );
 
     app.get("/api/runs", (context) => this.listRuns(context));
     app.get("/api/runs/:id", (context) => this.getRun(context, context.req.param("id")));

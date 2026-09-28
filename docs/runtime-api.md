@@ -37,23 +37,24 @@ is configured.
 
 ### OpenMeld Git upload-pack stream
 
-The OpenMeld Gateway can relay a read-only Git smart-HTTP exchange through these administrator-only
+The OpenMeld Remote Agent can relay a read-only Git smart-HTTP exchange through these runtime-only
 routes:
 
-- `GET /api/openmeld/git/:owner/:repo/info/refs?service=git-upload-pack`
-- `POST /api/openmeld/git/:owner/:repo/git-upload-pack` with
+- `GET /v1/openmeld/git/:owner/:repo/info/refs?service=git-upload-pack`
+- `POST /v1/openmeld/git/:owner/:repo/git-upload-pack` with
   `Content-Type: application/x-git-upload-pack-request`
 
-Both requests require `Authorization: Bearer <OOMOL_CONNECT_ADMIN_TOKEN>` and the headers
+Both requests require the exact configured `OOMOL_CONNECT_RUNTIME_TOKEN` bearer (stored runtime
+tokens, JWTs, and administrator tokens are rejected) and the headers
 `X-OpenMeld-Organization-Id`, `X-OpenMeld-Requester-User-Id`, `X-OpenMeld-Operation-Id`, and
 `X-OpenMeld-Repository` (`owner/repo`, exactly matching the URL path).
-The Gateway must authenticate the requester, confirm current Organization membership and that this
+The Remote Agent must authenticate the requester through Core, confirm current Organization membership and that this
 requester owns an active GitHub connection, and restrict the operation to the selected repository
 before forwarding **each** request. OpenConnector derives the member connection name from the two
 verified IDs; callers cannot select the shared Organization connection. It resolves the stored
 credential anew for every request and logs the requester, repository, and operation ID without
-logging the credential. The GitHub credential stays inside OpenConnector. The administrator bearer
-must stay on the trusted Gateway and must never be sent to an Agent Computer.
+logging the credential. The GitHub credential stays inside OpenConnector. The runtime bearer
+must stay on the trusted Remote Agent host and must never be sent to an Agent Computer.
 
 The route constructs a fixed `github.com/:owner/:repo.git` target; it rejects other services,
 redirects, unexpected response types, and arbitrary URLs. It streams the request and response

@@ -5,9 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 import { createLocalAuthMiddleware } from "./auth.ts";
 import { handleGitUploadPack } from "./git-upload-pack.ts";
 
-const adminToken = "test-admin-only";
+const runtimeToken = "test-runtime-only";
 const requesterHeaders = {
-  authorization: `Bearer ${adminToken}`,
+  authorization: `Bearer ${runtimeToken}`,
   "x-openmeld-organization-id": "org_test",
   "x-openmeld-requester-user-id": "user_one",
   "x-openmeld-operation-id": "checkout_1",
@@ -22,10 +22,10 @@ function createApp(
   })),
 ) {
   const app = new Hono();
-  const auth = { adminToken, runtimeToken: "runtime-token" };
+  const auth = { adminToken: "admin-token", runtimeToken };
   const connections = { getCredential } as unknown as ConnectionService;
   app.use("*", createLocalAuthMiddleware(auth));
-  app.get("/api/openmeld/git/:owner/:repo/info/refs", (context) =>
+  app.get("/v1/openmeld/git/:owner/:repo/info/refs", (context) =>
     handleGitUploadPack(context, {
       auth,
       connections,
@@ -35,7 +35,7 @@ function createApp(
       repo: context.req.param("repo"),
     }),
   );
-  app.post("/api/openmeld/git/:owner/:repo/git-upload-pack", (context) =>
+  app.post("/v1/openmeld/git/:owner/:repo/git-upload-pack", (context) =>
     handleGitUploadPack(context, {
       auth,
       connections,
@@ -49,7 +49,7 @@ function createApp(
 }
 
 describe("OpenMeld Git upload-pack streaming", () => {
-  it("requires the administrator bearer and derives a member connection on every request", async () => {
+  it("requires the configured runtime bearer and derives a member connection on every request", async () => {
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, init?: RequestInit) =>
         new Response("0000", {
@@ -62,11 +62,11 @@ describe("OpenMeld Git upload-pack streaming", () => {
         }),
     );
     const { app, getCredential } = createApp(fetchMock as unknown as typeof fetch);
-    const url = "/api/openmeld/git/amplifthq/openmeld/info/refs?service=git-upload-pack";
+    const url = "/v1/openmeld/git/amplifthq/openmeld/info/refs?service=git-upload-pack";
 
     expect((await app.request(url)).status).toBe(401);
     expect(
-      (await app.request(url, { headers: { ...requesterHeaders, authorization: "Bearer runtime-token" } })).status,
+      (await app.request(url, { headers: { ...requesterHeaders, authorization: "Bearer admin-token" } })).status,
     ).toBe(401);
     expect((await app.request(url, { headers: requesterHeaders })).status).toBe(200);
     expect(
@@ -99,7 +99,7 @@ describe("OpenMeld Git upload-pack streaming", () => {
       return new Response(upstream, { headers: { "content-type": "application/x-git-upload-pack-result" } });
     }) as unknown as typeof fetch;
     const { app } = createApp(fetcher);
-    const response = await app.request("/api/openmeld/git/amplifthq/openmeld/git-upload-pack", {
+    const response = await app.request("/v1/openmeld/git/amplifthq/openmeld/git-upload-pack", {
       method: "POST",
       headers: { ...requesterHeaders, "content-type": "application/x-git-upload-pack-request" },
       body: "0000",
@@ -123,31 +123,30 @@ describe("OpenMeld Git upload-pack streaming", () => {
     const { app } = createApp(fetchMock as unknown as typeof fetch, getCredential);
     const scopedHeaders = { ...requesterHeaders, "x-openmeld-repository": "a/b" };
     expect(
-      (await app.request("/api/openmeld/git/a/b/git-receive-pack", { method: "POST", headers: requesterHeaders }))
+      (await app.request("/v1/openmeld/git/a/b/git-receive-pack", { method: "POST", headers: requesterHeaders }))
         .status,
     ).toBe(404);
     expect(
-      (await app.request("/api/openmeld/git/a/b/info/refs?service=git-upload-pack", { headers: requesterHeaders }))
+      (await app.request("/v1/openmeld/git/a/b/info/refs?service=git-upload-pack", { headers: requesterHeaders }))
         .status,
     ).toBe(400);
     expect(
-      (await app.request("/api/openmeld/git/a/b/info/refs?service=git-receive-pack", { headers: scopedHeaders }))
-        .status,
+      (await app.request("/v1/openmeld/git/a/b/info/refs?service=git-receive-pack", { headers: scopedHeaders })).status,
     ).toBe(400);
     expect(
       (
-        await app.request("/api/openmeld/git/a/b/info/refs?service=git-upload-pack&extra=1", {
+        await app.request("/v1/openmeld/git/a/b/info/refs?service=git-upload-pack&extra=1", {
           headers: scopedHeaders,
         })
       ).status,
     ).toBe(400);
     expect(
-      (await app.request("/api/openmeld/git/a/b/info/refs?service=git-upload-pack", { headers: scopedHeaders })).status,
+      (await app.request("/v1/openmeld/git/a/b/info/refs?service=git-upload-pack", { headers: scopedHeaders })).status,
     ).toBe(502);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     getCredential.mockRejectedValueOnce(new Error("disconnected"));
     expect(
-      (await app.request("/api/openmeld/git/a/b/info/refs?service=git-upload-pack", { headers: scopedHeaders })).status,
+      (await app.request("/v1/openmeld/git/a/b/info/refs?service=git-upload-pack", { headers: scopedHeaders })).status,
     ).toBe(404);
   });
 });

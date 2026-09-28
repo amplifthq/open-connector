@@ -4,7 +4,7 @@ import type { LocalAuthOptions } from "./auth.ts";
 import type { Context } from "hono";
 
 import { providerFetch } from "../../providers/provider-runtime.ts";
-import { hasConfiguredAdminBearer } from "./auth.ts";
+import { hasConfiguredRuntimeBearer } from "./auth.ts";
 import { jsonError } from "./http-utils.ts";
 
 type GitOperation = "advertise" | "upload";
@@ -22,17 +22,17 @@ const operationIdentifier = /^[A-Za-z0-9_-]{1,128}$/u;
 const redirectStatuses = new Set([301, 302, 303, 307, 308]);
 
 /**
- * The administrator is the trusted OpenMeld Gateway. It authenticates the
- * requester and selects a repository on every HTTP exchange. This endpoint
+ * The configured runtime bearer belongs to the trusted OpenMeld Remote Agent.
+ * It verifies the requester and selected repository through Core on every exchange. This endpoint
  * derives the member connection instead of accepting a connection selector:
- * neither a runtime token nor the Computer can choose the Organization App.
+ * neither the caller nor the Computer can choose the Organization App.
  */
 export async function handleGitUploadPack(
   context: Context,
   input: GitUploadPackDependencies & { operation: GitOperation; owner: string; repo: string },
 ): Promise<Response> {
-  if (!hasConfiguredAdminBearer(context, input.auth)) {
-    return jsonError(context, 401, "unauthorized", "The OpenMeld Git transfer requires administrator authentication.");
+  if (!hasConfiguredRuntimeBearer(context, input.auth)) {
+    return jsonError(context, 401, "unauthorized", "The OpenMeld Git transfer requires runtime authentication.");
   }
 
   const organizationId = context.req.header("x-openmeld-organization-id") ?? "";
