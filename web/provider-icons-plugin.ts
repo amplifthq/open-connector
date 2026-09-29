@@ -1,23 +1,15 @@
 import type { Plugin } from "vite";
 
-const catalogUrl = "https://oomol.com/en/apps/catalog.json";
+import { readFile } from "node:fs/promises";
+
 const publicModuleId = "virtual:oomol-provider-icons";
 const resolvedModuleId = `\0${publicModuleId}`;
-
-interface CatalogItem {
-  iconUrl?: unknown;
-  service?: unknown;
-}
-
-interface CatalogPayload {
-  items?: unknown;
-}
 
 interface ProviderIconsPluginOptions {
   iconUrls?: Readonly<Record<string, string>>;
 }
 
-/** Bundles OOMOL's provider icon mapping and caches it for the lifetime of the Vite process. */
+/** Bundles a verified provider icon snapshot without requiring network access at build time. */
 export function providerIconsPlugin(options: ProviderIconsPluginOptions = {}): Plugin {
   let cachedModule: Promise<string> | undefined;
 
@@ -39,24 +31,8 @@ export function providerIconsPlugin(options: ProviderIconsPluginOptions = {}): P
 }
 
 async function loadProviderIconsModule(): Promise<string> {
-  const response = await fetch(catalogUrl);
-  if (!response.ok) {
-    throw new Error(`Could not load OOMOL provider icons: ${response.status} ${response.statusText}`);
-  }
-
-  const payload = (await response.json()) as CatalogPayload;
-  if (!Array.isArray(payload.items)) {
-    throw new Error("Could not load OOMOL provider icons: catalog.items is not an array");
-  }
-
-  const iconUrls: Record<string, string> = {};
-  for (const item of payload.items as CatalogItem[]) {
-    if (typeof item.service === "string" && typeof item.iconUrl === "string" && item.iconUrl.trim()) {
-      iconUrls[item.service] = item.iconUrl;
-    }
-  }
-
-  return serializeProviderIcons(iconUrls);
+  const snapshot = await readFile(new URL("./provider-icons.snapshot.json", import.meta.url), "utf8");
+  return serializeProviderIcons(JSON.parse(snapshot) as Record<string, string>);
 }
 
 function serializeProviderIcons(iconUrls: Readonly<Record<string, string>>): string {
