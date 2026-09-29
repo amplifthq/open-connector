@@ -1146,6 +1146,21 @@ describe("ConnectServer", () => {
     }
   });
 
+  it("registers the Git stream only behind the configured runtime bearer", async () => {
+    const path = "/v1/openmeld/git/amplifthq/openmeld/info/refs?service=git-upload-pack";
+    const unsecured = createTestServer([apiKeyProvider]).createApp();
+    expect((await unsecured.request(path)).status).toBe(401);
+
+    const secured = createTestServer([apiKeyProvider], {
+      auth: { adminToken: "admin-token", runtimeToken: "local-token" },
+    }).createApp();
+    expect((await secured.request(path)).status).toBe(401);
+    expect((await secured.request(path, { headers: { authorization: "Bearer admin-token" } })).status).toBe(401);
+    const response = await secured.request(path, { headers: { authorization: "Bearer local-token" } });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "invalid_git_request" } });
+  });
+
   it("surfaces provider errors returned on the OAuth callback", async () => {
     const app = createTestServer([apiKeyProvider], { auth: { adminToken: "local-token" } }).createApp();
 
