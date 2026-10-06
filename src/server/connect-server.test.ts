@@ -2280,6 +2280,11 @@ describe("ConnectServer", () => {
       ],
     });
 
+    const exact = await app.request("/v1/actions?service=example&actionId=example.follow_up");
+    await expect(exact.json()).resolves.toMatchObject({ success: true, data: [{ id: "example.follow_up" }] });
+    const wrongService = await app.request("/v1/actions?service=other&actionId=example.echo");
+    await expect(wrongService.json()).resolves.toMatchObject({ success: true, data: [] });
+
     const apiSearch = await app.request("/api/actions/search?q=echo");
     expect(apiSearch.status).toBe(200);
     expect(apiSearch.headers.get("cache-control")).toBe("no-store");
@@ -2430,6 +2435,11 @@ describe("ConnectServer", () => {
       success: true,
       data: [{ id: "example.echo" }],
     });
+
+    for (const actionId of ["example.follow_up", "missing.action"]) {
+      const selected = await app.request(`/v1/actions?service=example&actionId=${actionId}`);
+      await expect(selected.json()).resolves.toMatchObject({ success: true, data: [] });
+    }
 
     const search = await app.request("/v1/actions/search?q=follow");
     await expect(search.json()).resolves.toMatchObject({

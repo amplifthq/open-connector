@@ -75,6 +75,7 @@ export async function createConnectApp(options: ConnectAppOptions): Promise<Conn
 
   return {
     app: new ConnectServer({
+      runtimeConfig: options.runtimeConfig,
       catalog: options.catalog,
       providerLoader: options.providerLoader,
       connections,

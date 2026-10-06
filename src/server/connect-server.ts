@@ -2,6 +2,7 @@ import type { CatalogStore, RuntimeActionDefinition } from "../catalog-store.ts"
 import type { ConnectionService } from "../connection-service.ts";
 import type { ActionPolicySnapshot } from "../core/action-policy.ts";
 import type { ActionSearchIndexProvider, ActionSearchResult } from "../core/action-search.ts";
+import type { RuntimeConfigReader } from "../core/types.ts";
 import type { OAuthClientConfigInput } from "../oauth/oauth-client-config-service.ts";
 import type { GitHubAppInstallationService } from "../providers/github/installation-service.ts";
 import type { IProviderLoader } from "../providers/provider-loader.ts";
@@ -69,6 +70,7 @@ export interface IConnectServerOptions {
   catalog: CatalogStore;
   providerLoader: IProviderLoader;
   connections: ConnectionService;
+  runtimeConfig?: RuntimeConfigReader;
   oauthClientConfigs: OAuthClientConfigService;
   oauthFlow: OAuthFlowService;
   githubAppInstallations?: Pick<GitHubAppInstallationService, "complete"> &
@@ -158,8 +160,8 @@ export class ConnectServer {
           getPolicy: () => this.getPolicySnapshot(context),
           logger: this.options.logger,
           operation: "advertise",
-          owner: context.req.param("owner"),
-          repo: context.req.param("repo"),
+          owner: context.req.param("owner") ?? "",
+          repo: context.req.param("repo") ?? "",
         }),
     );
     app.post(
@@ -175,6 +177,24 @@ export class ConnectServer {
           repo: context.req.param("repo"),
         }),
     );
+    // A distinct path prevents an older server from silently selecting a
+    // personal connection when the caller selected an Organization App.
+    for (const operation of ["advertise", "upload"] as const) {
+      const path = `/v1/openmeld/git-connections/:owner/:repo/${operation === "advertise" ? "info/refs" : "git-upload-pack"}`;
+      app.on(operation === "advertise" ? "GET" : "POST", path, (context) =>
+        handleGitUploadPack(context, {
+          auth,
+          connections: this.options.connections,
+          runtimeConfig: this.options.runtimeConfig,
+          getPolicy: () => this.getPolicySnapshot(context),
+          logger: this.options.logger,
+          selectedConnection: true,
+          operation,
+          owner: context.req.param("owner") ?? "",
+          repo: context.req.param("repo") ?? "",
+        }),
+      );
+    }
 
     app.get("/openapi.json", (context) =>
       context.json(
@@ -423,14 +443,19 @@ export class ConnectServer {
 
   private async listRuntimeActions(context: Context): Promise<Response> {
     const policy = await this.getPolicySnapshot(context);
-    const allowedActions = this.options.catalog.actions.filter((action) => policy.evaluate(action).allowed);
     const service = optionalString(context.req.query("service"));
+    const actionId = optionalString(context.req.query("actionId"));
+    const exactAction = service && actionId ? this.options.catalog.actionsById.get(actionId) : undefined;
+    const candidates = service && actionId ? (exactAction ? [exactAction] : []) : this.options.catalog.actions;
+    const allowedActions = candidates.filter((action) => policy.evaluate(action).allowed);
     if (!service) {
       const services = [...new Set(allowedActions.map((action) => action.service))];
       return writeRuntimeSuccess(context, services.map(serializeRuntimeActionService));
     }
 
-    const actions = allowedActions.filter((action) => action.service === service);
+    const actions = allowedActions.filter(
+      (action) => action.service === service && (!actionId || action.id === actionId),
+    );
     return writeRuntimeSuccess(context, actions.map(serializeRuntimeAction));
   }
 
