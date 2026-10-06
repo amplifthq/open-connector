@@ -64,6 +64,32 @@ Git can advertise other readable refs in this repository; the caller must verify
 commit and tree against the pinned checkout after transfer. This endpoint does not itself enforce
 a pinned ref.
 
+The selected-connection routes add Organization GitHub App installations:
+
+- `GET /v1/openmeld/git-connections/:owner/:repo/info/refs?service=git-upload-pack`
+- `POST /v1/openmeld/git-connections/:owner/:repo/git-upload-pack`
+
+They require the same runtime bearer, requester, repository, and operation headers,
+plus `X-OpenMeld-Connection-Scope: member | shared` and `X-OO-Connector-Alias`.
+The alias must match the canonical member or shared connection for the verified
+Organization and requester IDs. The host must authorize the selected connection
+through Core on every exchange, including its current access policy and version.
+The `member` scope uses the stored OAuth or API token. The `shared` scope resolves
+the stored GitHub App installation using the existing runtime App configuration.
+It obtains a fresh installation token for each exchange and keeps that token in
+OpenConnector. Missing or revoked connections do not select another account.
+The legacy routes continue to select only the requester connection. Clients must
+not retry a missing selected-connection route through the legacy route.
+
+### Exact Action catalog lookup
+
+`GET /v1/actions?service=<service>&actionId=<action-id>` returns the usual Action
+array with at most one entry. It applies the current deployment and token policy
+before serialization. A missing, blocked, or wrong-service Action returns an empty
+array. Omitting `actionId` retains the service catalog behavior. Older producers
+may ignore this additive query filter, so clients must still select the exact ID
+and validate the service and executable metadata locally.
+
 ## MCP
 
 Point MCP-capable clients at:

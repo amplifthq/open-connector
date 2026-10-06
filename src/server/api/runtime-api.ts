@@ -32,6 +32,21 @@ export interface RuntimeProviderMetadata {
   homepageUrl: string | null;
   categories: RuntimeProviderCategory[];
   authTypes: string[];
+  connectionAuth?: {
+    oauth: boolean;
+    credentials: {
+      authType: "api_key" | "custom_credential";
+      fields: {
+        key: string;
+        label: string;
+        description: string;
+        placeholder?: string;
+        secret: boolean;
+        inputType?: "text" | "password" | "textarea" | "json";
+        required: boolean;
+      }[];
+    }[];
+  };
 }
 
 export interface RuntimeProviderCategory {
@@ -95,7 +110,7 @@ export type RuntimeActionHttpResult =
   | { status: 200; body: RuntimeSuccessEnvelope<unknown> }
   | { status: RuntimeStatus; body: RuntimeFailureEnvelope };
 
-export function serializeRuntimeProvider(provider: ProviderDefinition): RuntimeProviderMetadata {
+export function serializeRuntimeProvider(provider: ProviderDefinition, oauthReady?: boolean): RuntimeProviderMetadata {
   return {
     service: provider.service,
     displayName: provider.displayName,
@@ -106,6 +121,45 @@ export function serializeRuntimeProvider(provider: ProviderDefinition): RuntimeP
       displayName: category,
     })),
     authTypes: provider.authTypes,
+    ...(oauthReady === undefined
+      ? {}
+      : {
+          connectionAuth: {
+            oauth: oauthReady,
+            credentials: provider.auth.flatMap((auth) => {
+              if (auth.type !== "api_key" && auth.type !== "custom_credential") return [];
+              const fields =
+                auth.type === "api_key"
+                  ? [
+                      {
+                        key: "apiKey",
+                        label: auth.label ?? "API key",
+                        description: auth.description ?? "",
+                        placeholder: auth.placeholder,
+                        secret: true,
+                        inputType: "password" as const,
+                        required: true,
+                      },
+                      ...(auth.extraFields ?? []),
+                    ]
+                  : auth.fields;
+              return [
+                {
+                  authType: auth.type,
+                  fields: fields.map((field) => ({
+                    key: field.key,
+                    label: field.label,
+                    description: field.description ?? "",
+                    placeholder: field.placeholder,
+                    secret: field.secret,
+                    inputType: field.inputType,
+                    required: field.required,
+                  })),
+                },
+              ];
+            }),
+          },
+        }),
   };
 }
 

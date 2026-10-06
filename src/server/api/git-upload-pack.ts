@@ -1,5 +1,6 @@
 import type { ConnectionService } from "../../connection-service.ts";
 import type { ActionPolicySnapshot } from "../../core/action-policy.ts";
+import type { RuntimeConfigReader } from "../../core/types.ts";
 import type { Logger } from "../logger.ts";
 import type { LocalAuthOptions } from "./auth.ts";
 import type { Context } from "hono";
@@ -17,6 +18,9 @@ export interface GitUploadPackDependencies {
   getPolicy: () => Promise<ActionPolicySnapshot>;
   logger?: Logger;
   fetcher?: typeof fetch;
+  runtimeConfig?: RuntimeConfigReader;
+  /** The git-connections route accepts a Core-authorized connection. */
+  selectedConnection?: boolean;
 }
 
 const repositoryPart = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/u;
@@ -26,9 +30,9 @@ const redirectStatuses = new Set([301, 302, 303, 307, 308]);
 
 /**
  * The configured runtime bearer belongs to the trusted OpenMeld Remote Agent.
- * It verifies the requester and selected repository through Core on every exchange. This endpoint
- * derives the member connection instead of accepting a connection selector:
- * neither the caller nor the Computer can choose the Organization App.
+ * It verifies the requester and selected repository through Core on every exchange.
+ * The legacy route derives the member connection. git-connections requires the scope and alias
+ * selected by Core. Neither endpoint accepts credentials from the Computer.
  */
 export async function handleGitUploadPack(
   context: Context,
@@ -81,7 +85,17 @@ export async function handleGitUploadPack(
     return jsonError(context, 400, "invalid_git_protocol", "Only Git protocol version 2 is supported.");
   }
 
-  const connectionName = await requesterConnectionName(organizationId, requesterUserId);
+  const scope = input.selectedConnection ? context.req.header("x-openmeld-connection-scope") : "member";
+  if (scope !== "member" && scope !== "shared") {
+    return jsonError(context, 400, "invalid_git_connection", "Select a member or shared GitHub connection.");
+  }
+  const connectionName =
+    scope === "member"
+      ? await requesterConnectionName(organizationId, requesterUserId)
+      : `org_${await stableIdentifierHash(organizationId)}__shared__github`;
+  if (input.selectedConnection && context.req.header("x-oo-connector-alias") !== connectionName) {
+    return jsonError(context, 400, "git_connection_mismatch", "The Git connection does not match its owner.");
+  }
   let credential: Awaited<ReturnType<ConnectionService["getCredential"]>>;
   try {
     credential = await input.connections.getCredential("github", connectionName);
@@ -98,19 +112,38 @@ export async function handleGitUploadPack(
       context,
       503,
       "github_connection_lookup_unavailable",
-      "The requester's GitHub connection could not be checked right now.",
+      "The selected GitHub connection could not be checked right now.",
     );
   }
-  if (!credential || (credential.authType !== "oauth2" && credential.authType !== "api_key")) {
-    return jsonError(
-      context,
-      404,
-      "github_connection_unavailable",
-      "The requester's GitHub connection is unavailable.",
-    );
+  if (
+    !credential ||
+    (scope === "shared"
+      ? credential.authType !== "custom_credential"
+      : credential.authType !== "oauth2" && credential.authType !== "api_key")
+  ) {
+    return jsonError(context, 404, "github_connection_unavailable", "The selected GitHub connection is unavailable.");
   }
 
-  const token = credential.authType === "oauth2" ? credential.accessToken : credential.apiKey;
+  let token: string;
+  if (credential.authType === "custom_credential") {
+    try {
+      const { resolveGitHubAppInstallation } = await import("../../providers/github/app-auth.ts");
+      const installation = await resolveGitHubAppInstallation({
+        fetcher: input.fetcher ?? providerFetch,
+        installationId: credential.values.installationId ?? "",
+        runtimeConfig: input.runtimeConfig,
+      });
+      token = installation.accessToken;
+    } catch {
+      return jsonError(context, 503, "github_installation_unavailable", "The GitHub installation is unavailable.");
+    }
+  } else if (credential.authType === "oauth2") {
+    token = credential.accessToken;
+  } else if (credential.authType === "api_key") {
+    token = credential.apiKey;
+  } else {
+    return jsonError(context, 404, "github_connection_unavailable", "The selected GitHub connection is unavailable.");
+  }
   const suffix = input.operation === "advertise" ? "/info/refs?service=git-upload-pack" : "/git-upload-pack";
   const url = `https://github.com/${input.owner}/${input.repo}.git${suffix}`;
   const headers = new Headers({
@@ -130,6 +163,7 @@ export async function handleGitUploadPack(
       operationId,
       repository: `${input.owner}/${input.repo}`,
       gitOperation: input.operation,
+      connectionScope: scope,
     },
     "OpenMeld Git transfer started",
   );
