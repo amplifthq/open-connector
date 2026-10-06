@@ -4,6 +4,7 @@ import type { RuntimeConfigReader } from "../../core/types.ts";
 
 import { Hono } from "hono";
 import { exportPKCS8, generateKeyPair } from "jose";
+import { gzipSync, gunzipSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
 import { ActionPolicyService } from "../../core/action-policy.ts";
 import { createLocalAuthMiddleware } from "./auth.ts";
@@ -236,36 +237,46 @@ describe("OpenMeld Git upload-pack streaming", () => {
     expect(fetchMock.mock.calls[0]?.[1]?.redirect).toBe("manual");
   });
 
-  it("streams the upload body and pack response without buffering", async () => {
-    let pushResponseChunk: ((value: Uint8Array) => void) | undefined;
-    const upstream = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(new TextEncoder().encode("first"));
-        pushResponseChunk = (value) => {
-          controller.enqueue(value);
-          controller.close();
-        };
-      },
-    });
-    const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
-      expect(init?.body).toBeInstanceOf(ReadableStream);
-      expect(init?.method).toBe("POST");
-      expect(init?.headers).toBeInstanceOf(Headers);
-      return new Response(upstream, { headers: { "content-type": "application/x-git-upload-pack-result" } });
-    }) as unknown as typeof fetch;
-    const { app } = createApp(fetcher);
-    const response = await app.request("/v1/openmeld/git/amplifthq/openmeld/git-upload-pack", {
-      method: "POST",
-      headers: { ...requesterHeaders, "content-type": "application/x-git-upload-pack-request" },
-      body: "0000",
-    });
-    expect(response.status).toBe(200);
-    const reader = response.body?.getReader();
-    expect(reader).toBeDefined();
-    expect(new TextDecoder().decode((await reader!.read()).value)).toBe("first");
-    pushResponseChunk?.(new TextEncoder().encode("second"));
-    expect(new TextDecoder().decode((await reader!.read()).value)).toBe("second");
-  });
+  it.each([false, true])(
+    "streams the upload body and pack response without buffering (gzip=%s)",
+    async (compressed) => {
+      let pushResponseChunk: ((value: Uint8Array) => void) | undefined;
+      const upstream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode("first"));
+          pushResponseChunk = (value) => {
+            controller.enqueue(value);
+            controller.close();
+          };
+        },
+      });
+      const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+        expect(init?.body).toBeInstanceOf(ReadableStream);
+        expect(init?.method).toBe("POST");
+        expect(init?.headers).toBeInstanceOf(Headers);
+        expect(new Headers(init?.headers).get("content-encoding")).toBe(compressed ? "gzip" : null);
+        const received = Buffer.from(await new Response(init?.body).arrayBuffer());
+        expect((compressed ? gunzipSync(received) : received).toString()).toBe("0000");
+        return new Response(upstream, { headers: { "content-type": "application/x-git-upload-pack-result" } });
+      }) as unknown as typeof fetch;
+      const { app } = createApp(fetcher);
+      const response = await app.request("/v1/openmeld/git/amplifthq/openmeld/git-upload-pack", {
+        method: "POST",
+        headers: {
+          ...requesterHeaders,
+          "content-type": "application/x-git-upload-pack-request",
+          ...(compressed ? { "content-encoding": "gzip" } : {}),
+        },
+        body: compressed ? gzipSync("0000") : "0000",
+      });
+      expect(response.status).toBe(200);
+      const reader = response.body?.getReader();
+      expect(reader).toBeDefined();
+      expect(new TextDecoder().decode((await reader!.read()).value)).toBe("first");
+      pushResponseChunk?.(new TextEncoder().encode("second"));
+      expect(new TextDecoder().decode((await reader!.read()).value)).toBe("second");
+    },
+  );
 
   it("rejects receive-pack, malformed selectors, redirects and unavailable member credentials", async () => {
     const fetchMock = vi.fn(
