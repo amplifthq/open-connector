@@ -421,7 +421,7 @@ export class ConnectServer {
     }
   }
 
-  private listRuntimeProviders(context: Context): Response {
+  private async listRuntimeProviders(context: Context): Promise<Response> {
     const services = context.req.queries("service") ?? [];
     const query = optionalString(context.req.query("q"))?.toLowerCase();
     const providers = this.options.catalog.providers.filter((provider) => {
@@ -438,7 +438,27 @@ export class ConnectServer {
         .includes(query);
     });
 
-    return writeRuntimeSuccess(context, providers.map(serializeRuntimeProvider));
+    const includeAuth = context.req.query("includeConnectionAuth") === "true";
+    const ready = includeAuth
+      ? new Set(
+          (await this.options.oauthClientConfigs.listConfigs())
+            .filter((config) => config.configured)
+            .map((config) => config.service),
+        )
+      : undefined;
+    return writeRuntimeSuccess(
+      context,
+      providers.map((provider) => {
+        if (!includeAuth) return serializeRuntimeProvider(provider);
+        try {
+          this.options.connections.assertProviderAvailable(provider.service);
+        } catch (error) {
+          if (!(error instanceof ConnectionError) || error.code !== "provider_unavailable") throw error;
+          return { ...serializeRuntimeProvider(provider), connectionAuth: { oauth: false, credentials: [] } };
+        }
+        return serializeRuntimeProvider(provider, ready?.has(provider.service));
+      }),
+    );
   }
 
   private async listRuntimeActions(context: Context): Promise<Response> {
