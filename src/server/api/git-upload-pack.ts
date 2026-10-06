@@ -154,7 +154,11 @@ export async function handleGitUploadPack(
         : "application/x-git-upload-pack-result",
   });
   if (gitProtocol) headers.set("git-protocol", gitProtocol);
-  if (input.operation === "upload") headers.set("content-type", "application/x-git-upload-pack-request");
+  if (input.operation === "upload") {
+    headers.set("content-type", "application/x-git-upload-pack-request");
+    const contentEncoding = context.req.header("content-encoding");
+    if (contentEncoding) headers.set("content-encoding", contentEncoding);
+  }
 
   input.logger?.info(
     {
