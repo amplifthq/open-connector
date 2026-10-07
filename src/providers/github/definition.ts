@@ -13,6 +13,13 @@ const service = "github";
  * App without copying the App private key into each connection.
  */
 export const provider: ProviderDefinition = {
+  nativeHttp: {
+    baseUrl: "https://api.github.com",
+    documentationUrl: "https://docs.github.com/en/rest",
+    auth: { type: "provider" },
+    headers: { "X-GitHub-Api-Version": "2022-11-28" },
+    read: [{ method: "GET", path: "^/(?:repos|orgs|users|user|search)(?:/.*)?$" }],
+  },
   service,
   displayName: "GitHub",
   categories: ["Developer Tools"],

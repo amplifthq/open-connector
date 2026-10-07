@@ -1,8 +1,15 @@
-import type { ActionExecutor, CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../core/types.ts";
+import type {
+  ActionExecutor,
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../core/types.ts";
 
 import { withProviderFallbackMessage } from "./provider-runtime.ts";
 
 export interface ExecutorModule {
+  nativeHttpAuth?: (context: ExecutionContext) => Promise<Headers>;
   credentialValidators?: CredentialValidators;
   executors: ProviderExecutors;
   proxy?: ProviderProxyExecutor;
@@ -20,6 +27,7 @@ export interface ExecutorModules {
  * hundreds of provider definition modules at startup.
  */
 export interface IProviderLoader {
+  loadNativeHttpAuth?(service: string): Promise<ExecutorModule["nativeHttpAuth"]>;
   /**
    * Load one executor only when an action is being executed.
    */
@@ -48,6 +56,10 @@ export class ProviderLoader implements IProviderLoader {
 
   constructor(executorModules: ExecutorModules) {
     this.executorModules = executorModules;
+  }
+
+  async loadNativeHttpAuth(service: string): Promise<ExecutorModule["nativeHttpAuth"]> {
+    return (await this.executorModules[service]?.())?.nativeHttpAuth;
   }
 
   async loadActionExecutor(

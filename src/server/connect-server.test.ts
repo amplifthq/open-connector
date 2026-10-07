@@ -134,6 +134,36 @@ afterEach(() => {
 });
 
 describe("ConnectServer", () => {
+  it("restricts selected-account descriptions to the configured host bearer and current proxy policy", async () => {
+    const app = createTestServer([{ ...apiKeyProvider, authTypes: ["no_auth"], auth: [{ type: "no_auth" }] }], {
+      auth: { adminToken: "admin", runtimeToken: "host" },
+    }).createApp();
+    const path = "/v1/openmeld/connections/example/describe";
+    for (const authorization of ["", "Bearer admin", "Bearer invalid"]) {
+      expect((await app.request(path, { headers: { authorization, "x-oo-connector-alias": "chosen" } })).status).toBe(
+        401,
+      );
+    }
+    expect((await app.request(path, { headers: { authorization: "Bearer host" } })).status).toBe(400);
+    const response = await app.request(path, {
+      headers: { authorization: "Bearer host", "x-oo-connector-alias": "chosen" },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({
+      service: "example",
+      nativeHttp: null,
+      connection: { connectionName: "chosen", health: { state: "ready" } },
+    });
+    const blocked = createTestServer([apiKeyProvider], {
+      auth: { runtimeToken: "host" },
+      actionPolicy: new LocalActionPolicyService({ blockedProxies: ["*"] }),
+    }).createApp();
+    expect(
+      (await blocked.request(path, { headers: { authorization: "Bearer host", "x-oo-connector-alias": "chosen" } }))
+        .status,
+    ).toBe(403);
+  });
   it("rejects connections for providers unavailable in the current runtime", async () => {
     const app = createTestServer([catalogOnlyProvider]).createApp();
 
@@ -1252,6 +1282,7 @@ describe("ConnectServer", () => {
 
   it("completes a verified GitHub App installation through the admin API", async () => {
     const complete = vi.fn(async () => ({
+      health: { state: "unknown" as const, observedAt: "2026-01-01T00:00:00.000Z", expiresAt: null, reason: null },
       authType: "custom_credential" as const,
       configured: true as const,
       connectionName: "organization:org-1:github",

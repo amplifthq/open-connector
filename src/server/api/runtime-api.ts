@@ -1,5 +1,5 @@
 import type { RuntimeActionDefinition } from "../../catalog-store.ts";
-import type { ConnectionError, ConnectionSummary } from "../../connection-service.ts";
+import type { ConnectionError, ConnectionHealth, ConnectionSummary } from "../../connection-service.ts";
 import type { ExecutionResult, ProviderDefinition } from "../../core/types.ts";
 import type { Context } from "hono";
 
@@ -78,6 +78,7 @@ export interface RuntimeActionMetadata {
 }
 
 export interface RuntimeConnectedApp {
+  health: ConnectionHealth;
   id: string;
   service: string;
   status: "active" | "disconnected";
@@ -188,6 +189,7 @@ export function serializeRuntimeAction(action: RuntimeActionDefinition): Runtime
 
 export function serializeRuntimeConnectedApp(connection: ConnectionSummary): RuntimeConnectedApp {
   return {
+    health: connection.health,
     id: connection.id,
     service: connection.service,
     status: connection.configured ? "active" : "disconnected",

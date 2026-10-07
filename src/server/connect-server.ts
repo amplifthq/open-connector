@@ -36,7 +36,13 @@ import {
 } from "./actions/action-idempotency.ts";
 import { ActionRunner } from "./actions/action-runner.ts";
 import { renderActionMarkdown } from "./api/action-markdown.ts";
-import { clearLocalAuthCookie, createLocalAuthMiddleware, readLocalAuthSession, readRuntimeGrant } from "./api/auth.ts";
+import {
+  clearLocalAuthCookie,
+  createLocalAuthMiddleware,
+  hasConfiguredRuntimeBearer,
+  readLocalAuthSession,
+  readRuntimeGrant,
+} from "./api/auth.ts";
 import { getResponseCachePolicy } from "./api/cache-policy.ts";
 import { handleGitUploadPack } from "./api/git-upload-pack.ts";
 import { HttpRequestError, internalError, jsonError, notFound, readJsonBody } from "./api/http-utils.ts";
@@ -56,6 +62,7 @@ import {
   writeRuntimeSuccess,
 } from "./api/runtime-api.ts";
 import { createTransitFileResponse, TransitFileError } from "./files/transit-file-store.ts";
+import { NativeHttpRunner } from "./proxy/native-http.ts";
 import { ProxyRunner } from "./proxy/proxy-runner.ts";
 import { decodeRunLogCursor } from "./storage/runtime-store.ts";
 
@@ -105,6 +112,7 @@ export class ConnectServer {
     this.actionSearch = options.actionSearch ?? createActionSearchIndexProvider(options.catalog.actions);
     this.actionPolicy = options.actionPolicy ?? new ActionPolicyService();
     this.proxyRunner = new ProxyRunner({
+      runtimeConfig: options.runtimeConfig,
       catalog: options.catalog,
       providerLoader: options.providerLoader,
       connections: options.connections,
@@ -116,6 +124,38 @@ export class ConnectServer {
   createApp(): Hono {
     const app = new Hono();
     const auth = this.options.auth ?? {};
+    const nativeHttp = new NativeHttpRunner(this.options);
+    // Only the trusted host can select a connection. A Computer receives no runtime token.
+    app.all("/v1/openmeld/connections/:service/*", async (context) => {
+      context.header("Cache-Control", "no-store");
+      if (!hasConfiguredRuntimeBearer(context, auth))
+        return jsonError(context, 401, "unauthorized", "Connection runtime authentication is required.");
+      const service = context.req.param("service");
+      const connectionName = context.req.header("x-oo-connector-alias");
+      if (!connectionName)
+        return jsonError(context, 400, "connection_required", "Select an existing Plugin connection.");
+      const policy = await this.getPolicySnapshot(context);
+      if (!policy.evaluateProxy(service).allowed)
+        return jsonError(
+          context,
+          403,
+          "connection_access_denied",
+          "Connection access is disabled by deployment policy.",
+        );
+      const url = new URL(context.req.url);
+      const prefix = `/v1/openmeld/connections/${service}`;
+      if (url.pathname === `${prefix}/describe` && context.req.method === "GET") {
+        return context.json(await nativeHttp.describe(service, connectionName));
+      }
+      if (!url.pathname.startsWith(`${prefix}/request/`))
+        return jsonError(context, 404, "not_found", "Unknown connection operation.");
+      return nativeHttp.run({
+        service,
+        connectionName,
+        endpoint: `${url.pathname.slice(`${prefix}/request`.length)}${url.search}`,
+        request: context.req.raw,
+      });
+    });
 
     app.use("*", async (context, next) => {
       await next();

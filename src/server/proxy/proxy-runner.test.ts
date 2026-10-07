@@ -188,6 +188,7 @@ describe("ProxyRunner", () => {
   });
 
   it("passes proxy input and named connection context to provider proxy executors", async () => {
+    const runtimeConfig = (name: string) => (name === "PROVIDER_APP_ID" ? "fixture-app" : undefined);
     const proxy: ProviderProxyExecutor = vi.fn(async (_input, context): Promise<ProxyExecutionResult> => {
       await context.getCredential("example");
       return {
@@ -195,7 +196,7 @@ describe("ProxyRunner", () => {
         response: {
           status: 202,
           headers: { "content-type": "application/json" },
-          data: { accepted: true },
+          data: { accepted: true, appId: context.runtimeConfig?.("PROVIDER_APP_ID") },
         },
       };
     });
@@ -203,6 +204,7 @@ describe("ProxyRunner", () => {
     const runner = createRunner({
       connections,
       providerLoader: new TestProviderLoader(proxy),
+      runtimeConfig,
     });
 
     await expect(
@@ -216,7 +218,7 @@ describe("ProxyRunner", () => {
       response: {
         status: 202,
         headers: { "content-type": "application/json" },
-        data: { accepted: true },
+        data: { accepted: true, appId: "fixture-app" },
       },
     });
 
@@ -462,6 +464,7 @@ describe("ProxyRunner", () => {
 });
 
 function createRunner(input: {
+  runtimeConfig?: (name: string) => string | undefined;
   actionPolicy?: ActionPolicyService;
   connections?: ConnectionService;
   logger?: Logger;
@@ -473,6 +476,7 @@ function createRunner(input: {
     connections: input.connections ?? createConnections(),
     logger: input.logger,
     providerLoader: input.providerLoader,
+    runtimeConfig: input.runtimeConfig,
   });
 }
 
@@ -482,6 +486,7 @@ function createConnections(
   } = {},
 ): ConnectionService {
   const summary: ConnectionSummary = {
+    health: { state: "unknown", observedAt: "2026-01-01T00:00:00.000Z", expiresAt: null, reason: null },
     id: "example:default",
     service: "example",
     connectionName: "default",
