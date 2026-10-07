@@ -162,6 +162,7 @@ describe("ConnectionService", () => {
         configured: true,
         virtual: true,
         default: true,
+        health: { state: "ready", observedAt: expect.any(String), expiresAt: null, reason: null },
         profile: {
           accountId: "hackernews:public",
           displayName: "Hacker News Public",
@@ -743,6 +744,10 @@ describe("ConnectionService", () => {
 
     await expect(service.getCredential("example")).rejects.toMatchObject({
       code: "oauth_token_expired",
+    });
+    await expect(service.getConnectionSummary("example")).resolves.toMatchObject({
+      configured: true,
+      health: { state: "reconnect_required", reason: "oauth_token_expired" },
     });
   });
 

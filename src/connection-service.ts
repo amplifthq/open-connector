@@ -31,6 +31,15 @@ export interface ConnectionSummary {
   virtual: boolean;
   default: boolean;
   profile: CredentialProfile;
+  health: ConnectionHealth;
+}
+
+/** Credential evidence, not a promise that every provider operation is permitted. */
+export interface ConnectionHealth {
+  state: "unknown" | "ready" | "refresh_required" | "reconnect_required";
+  observedAt: string;
+  expiresAt: string | null;
+  reason: string | null;
 }
 
 /**
@@ -403,6 +412,7 @@ export class ConnectionService {
       virtual: false,
       default: connectionName === defaultConnectionName,
       profile: credential.profile,
+      health: this.credentialHealth(credential),
     };
   }
 
@@ -416,7 +426,29 @@ export class ConnectionService {
       virtual: true,
       default: connectionName === defaultConnectionName,
       profile: this.createNoAuthProfile(provider),
+      health: this.credentialHealth({ authType: "no_auth" }),
     };
+  }
+
+  private credentialHealth(credential: ResolvedCredential): ConnectionHealth {
+    const health: ConnectionHealth = {
+      state: "unknown",
+      observedAt: new Date().toISOString(),
+      expiresAt: credential.authType === "oauth2" ? (credential.expiresAt ?? null) : null,
+      reason: null,
+    };
+    if (credential.authType === "no_auth") {
+      health.state = "ready";
+    } else if (credential.authType === "oauth2" && isOAuthCredentialExpired(credential)) {
+      if (!credential.refreshToken) {
+        health.state = "reconnect_required";
+        health.reason = "oauth_token_expired";
+      } else {
+        health.state = "refresh_required";
+        health.reason = this.oauthCredentials ? "oauth_refresh_required" : "oauth_refresh_unavailable";
+      }
+    }
+    return health;
   }
 
   /** Rejects provider setup when none of its catalog actions can execute in this runtime. */

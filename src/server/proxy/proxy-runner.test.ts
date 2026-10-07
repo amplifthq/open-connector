@@ -482,6 +482,7 @@ function createConnections(
   } = {},
 ): ConnectionService {
   const summary: ConnectionSummary = {
+    health: { state: "unknown", observedAt: "2026-01-01T00:00:00.000Z", expiresAt: null, reason: null },
     id: "example:default",
     service: "example",
     connectionName: "default",

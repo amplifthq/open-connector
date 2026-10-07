@@ -1252,6 +1252,7 @@ describe("ConnectServer", () => {
 
   it("completes a verified GitHub App installation through the admin API", async () => {
     const complete = vi.fn(async () => ({
+      health: { state: "unknown" as const, observedAt: "2026-01-01T00:00:00.000Z", expiresAt: null, reason: null },
       authType: "custom_credential" as const,
       configured: true as const,
       connectionName: "organization:org-1:github",

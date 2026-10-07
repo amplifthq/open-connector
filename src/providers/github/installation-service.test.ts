@@ -23,6 +23,7 @@ describe("GitHubAppInstallationService", () => {
         calls.push(`connect:${input.connectionName}`);
         return {
           authType: "custom_credential" as const,
+          health: { state: "unknown" as const, observedAt: "2026-01-01T00:00:00.000Z", expiresAt: null, reason: null },
           configured: true as const,
           connectionName: input.connectionName,
           default: false,
