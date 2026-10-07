@@ -138,4 +138,29 @@ describe("native Plugin HTTP reads", () => {
     expect(await response.json()).toMatchObject({ error: { code: "oauth_token_expired" } });
     expect(f.fetcher).not.toHaveBeenCalled();
   });
+
+  it.each([
+    {
+      response: () => new Response(null, { status: 302, headers: { location: "https://attacker.invalid" } }),
+      code: "connection_redirect_rejected",
+    },
+    {
+      response: () => new Response("not JSON", { headers: { "content-type": "text/html" } }),
+      code: "connection_response_type_unsupported",
+    },
+  ])("rejects unsafe provider responses: $code", async ({ response, code }) => {
+    const f = fixture();
+    await f.store.set("cloudflare_worker", "selected", {
+      authType: "custom_credential",
+      values: { apiKey: "selected-provider-token", accountId: "account" },
+      profile: { accountId: "account", displayName: "Selected", grantedScopes: [] },
+      metadata: {},
+    });
+    f.fetcher.mockResolvedValueOnce(response());
+    const result = await f.runner.run(request());
+    expect(result.status).toBe(502);
+    expect(await result.json()).toMatchObject({ error: { code } });
+    expect(f.fetcher).toHaveBeenCalledTimes(1);
+    expect(f.fetcher.mock.calls[0]?.[1]?.redirect).toBe("manual");
+  });
 });
