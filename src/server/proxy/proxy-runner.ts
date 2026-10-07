@@ -1,7 +1,7 @@
 import type { CatalogStore } from "../../catalog-store.ts";
 import type { ConnectionService } from "../../connection-service.ts";
 import type { ActionPolicyService, ActionPolicySnapshot } from "../../core/action-policy.ts";
-import type { ProviderProxyExecutor, ProxyRequestInput, ProxyResponse } from "../../core/types.ts";
+import type { ProviderProxyExecutor, ProxyRequestInput, ProxyResponse, RuntimeConfigReader } from "../../core/types.ts";
 import type { IProviderLoader } from "../../providers/provider-loader.ts";
 import type { Logger } from "../logger.ts";
 
@@ -12,6 +12,7 @@ import { mapConnectionErrorStatus } from "../api/runtime-api.ts";
 export type ProxyFailureStatus = 400 | 403 | 404 | 409 | 413 | 429 | 500 | 501;
 
 export interface ProxyRunnerOptions {
+  runtimeConfig?: RuntimeConfigReader;
   catalog: CatalogStore;
   providerLoader: IProviderLoader;
   connections: ConnectionService;
@@ -118,6 +119,7 @@ export class ProxyRunner {
       await this.options.connections.getConnectionSummary(provider.service, input.connectionName);
       const result = await executor(request.input, {
         ...this.options.connections.forConnection(input.connectionName),
+        runtimeConfig: this.options.runtimeConfig,
       });
       const durationMs = Date.now() - startedAtMs;
       if (result.ok) {

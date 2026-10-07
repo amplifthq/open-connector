@@ -1,4 +1,9 @@
-import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
 import type { GitHubActionContext } from "./runtime-shared.ts";
 
 import {
@@ -18,6 +23,22 @@ import { searchActionHandlers } from "./runtime-search.ts";
 import { githubApiBaseUrl, githubApiVersion, githubDefaultAcceptHeader, githubRequestJson } from "./runtime-shared.ts";
 
 const service = "github";
+
+/** Reuse installation-token minting for native API requests without exporting the token. */
+export async function nativeHttpAuth(context: ExecutionContext): Promise<Headers> {
+  const configured = await context.getCredential(service);
+  const token =
+    configured?.authType === "custom_credential"
+      ? (
+          await resolveGitHubAppInstallation({
+            fetcher: providerFetch,
+            installationId: configured.values.installationId ?? "",
+            runtimeConfig: context.runtimeConfig,
+          })
+        ).accessToken
+      : (await requireBearerCredential(context, service)).accessToken;
+  return new Headers({ authorization: `Bearer ${token}` });
+}
 
 export const executors: ProviderExecutors = defineProviderExecutors<GitHubActionContext>({
   service,

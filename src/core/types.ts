@@ -201,6 +201,8 @@ export type ActionDefinition = {
  * Public catalog definition for one provider or app.
  */
 export type ProviderDefinition = {
+  /** Read-only native HTTP access, independent of the action catalog. */
+  nativeHttp?: NativeHttpDefinition;
   /** Stable lowercase service id used in action ids, routes, and catalog filenames. */
   service: string;
   /** Human-readable provider name. */
@@ -220,6 +222,24 @@ export type ProviderDefinition = {
   /** Public action catalog for this provider. */
   actions: readonly ActionDefinition[];
 };
+
+export interface NativeHttpDefinition {
+  baseUrl: string;
+  documentationUrl: string;
+  auth:
+    | { type: "bearer"; credentialField?: string }
+    | { type: "header"; name: string; credentialField: string }
+    | { type: "provider" };
+  headers?: Record<string, string>;
+  cli?: { command: string; baseUrlEnvironment: string; tokenEnvironment: string; accountEnvironment?: string };
+  read: Array<{
+    method: "GET" | "POST";
+    /** Anchored regular expression over the decoded, traversal-free path. */
+    path: string;
+    bodySchema?: JsonSchema;
+    timeWindow?: { from: string; to: string; maxMilliseconds: number };
+  }>;
+}
 
 /**
  * A credential resolved for action execution.
