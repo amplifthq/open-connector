@@ -23,6 +23,7 @@ export const provider: ProviderDefinition = {
       {
         method: "POST",
         path: "^/accounts/[^/]+/workers/observability/telemetry/query$",
+        requiredPermissions: ["Workers Observability Write"],
         bodySchema: s.object(
           {
             dry: { const: true },

@@ -236,6 +236,8 @@ export interface NativeHttpDefinition {
     method: "GET" | "POST";
     /** Anchored regular expression over the decoded, traversal-free path. */
     path: string;
+    /** Provider permission names for discovery and actionable access-denied responses. */
+    requiredPermissions?: string[];
     bodySchema?: JsonSchema;
     timeWindow?: { from: string; to: string; maxMilliseconds: number };
   }>;
