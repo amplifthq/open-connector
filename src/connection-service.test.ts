@@ -131,6 +131,7 @@ const testProfile = {
 };
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -179,6 +180,9 @@ describe("ConnectionService", () => {
   // The listing puts the Marketplace entry after whatever already answers for the provider, and
   // only that first entry is the default one.
   it("orders Marketplace entries after stored and no_auth connections", async () => {
+    // Both listing paths must observe the same time while comparing their complete summaries.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-08T00:00:00.000Z"));
     const services = ["uptimerobot", "hackernews", "database"];
     const marketplace = {
       getSnapshot: () => ({
