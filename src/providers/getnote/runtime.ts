@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { GetnoteActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   nullableString,
@@ -9,7 +9,7 @@ import {
   optionalString,
   requiredRecord,
 } from "../../core/cast.ts";
-import { providerFetch, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { isAbortLikeError, providerFetch, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 export const getnoteBaseUrl = "https://openapi.biji.com";
 const getnoteRequestTimeoutMs = 30_000;
@@ -71,7 +71,7 @@ export async function validateGetnoteCredential(
   };
 }
 
-export const getnoteActionHandlers: Record<GetnoteActionName, GetnoteActionHandler> = {
+export const getnoteActionHandlers: ProviderActionHandlers<"getnote", GetnoteActionHandler> = {
   save_note: saveNote,
   get_save_task: getSaveTask,
   list_notes: listNotes,
@@ -771,8 +771,4 @@ function readFirstObjectField(input: Record<string, unknown>, keys: string[]) {
 
 function toRecord(value: unknown): Record<string, unknown> {
   return requiredRecord(value, "Getnote response object", (message) => new ProviderRequestError(502, message));
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return error instanceof Error && error.name === "AbortError";
 }

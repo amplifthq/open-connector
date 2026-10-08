@@ -203,27 +203,10 @@ const deleteWebhookInputSchema = s.object("Input for deleting a webhook.", {
   webhookId: webhookIdSchema,
 });
 
-export type LemonSqueezyActionName =
-  | "retrieve_authenticated_user"
-  | "list_stores"
-  | "retrieve_store"
-  | "list_products"
-  | "list_variants"
-  | "list_orders"
-  | "list_subscriptions"
-  | "list_customers"
-  | "retrieve_customer"
-  | "create_customer"
-  | "update_customer"
-  | "list_webhooks"
-  | "retrieve_webhook"
-  | "create_webhook"
-  | "update_webhook"
-  | "delete_webhook";
-
 export const lemonSqueezyActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "retrieve_authenticated_user",
+    operationType: "read",
     description: "Retrieve the currently authenticated Lemon Squeezy user.",
     requiredScopes: [],
     inputSchema: s.object("No input is required.", {}),
@@ -231,6 +214,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_stores",
+    operationType: "read",
     description: "List stores that belong to the authenticated Lemon Squeezy account.",
     requiredScopes: [],
     inputSchema: s.object("No input is required.", {}),
@@ -238,6 +222,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "retrieve_store",
+    operationType: "read",
     description: "Retrieve a single Lemon Squeezy store by ID.",
     requiredScopes: [],
     inputSchema: retrieveStoreInputSchema,
@@ -245,6 +230,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_products",
+    operationType: "read",
     description: "List Lemon Squeezy products with optional store filtering and pagination.",
     requiredScopes: [],
     inputSchema: listProductsInputSchema,
@@ -252,6 +238,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_variants",
+    operationType: "read",
     description: "List Lemon Squeezy variants with optional product filtering and pagination.",
     requiredScopes: [],
     inputSchema: listVariantsInputSchema,
@@ -259,6 +246,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_orders",
+    operationType: "read",
     description: "List Lemon Squeezy orders with optional store, email, or order-number filtering.",
     requiredScopes: [],
     inputSchema: listOrdersInputSchema,
@@ -266,6 +254,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_subscriptions",
+    operationType: "read",
     description: "List Lemon Squeezy subscriptions with optional filters and pagination.",
     requiredScopes: [],
     inputSchema: listSubscriptionsInputSchema,
@@ -273,6 +262,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_customers",
+    operationType: "read",
     description: "List Lemon Squeezy customers with optional store or email filtering.",
     requiredScopes: [],
     inputSchema: listCustomersInputSchema,
@@ -280,6 +270,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "retrieve_customer",
+    operationType: "read",
     description: "Retrieve a single Lemon Squeezy customer by ID.",
     requiredScopes: [],
     inputSchema: retrieveCustomerInputSchema,
@@ -287,6 +278,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_customer",
+    operationType: "write",
     description: "Create a Lemon Squeezy customer for the specified store.",
     requiredScopes: [],
     inputSchema: createCustomerInputSchema,
@@ -294,6 +286,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_customer",
+    operationType: "write",
     description: "Update a Lemon Squeezy customer by ID.",
     requiredScopes: [],
     inputSchema: updateCustomerInputSchema,
@@ -301,6 +294,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_webhooks",
+    operationType: "read",
     description: "List Lemon Squeezy webhooks with optional store filtering and pagination.",
     requiredScopes: [],
     inputSchema: listWebhooksInputSchema,
@@ -308,6 +302,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "retrieve_webhook",
+    operationType: "read",
     description: "Retrieve a single Lemon Squeezy webhook by ID.",
     requiredScopes: [],
     inputSchema: retrieveWebhookInputSchema,
@@ -315,6 +310,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_webhook",
+    operationType: "write",
     description: "Create a Lemon Squeezy webhook for the specified store.",
     requiredScopes: [],
     inputSchema: createWebhookInputSchema,
@@ -322,6 +318,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_webhook",
+    operationType: "write",
     description: "Update a Lemon Squeezy webhook by ID.",
     requiredScopes: [],
     inputSchema: updateWebhookInputSchema,
@@ -329,6 +326,7 @@ export const lemonSqueezyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_webhook",
+    operationType: "destructive",
     description:
       "Delete a Lemon Squeezy webhook by ID. The returned acknowledgement is generated locally because Lemon Squeezy responds with 204 No Content.",
     requiredScopes: [],

@@ -272,6 +272,7 @@ const placeTipsInputSchema = s.object(
 export const foursquareActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "search_places",
+    operationType: "read",
     description: "Search for places with the Foursquare Places Search endpoint.",
     requiredScopes: [],
     inputSchema: searchPlacesInputSchema,
@@ -286,6 +287,7 @@ export const foursquareActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_nearby_places",
+    operationType: "read",
     description: "Retrieve nearby places around a latitude and longitude with Foursquare.",
     requiredScopes: [],
     inputSchema: nearbyPlacesInputSchema,
@@ -295,6 +297,7 @@ export const foursquareActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_place",
+    operationType: "read",
     description: "Retrieve one place by Foursquare place ID.",
     requiredScopes: [],
     inputSchema: getPlaceInputSchema,
@@ -302,6 +305,7 @@ export const foursquareActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_place_photos",
+    operationType: "read",
     description: "Retrieve photos for one Foursquare place.",
     requiredScopes: [],
     inputSchema: placePhotosInputSchema,
@@ -311,6 +315,7 @@ export const foursquareActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_place_tips",
+    operationType: "read",
     description: "Retrieve tips for one Foursquare place.",
     requiredScopes: [],
     inputSchema: placeTipsInputSchema,
@@ -319,10 +324,3 @@ export const foursquareActions: ActionDefinition[] = [
     }),
   }),
 ];
-
-export type FoursquareActionName =
-  | "search_places"
-  | "get_nearby_places"
-  | "get_place"
-  | "get_place_photos"
-  | "get_place_tips";

@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { createHash } from "node:crypto";
@@ -13,6 +14,7 @@ import {
 import {
   defineProviderExecutors,
   defineProviderProxy,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
   requireApiKeyCredential,
@@ -25,7 +27,7 @@ const bannerbearSyncApiBaseUrl = "https://sync.api.bannerbear.com";
 
 type BannerbearActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const bannerbearActionHandlers: Record<string, BannerbearActionHandler> = {
+export const bannerbearActionHandlers: ProviderActionHandlers<"bannerbear", BannerbearActionHandler> = {
   get_auth(input, context) {
     return getBannerbearAuth(input, context);
   },
@@ -137,7 +139,7 @@ async function getBannerbearTemplate(
   input: Record<string, unknown>,
   context: ApiKeyProviderContext,
 ): Promise<Record<string, unknown>> {
-  const uid = requiredString(input.uid, "uid", invalidInputError);
+  const uid = requiredString(input.uid, "uid", providerInputError);
   const payload = await requestBannerbear({
     apiKey: context.apiKey,
     path: `/v2/templates/${encodeURIComponent(uid)}`,
@@ -184,7 +186,7 @@ async function getBannerbearImage(
   input: Record<string, unknown>,
   context: ApiKeyProviderContext,
 ): Promise<Record<string, unknown>> {
-  const uid = requiredString(input.uid, "uid", invalidInputError);
+  const uid = requiredString(input.uid, "uid", providerInputError);
   const payload = await requestBannerbear({
     apiKey: context.apiKey,
     path: `/v2/images/${encodeURIComponent(uid)}`,
@@ -308,10 +310,6 @@ function stringifyOptional(value: unknown): string | undefined {
 
 function hashBannerbearApiKey(apiKey: string): string {
   return createHash("sha256").update(apiKey).digest("hex").slice(0, 16);
-}
-
-function invalidInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function isAbortError(error: unknown): boolean {

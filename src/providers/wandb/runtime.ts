@@ -1,15 +1,20 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type {
+  ProviderActionHandlers,
+  ProviderActionSources,
+  ProviderFetch,
+  ProviderRuntimeHandler,
+} from "../provider-runtime.ts";
+import type { Client } from "@modelcontextprotocol/client";
 
-import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
-import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
+import { UnauthorizedError } from "@modelcontextprotocol/client";
+import { SdkHttpError } from "@modelcontextprotocol/client";
+import { ProtocolError, SdkError, SdkErrorCode } from "@modelcontextprotocol/client";
 import { createHash } from "node:crypto";
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { withMcpClient } from "../mcp-client.ts";
+import { mapProviderActionSources, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 export interface WandbMcpContext {
   endpoint: URL;
@@ -23,9 +28,8 @@ type WandbMcpToolResult = Awaited<ReturnType<Client["callTool"]>>;
 
 const defaultEndpoint = "https://mcp.withwandb.com/mcp";
 const requestTimeoutMs = 60_000;
-const wandbMcpJsonSchemaValidator = new CfWorkerJsonSchemaValidator();
 
-export const wandbMcpTools: Record<string, string> = {
+export const wandbMcpTools: ProviderActionSources<"wandb", string> = {
   query_weave_traces: "query_weave_traces_tool",
   count_weave_traces: "count_weave_traces_tool",
   resolve_trace_roots: "resolve_trace_roots_tool",
@@ -50,15 +54,20 @@ export const wandbMcpTools: Record<string, string> = {
   probe_project: "probe_project_tool",
 };
 
-export const wandbMcpActionHandlers: Record<string, ProviderRuntimeHandler<WandbMcpContext>> = {};
-for (const [actionName, toolName] of Object.entries(wandbMcpTools)) {
-  wandbMcpActionHandlers[actionName] = async (input: Record<string, unknown>, context: WandbMcpContext) => {
-    if (context.availableActions && !context.availableActions.has(actionName)) {
-      throw new ProviderRequestError(400, `W&B MCP action ${actionName} is not available for this connection`);
-    }
-    return callWandbMcpTool(context, toolName, input);
-  };
-}
+export const wandbMcpActionHandlers: ProviderActionHandlers<
+  "wandb",
+  ProviderRuntimeHandler<WandbMcpContext>
+> = mapProviderActionSources(
+  "wandb",
+  wandbMcpTools,
+  (actionName, toolName): ProviderRuntimeHandler<WandbMcpContext> =>
+    async (input, context) => {
+      if (context.availableActions && !context.availableActions.has(actionName)) {
+        throw new ProviderRequestError(400, `W&B MCP action ${actionName} is not available for this connection`);
+      }
+      return callWandbMcpTool(context, toolName, input);
+    },
+);
 
 export function createWandbMcpContext(
   apiKey: string,
@@ -136,10 +145,13 @@ export async function callWandbMcpTool(
   args: Record<string, unknown>,
 ): Promise<unknown> {
   return withWandbMcpClient(context, async (client) => {
-    const result = await client.callTool({ name: toolName, arguments: args }, undefined, {
-      timeout: requestTimeoutMs,
-      signal: context.signal,
-    });
+    const result = await client.callTool(
+      { name: toolName, arguments: args },
+      {
+        timeout: requestTimeoutMs,
+        signal: context.signal,
+      },
+    );
     return normalizeWandbMcpToolResult(toolName, result);
   });
 }
@@ -162,23 +174,17 @@ async function withWandbMcpClient<T>(context: WandbMcpContext, run: (client: Cli
     authorization: `Bearer ${context.apiKey}`,
     "user-agent": providerUserAgent,
   });
-  const transport = new StreamableHTTPClientTransport(context.endpoint, {
-    fetch: context.fetcher,
-    requestInit: { headers },
-  });
-  const client = new Client(
-    { name: "oomol-connect-wandb", version: "1.0.0" },
-    { jsonSchemaValidator: wandbMcpJsonSchemaValidator },
+  return withMcpClient(
+    {
+      endpoint: context.endpoint,
+      transport: "streamable_http",
+      fetcher: context.fetcher,
+      headers,
+      signal: context.signal,
+      mapError: mapWandbMcpError,
+    },
+    run,
   );
-
-  try {
-    await client.connect(transport, { timeout: requestTimeoutMs, signal: context.signal });
-    return await run(client);
-  } catch (error) {
-    throw mapWandbMcpError(error);
-  } finally {
-    await client.close().catch(() => undefined);
-  }
 }
 
 function normalizeWandbMcpToolResult(toolName: string, result: WandbMcpToolResult): unknown {
@@ -261,8 +267,8 @@ function mapWandbMcpError(error: unknown): ProviderRequestError {
   if (error instanceof UnauthorizedError) {
     return new ProviderRequestError(401, "W&B API key is invalid or expired", error);
   }
-  if (error instanceof StreamableHTTPError) {
-    const status = error.code;
+  if (error instanceof SdkHttpError) {
+    const status = error.status;
     let providerStatus = 502;
     if (status === 401 || status === 403) {
       providerStatus = 401;
@@ -273,10 +279,11 @@ function mapWandbMcpError(error: unknown): ProviderRequestError {
     }
     return new ProviderRequestError(providerStatus, `W&B MCP request failed: ${error.message}`, error);
   }
-  if (error instanceof McpError) {
-    return error.code === ErrorCode.RequestTimeout
-      ? new ProviderRequestError(504, "W&B MCP request timed out", error)
-      : new ProviderRequestError(502, `W&B MCP request failed: ${error.message}`, error);
+  if (error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout) {
+    return new ProviderRequestError(504, "W&B MCP request timed out", error);
+  }
+  if (error instanceof ProtocolError) {
+    return new ProviderRequestError(502, `W&B MCP request failed: ${error.message}`, error);
   }
   if (isAbortError(error)) {
     return new ProviderRequestError(504, "W&B MCP request timed out", error);

@@ -1,9 +1,10 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const plainApiUrl = "https://core-api.uk.plain.com/graphql/v1";
+export const plainApiUrl = "https://core-api.uk.plain.com/graphql/v1";
 
 const customerSelection = `
   id
@@ -94,7 +95,7 @@ interface PlainGraphqlPayload {
 
 type PlainHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const plainActionHandlers: Record<string, PlainHandler> = {
+export const plainActionHandlers: ProviderActionHandlers<"plain", PlainHandler> = {
   get_customer_by_email(input, context) {
     return getCustomerByEmail(input, context);
   },

@@ -4,7 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { AdafruitIoActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -16,18 +16,17 @@ import {
   requiredString,
 } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
   defineProviderExecutors,
   defineProviderProxy,
-  isAbortLikeError,
+  providerResponseError,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 const service = "adafruit_io";
 const adafruitIoApiBaseUrl = "https://io.adafruit.com/api/v2";
-const adafruitIoDefaultRequestTimeoutMs = 30_000;
 
 type AdafruitIoPhase = "validate" | "execute";
 
@@ -84,7 +83,7 @@ interface AdafruitIoDataPoint {
 
 type AdafruitIoActionHandler = (input: Record<string, unknown>, context: AdafruitIoActionContext) => Promise<unknown>;
 
-export const adafruitIoActionHandlers: Record<AdafruitIoActionName, AdafruitIoActionHandler> = {
+export const adafruitIoActionHandlers: ProviderActionHandlers<"adafruit_io", AdafruitIoActionHandler> = {
   async get_current_user(_input, context) {
     const user = await fetchAdafruitIoCurrentUser({
       apiKey: context.apiKey,
@@ -252,9 +251,7 @@ async function requestAdafruitIoJson(input: {
   phase: AdafruitIoPhase;
   signal?: AbortSignal;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, adafruitIoDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.signal, label: "Adafruit IO" }, async (signal) => {
     const headers: Record<string, string> = {
       accept: "application/json",
       "user-agent": providerUserAgent,
@@ -268,7 +265,7 @@ async function requestAdafruitIoJson(input: {
       method: input.method,
       headers,
       body: input.body ? JSON.stringify(input.body) : undefined,
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readAdafruitIoPayload(response);
 
@@ -277,22 +274,7 @@ async function requestAdafruitIoJson(input: {
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Adafruit IO request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Adafruit IO request failed: ${error.message}` : "Adafruit IO request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildAdafruitIoUrl(path: string, query: Record<string, string | undefined> = {}): URL {
@@ -489,8 +471,4 @@ function requireRecord(value: unknown, message: string): Record<string, unknown>
     throw new ProviderRequestError(502, message, value);
   }
   return record;
-}
-
-function providerResponseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

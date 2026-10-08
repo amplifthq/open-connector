@@ -3,13 +3,15 @@ import type {
   CredentialValidators,
   ExecutionContext,
   ProviderExecutors,
+  ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { Knowbe4ActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -19,7 +21,6 @@ import {
 const service = "knowbe4";
 const knowbe4ReportingValidationPath = "/v1/account";
 const knowbe4DefaultRegion = "us";
-const knowbe4DefaultRequestTimeoutMs = 30_000;
 
 const knowbe4RegionBaseUrls = {
   us: "https://us.api.knowbe4.com",
@@ -46,7 +47,7 @@ interface Knowbe4RequestInput extends Knowbe4ActionContext {
   query?: Record<string, string | undefined>;
 }
 
-export const knowbe4ActionHandlers: Record<Knowbe4ActionName, Knowbe4ActionHandler> = {
+export const knowbe4ActionHandlers: ProviderActionHandlers<"knowbe4", Knowbe4ActionHandler> = {
   async get_account(_input, context): Promise<unknown> {
     const account = requireObjectPayload(
       await requestKnowbe4Json({
@@ -145,6 +146,19 @@ export const executors: ProviderExecutors = defineProviderExecutors<Knowbe4Actio
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  async baseUrl(context) {
+    const credential = await requireApiKeyCredential(context, service);
+    return resolveKnowbe4BaseUrl(credential.metadata, credential.values);
+  },
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     return validateKnowbe4Credential(input.apiKey, input.values, fetcher, signal);
@@ -204,7 +218,7 @@ async function requestKnowbe4JsonWithResponse(
     }
   }
 
-  const timeout = createProviderTimeout(input.signal, knowbe4DefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   let response: Response;
   let payload: unknown;
   try {

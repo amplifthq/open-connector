@@ -1,13 +1,13 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { EnchargeActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
   ProviderRequestError,
   providerUserAgent,
+  requiredInputString,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 export const enchargeApiBaseUrl = "https://api.encharge.io/v1";
@@ -25,7 +25,7 @@ interface EnchargeRequestOptions {
 
 type EnchargeActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
-export const enchargeActionHandlers: Record<EnchargeActionName, EnchargeActionHandler> = {
+export const enchargeActionHandlers: ProviderActionHandlers<"encharge", EnchargeActionHandler> = {
   send_email(input, context) {
     return sendEmail(input, context);
   },
@@ -105,39 +105,27 @@ async function validateEnchargeApiKey(options: EnchargeRequestOptions): Promise<
 
 async function rawEnchargeRequest(options: EnchargeRequestOptions): Promise<Response> {
   const url = new URL(resolveEnchargePath(options.path), `${enchargeApiBaseUrl}/`);
-  const timeout = createProviderTimeout(options.context.signal, enchargeDefaultRequestTimeoutMs);
-
-  try {
-    return await options.context.fetcher(url, {
-      method: options.method ?? "GET",
-      signal: timeout.signal,
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-        "user-agent": providerUserAgent,
-        "X-Encharge-Token": options.context.apiKey,
-      },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    });
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Encharge request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Encharge request failed: ${error.message}` : "Encharge request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  return runProviderRequest(
+    { signal: options.context.signal, timeoutMs: enchargeDefaultRequestTimeoutMs, label: "Encharge" },
+    async (signal) => {
+      return await options.context.fetcher(url, {
+        method: options.method ?? "GET",
+        signal,
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "user-agent": providerUserAgent,
+          "X-Encharge-Token": options.context.apiKey,
+        },
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      });
+    },
+  );
 }
 
 function buildSendEmailBody(input: Record<string, unknown>): Record<string, unknown> {
-  const contentType = readRequiredString(input.contentType, "contentType");
-  const content = readRequiredString(input.content, "content");
+  const contentType = requiredInputString(input.contentType, "contentType");
+  const content = requiredInputString(input.content, "content");
   if (contentType !== "template" && !optionalString(input.subject)) {
     throw new ProviderRequestError(400, "subject is required unless contentType is template");
   }
@@ -196,10 +184,6 @@ function extractEnchargeErrorMessage(payload: unknown): string | undefined {
 
 function isMissingEmailContentError(payload: unknown): boolean {
   return extractEnchargeErrorMessage(payload)?.includes(missingEmailContentMessage) === true;
-}
-
-function readRequiredString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function resolveEnchargePath(path: string): string {

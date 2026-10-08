@@ -1,0 +1,67 @@
+import type { ConnectorAssets } from "./connector-runtime.ts";
+
+import { access } from "node:fs/promises";
+import { join } from "node:path";
+import { catalogIndexFileName } from "../catalog-index.ts";
+import { isStandaloneExecutable } from "./connector-assets.ts";
+
+/**
+ * Locations of the assets that are generated or built outside `src` and read
+ * by the server at startup: the runtime's catalog and migrations plus the web console.
+ */
+export interface ServerAssets extends ConnectorAssets {
+  /** Built web console directory, or undefined when the console is not built (index.html missing). */
+  staticRoot: string | undefined;
+  /**
+   * True when the directories above live in the read-only tree embedded in a
+   * Bun standalone executable. Embedded files cannot be streamed and report
+   * epoch mtimes.
+   */
+  embedded: boolean;
+}
+
+/**
+ * Resolve where catalog, migrations and web console live for this process: the
+ * embedded tree in a standalone executable, otherwise the working directory and
+ * repository layout used by `npm start`.
+ *
+ * The build script embeds `migrations/`, `catalog/apps/`, `catalog/apps-index.json`
+ * and `dist/web/` next to the bundled entry point, so inside the executable they
+ * appear under `import.meta.dirname` as `migrations/`, `apps/`, `apps-index.json`
+ * and `web/`.
+ */
+export async function resolveServerAssets(): Promise<ServerAssets> {
+  if (isStandaloneExecutable()) {
+    const root = import.meta.dirname;
+    return {
+      catalogDir: join(root, "apps"),
+      catalogIndexFile: await resolveExistingFile(join(root, catalogIndexFileName)),
+      migrationDirectory: join(root, "migrations"),
+      staticRoot: await resolveStaticRoot(join(root, "web")),
+      embedded: true,
+    };
+  }
+
+  const cwd = process.cwd();
+  return {
+    catalogDir: join(cwd, "catalog/apps"),
+    catalogIndexFile: await resolveExistingFile(join(cwd, "catalog", catalogIndexFileName)),
+    migrationDirectory: join(import.meta.dirname, "../../migrations"),
+    staticRoot: await resolveStaticRoot(join(cwd, "dist/web")),
+    embedded: false,
+  };
+}
+
+async function resolveStaticRoot(root: string): Promise<string | undefined> {
+  const indexHtml = await resolveExistingFile(join(root, "index.html"));
+  return indexHtml === undefined ? undefined : root;
+}
+
+async function resolveExistingFile(path: string): Promise<string | undefined> {
+  try {
+    await access(path);
+    return path;
+  } catch {
+    return undefined;
+  }
+}

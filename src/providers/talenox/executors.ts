@@ -4,6 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
 
 import { optionalRawString, optionalRecord, positiveInteger } from "../../core/cast.ts";
@@ -18,7 +19,6 @@ import {
 
 const service = "talenox";
 const talenoxApiBaseUrl = "https://api.talenox.com/api/v2";
-const talenoxDefaultRequestTimeoutMs = 30_000;
 const talenoxValidationPath = "/company_settings";
 
 interface TalenoxRequestOptions {
@@ -31,7 +31,7 @@ interface TalenoxRequestOptions {
 
 type TalenoxActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-const talenoxActionHandlers: Record<string, TalenoxActionHandler> = {
+const talenoxActionHandlers: ProviderActionHandlers<"talenox", TalenoxActionHandler> = {
   async list_company_settings(_input, context) {
     const payload = await requestTalenoxJson({
       path: "/company_settings",
@@ -148,7 +148,7 @@ async function getTalenoxEntity(
 
 async function requestTalenoxJson(options: TalenoxRequestOptions): Promise<unknown> {
   const url = new URL(`${talenoxApiBaseUrl}${options.path}`);
-  const timeout = createProviderTimeout(options.signal, talenoxDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(options.signal);
   try {
     const response = await options.fetcher(url, {
       method: "GET",

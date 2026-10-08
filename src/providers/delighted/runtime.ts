@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { DelightedActionName } from "./actions.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -15,12 +15,12 @@ import {
   createProviderTimeout,
   isAbortLikeError,
   ProviderRequestError,
+  providerResponseError,
   providerUserAgent,
 } from "../provider-runtime.ts";
 
 export const delightedApiBaseUrl = "https://api.delighted.com/v1";
 const delightedValidationPath = "/metrics.json";
-const delightedDefaultRequestTimeoutMs = 30_000;
 
 type DelightedQueryValue = string | number | boolean | Array<string | number | boolean> | undefined;
 type DelightedActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -41,7 +41,7 @@ interface DelightedResponse {
   headers: Headers;
 }
 
-export const delightedActionHandlers: Record<DelightedActionName, DelightedActionHandler> = {
+export const delightedActionHandlers: ProviderActionHandlers<"delighted", DelightedActionHandler> = {
   create_or_update_person(input, context) {
     return delightedCreateOrUpdatePerson(input, context);
   },
@@ -80,7 +80,7 @@ export async function validateDelightedCredential(
     path: delightedValidationPath,
     mode: "validate",
   });
-  const metrics = requiredRecord(response.payload, "metrics", providerError);
+  const metrics = requiredRecord(response.payload, "metrics", providerResponseError);
 
   return {
     profile: {
@@ -264,7 +264,7 @@ function requestContext(
 }
 
 async function requestDelightedJson(input: DelightedRequestOptions): Promise<DelightedResponse> {
-  const timeout = createProviderTimeout(input.signal, delightedDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const url = new URL(`${delightedApiBaseUrl}${input.path}`);
     appendQuery(url, input.query);
@@ -368,7 +368,7 @@ function pickErrorMessage(payload: unknown): string | undefined {
 }
 
 function requireObjectPayload(payload: unknown, label: string): Record<string, unknown> {
-  return requiredRecord(payload, `Delighted ${label} response`, providerError);
+  return requiredRecord(payload, `Delighted ${label} response`, providerResponseError);
 }
 
 function requireArrayPayload(payload: unknown, label: string): unknown[] {
@@ -440,8 +440,4 @@ function assertPersonCreateInput(input: Record<string, unknown>): void {
   if (input.channel === "sms" && !optionalString(input.phone_number)) {
     throw new ProviderRequestError(400, "phone_number is required when channel is sms.");
   }
-}
-
-function providerError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

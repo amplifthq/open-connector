@@ -105,11 +105,62 @@ const filterExpressionSchema = s.looseObject(
   },
 );
 
-const orderBySchema = s.looseObject(
-  {},
-  {
-    description: "A Google Analytics Data API OrderBy object.",
-  },
+const orderByDescendingSchema = s.boolean("Whether to sort the values in descending order.");
+const orderBySchema = s.anyOf(
+  [
+    s.object(
+      {
+        metric: s.object(
+          { metricName: s.nonEmptyString("The requested metric name to sort by.") },
+          { description: "The metric ordering configuration." },
+        ),
+        desc: orderByDescendingSchema,
+      },
+      { description: "A Google Analytics metric ordering rule.", required: ["metric"] },
+    ),
+    s.object(
+      {
+        dimension: s.object(
+          {
+            dimensionName: s.nonEmptyString("The requested dimension name to sort by."),
+            orderType: s.stringEnum(
+              ["ORDER_TYPE_UNSPECIFIED", "ALPHANUMERIC", "CASE_INSENSITIVE_ALPHANUMERIC", "NUMERIC"],
+              { description: "The rule used to order dimension string values." },
+            ),
+          },
+          { description: "The dimension ordering configuration.", required: ["dimensionName"] },
+        ),
+        desc: orderByDescendingSchema,
+      },
+      { description: "A Google Analytics dimension ordering rule.", required: ["dimension"] },
+    ),
+    s.object(
+      {
+        pivot: s.object(
+          {
+            metricName: s.nonEmptyString("The requested metric name to sort by."),
+            pivotSelections: s.array(
+              s.object(
+                {
+                  dimensionName: s.nonEmptyString("The pivot dimension name."),
+                  dimensionValue: s.string("The pivot dimension value."),
+                },
+                {
+                  description: "A dimension name and value pair selecting a pivot column.",
+                  required: ["dimensionName", "dimensionValue"],
+                },
+              ),
+              { description: "The dimension name and value pairs selecting the pivot column group." },
+            ),
+          },
+          { description: "The pivot ordering configuration.", required: ["metricName"] },
+        ),
+        desc: orderByDescendingSchema,
+      },
+      { description: "A Google Analytics pivot ordering rule.", required: ["pivot"] },
+    ),
+  ],
+  { description: "A Google Analytics Data API OrderBy object." },
 );
 
 const comparisonSchema = s.looseObject(
@@ -1274,6 +1325,7 @@ const propertyOverviewSchema = s.object(
 export const googleAnalyticsActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_account_summaries",
+    operationType: "read",
     description: "List Google Analytics accounts and property summaries visible to the connected Google account.",
     requiredScopes: readScope,
     inputSchema: s.object(
@@ -1304,6 +1356,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_properties",
+    operationType: "read",
     description:
       "List Google Analytics properties visible to the connected account as user-selectable options. Use this first when the user does not know their GA4 propertyId.",
     requiredScopes: readScope,
@@ -1335,6 +1388,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_metadata",
+    operationType: "read",
     description: "Get available dimensions and metrics for a Google Analytics property before building reports.",
     requiredScopes: readScope,
     inputSchema: s.object(
@@ -1358,6 +1412,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_property_overview",
+    operationType: "read",
     description: "Get the key setup details for a Google Analytics property before choosing reports.",
     requiredScopes: readScope,
     inputSchema: s.object(
@@ -1381,6 +1436,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "run_report",
+    operationType: "read",
     description: "Run a Google Analytics Data API report for selected dimensions, metrics, and date ranges.",
     requiredScopes: readScope,
     inputSchema: reportRequestSchema,
@@ -1396,6 +1452,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "run_acquisition_report",
+    operationType: "read",
     description: "Run a Google Analytics acquisition report showing where sessions and users came from.",
     requiredScopes: readScope,
     inputSchema: businessReportInputSchema("Input parameters for running a Google Analytics acquisition report.", [
@@ -1416,6 +1473,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "run_engagement_report",
+    operationType: "write",
     description: "Run a Google Analytics engagement trend report for users, sessions, and engagement quality.",
     requiredScopes: readScope,
     inputSchema: businessReportInputSchema("Input parameters for running a Google Analytics engagement report.", [
@@ -1439,6 +1497,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "run_pages_report",
+    operationType: "write",
     description: "Run a Google Analytics pages report for page views, users, sessions, and engagement.",
     requiredScopes: readScope,
     inputSchema: businessReportInputSchema("Input parameters for running a Google Analytics pages report.", [
@@ -1462,6 +1521,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "run_events_report",
+    operationType: "write",
     description: "Run a Google Analytics events report for event volume, users, key events, and value.",
     requiredScopes: readScope,
     inputSchema: businessReportInputSchema("Input parameters for running a Google Analytics events report.", [
@@ -1484,6 +1544,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "run_key_events_report",
+    operationType: "write",
     description: "Run a Google Analytics key events report for key event volume and conversion rates.",
     requiredScopes: readScope,
     inputSchema: businessReportInputSchema("Input parameters for running a Google Analytics key events report.", [
@@ -1504,6 +1565,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "run_geography_report",
+    operationType: "write",
     description: "Run a Google Analytics geography report for users, sessions, and key events by location.",
     requiredScopes: readScope,
     inputSchema: businessReportInputSchema("Input parameters for running a Google Analytics geography report.", [
@@ -1528,6 +1590,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "run_technology_report",
+    operationType: "write",
     description: "Run a Google Analytics technology report for device, browser, and operating system performance.",
     requiredScopes: readScope,
     inputSchema: businessReportInputSchema("Input parameters for running a Google Analytics technology report.", [
@@ -1553,6 +1616,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "check_compatibility",
+    operationType: "read",
     description: "Check whether selected Google Analytics dimensions and metrics can be queried together.",
     requiredScopes: readScope,
     inputSchema: s.object(
@@ -1590,6 +1654,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "run_pivot_report",
+    operationType: "write",
     description: "Run a Google Analytics Data API pivot report for cross-tabbed reporting views.",
     requiredScopes: readScope,
     inputSchema: pivotReportRequestSchema,
@@ -1605,6 +1670,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "batch_run_reports",
+    operationType: "write",
     description: "Run up to five Google Analytics Data API reports in one batch request for a single property.",
     requiredScopes: readScope,
     inputSchema: s.object(
@@ -1636,6 +1702,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "batch_run_pivot_reports",
+    operationType: "write",
     description: "Run up to five Google Analytics Data API pivot reports in one batch request for a single property.",
     requiredScopes: readScope,
     inputSchema: s.object(
@@ -1667,6 +1734,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "run_realtime_report",
+    operationType: "write",
     description: "Run a Google Analytics realtime report for currently active users and events.",
     requiredScopes: readScope,
     inputSchema: realtimeReportRequestSchema,
@@ -1682,6 +1750,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_property_quotas_snapshot",
+    operationType: "read",
     description: "Get the Google Analytics Data API quota snapshot for a property without running a report.",
     requiredScopes: readScope,
     inputSchema: s.object(
@@ -1705,6 +1774,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_custom_dimensions",
+    operationType: "read",
     description: "List custom dimensions configured on a Google Analytics property.",
     requiredScopes: readScope,
     inputSchema: s.object(
@@ -1737,6 +1807,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_custom_dimension",
+    operationType: "write",
     description:
       "Create a Google Analytics custom dimension so reporting can use a business-specific event, user, or item attribute.",
     requiredScopes: writeScope,
@@ -1753,6 +1824,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "archive_custom_dimension",
+    operationType: "destructive",
     description:
       "Archive a Google Analytics custom dimension that should no longer be available for reporting configuration.",
     requiredScopes: writeScope,
@@ -1772,6 +1844,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_custom_metrics",
+    operationType: "read",
     description: "List custom metrics configured on a Google Analytics property.",
     requiredScopes: readScope,
     inputSchema: s.object(
@@ -1804,6 +1877,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_custom_metric",
+    operationType: "write",
     description: "Create a Google Analytics custom metric so reports can measure business-specific event values.",
     requiredScopes: writeScope,
     inputSchema: customMetricWriteInputSchema,
@@ -1819,6 +1893,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "archive_custom_metric",
+    operationType: "destructive",
     description:
       "Archive a Google Analytics custom metric that should no longer be available for reporting configuration.",
     requiredScopes: writeScope,
@@ -1838,6 +1913,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_properties_filtered",
+    operationType: "read",
     description:
       "List Google Analytics properties matching a known Admin API filter such as parent:accounts/123. Use list_properties first when the account or propertyId is unknown.",
     requiredScopes: readScope,
@@ -1877,6 +1953,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_property",
+    operationType: "write",
     description:
       "Update Google Analytics property settings such as display name, industry category, time zone, or currency.",
     requiredScopes: writeScope,
@@ -1893,6 +1970,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_data_retention_settings",
+    operationType: "write",
     description:
       "Update Google Analytics property data retention settings for event data and user activity reset behavior.",
     requiredScopes: writeScope,
@@ -1909,6 +1987,7 @@ export const googleAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_data_streams",
+    operationType: "read",
     description: "List data streams configured on a Google Analytics property.",
     requiredScopes: readScope,
     inputSchema: s.object(

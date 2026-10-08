@@ -1,11 +1,11 @@
 import type { TransitFileRead } from "../../core/types.ts";
+import type { ProviderActionHandlerSubset } from "../provider-runtime.ts";
 import type { AsanaActionHandler, AsanaContext } from "./runtime.ts";
 
 import { optionalInteger, optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
-import { ProviderRequestError } from "../provider-runtime.ts";
+import { providerInputError, ProviderRequestError } from "../provider-runtime.ts";
 import {
-  asanaInvalidInputError,
   asanaPathGid,
   buildAsanaFieldsQuery,
   buildAsanaPaginationQuery,
@@ -31,7 +31,7 @@ const defaultAttachmentFields = [
   "view_url",
 ];
 
-export const attachmentActionHandlers: Record<string, AsanaActionHandler> = {
+export const attachmentActionHandlers: ProviderActionHandlerSubset<"asana", AsanaActionHandler> = {
   get_attachment(input, context) {
     return getAsanaResource(
       `/attachments/${asanaPathGid(input.attachmentId, "attachmentId")}`,
@@ -49,7 +49,7 @@ export const attachmentActionHandlers: Record<string, AsanaActionHandler> = {
     return listAsanaResources(
       "/attachments",
       {
-        parent: requiredString(input.parentId, "parentId", asanaInvalidInputError),
+        parent: requiredString(input.parentId, "parentId", providerInputError),
         ...buildAsanaPaginationQuery(input, defaultAttachmentFields),
       },
       "attachments",
@@ -61,11 +61,11 @@ export const attachmentActionHandlers: Record<string, AsanaActionHandler> = {
     const fileId = optionalString(input.fileId);
     const externalUrl = optionalString(input.externalUrl);
     if (!!fileId === !!externalUrl) {
-      throw asanaInvalidInputError("Exactly one of fileId or externalUrl must be provided.");
+      throw providerInputError("Exactly one of fileId or externalUrl must be provided.");
     }
     return externalUrl
       ? createExternalAttachment(input, externalUrl, context)
-      : createTransitFileAttachment(input, requiredString(input.fileId, "fileId", asanaInvalidInputError), context);
+      : createTransitFileAttachment(input, requiredString(input.fileId, "fileId", providerInputError), context);
   },
 };
 
@@ -76,17 +76,17 @@ async function createExternalAttachment(
 ): Promise<Record<string, unknown>> {
   const url = assertPublicHttpUrl(externalUrl, {
     fieldName: "externalUrl",
-    createError: asanaInvalidInputError,
+    createError: providerInputError,
   });
   if (url.username || url.password) {
-    throw asanaInvalidInputError("externalUrl must not include credentials.");
+    throw providerInputError("externalUrl must not include credentials.");
   }
 
   const formData = new FormData();
-  formData.set("parent", requiredString(input.parentId, "parentId", asanaInvalidInputError));
+  formData.set("parent", requiredString(input.parentId, "parentId", providerInputError));
   formData.set("resource_subtype", "external");
   formData.set("url", url.toString());
-  formData.set("name", requiredString(input.name, "name", asanaInvalidInputError));
+  formData.set("name", requiredString(input.name, "name", providerInputError));
   return uploadAsanaAttachment(formData, input, context);
 }
 
@@ -96,7 +96,7 @@ async function createTransitFileAttachment(
   context: AsanaContext,
 ): Promise<Record<string, unknown>> {
   if (!context.transitFiles) {
-    throw asanaInvalidInputError("Transit file storage is not enabled.");
+    throw providerInputError("Transit file storage is not enabled.");
   }
 
   let stored: TransitFileRead;
@@ -110,7 +110,7 @@ async function createTransitFileAttachment(
   }
 
   const formData = new FormData();
-  formData.set("parent", requiredString(input.parentId, "parentId", asanaInvalidInputError));
+  formData.set("parent", requiredString(input.parentId, "parentId", providerInputError));
   formData.set("file", await normalizedTransitFile(stored), encodeURIComponent(stored.name));
   return uploadAsanaAttachment(formData, input, context);
 }
@@ -143,7 +143,7 @@ function mapTransitFileReadError(error: unknown, fileId: string): ProviderReques
   const status = error instanceof ProviderRequestError ? error.status : optionalInteger(details?.status);
   const code = optionalString(details?.code);
   if (status === 404 || code === "file_not_found") {
-    return asanaInvalidInputError(`Transit file ${fileId} was not found.`);
+    return providerInputError(`Transit file ${fileId} was not found.`);
   }
   if (status === 413) {
     return new ProviderRequestError(413, "Transit file storage rejected the file as too large.");

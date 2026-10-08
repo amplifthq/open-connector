@@ -1,16 +1,15 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { BrandfetchActionName } from "./actions.ts";
 
+import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
-  compactObject,
-  optionalBoolean,
-  optionalNumber,
-  optionalRecord,
-  optionalString,
-  requiredString,
-} from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+  requiredInputString,
+} from "../provider-runtime.ts";
 
 const service = "brandfetch";
 const brandfetchApiBaseUrl = "https://api.brandfetch.io";
@@ -20,7 +19,7 @@ const brandfetchValidationPath = `/v2/brands/${brandfetchValidationIdentifier}`;
 type BrandfetchPhase = "validate" | "execute";
 type BrandfetchActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
-export const brandfetchActionHandlers: Record<BrandfetchActionName, BrandfetchActionHandler> = {
+export const brandfetchActionHandlers: ProviderActionHandlers<"brandfetch", BrandfetchActionHandler> = {
   async get_brand(input, context) {
     const identifier = requiredInputString(input.identifier, "identifier");
     const payload = await requestBrandfetchJson({
@@ -51,6 +50,16 @@ export const brandfetchActionHandlers: Record<BrandfetchActionName, BrandfetchAc
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, brandfetchActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: brandfetchApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -267,10 +276,6 @@ function normalizeObjectArray(value: unknown): Array<Record<string, unknown>> | 
   return value
     .map((item) => optionalRecord(item))
     .filter((item): item is Record<string, unknown> => item !== undefined);
-}
-
-function requiredInputString(value: unknown, key: string): string {
-  return requiredString(value, key, (message) => new ProviderRequestError(400, message));
 }
 
 function createBrandfetchError(response: Response, payload: unknown, phase: BrandfetchPhase): ProviderRequestError {

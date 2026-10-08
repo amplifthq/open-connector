@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -19,7 +20,6 @@ import {
 
 export const typebotApiBaseUrl = "https://app.typebot.com/api";
 const validationPath = "/v1/workspaces";
-const timeoutMs = 30_000;
 
 const get =
   (
@@ -29,7 +29,7 @@ const get =
   (input, context) =>
     requestTypebot(path(input), query?.(input), context, "execute");
 
-export const typebotActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const typebotActionHandlers: ProviderActionHandlers<"typebot", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   list_workspaces: get(() => validationPath),
   get_workspace: get(
     (input) => `/v1/workspaces/${encodeURIComponent(requiredString(input.workspaceId, "workspaceId"))}`,
@@ -86,7 +86,7 @@ async function requestTypebot(
 ): Promise<Record<string, unknown>> {
   const url = new URL(`${typebotApiBaseUrl}${path}`);
   for (const [name, value] of Object.entries(query ?? {})) url.searchParams.set(name, value);
-  const timeout = createProviderTimeout(context.signal, timeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       headers: {

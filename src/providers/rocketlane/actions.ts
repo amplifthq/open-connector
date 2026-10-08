@@ -115,17 +115,10 @@ const commonListFields = {
   match: matchSchema,
 };
 
-export type RocketlaneActionName =
-  | "list_projects"
-  | "get_project"
-  | "list_tasks"
-  | "get_task"
-  | "list_users"
-  | "get_user";
-
 export const rocketlaneActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_projects",
+    operationType: "read",
     description: "List Rocketlane projects with pagination, sorting, and first-pass project filters.",
     inputSchema: s.object(
       "The input payload for listing Rocketlane projects.",
@@ -179,6 +172,7 @@ export const rocketlaneActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_project",
+    operationType: "read",
     description: "Get one Rocketlane project by numeric project ID.",
     inputSchema: s.object(
       "The input payload for getting one Rocketlane project.",
@@ -195,6 +189,7 @@ export const rocketlaneActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tasks",
+    operationType: "read",
     description: "List Rocketlane tasks with pagination, sorting, and first-pass task filters.",
     inputSchema: s.object(
       "The input payload for listing Rocketlane tasks.",
@@ -246,6 +241,7 @@ export const rocketlaneActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_task",
+    operationType: "read",
     description: "Get one Rocketlane task by numeric task ID.",
     inputSchema: s.object(
       "The input payload for getting one Rocketlane task.",
@@ -262,6 +258,7 @@ export const rocketlaneActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List Rocketlane users with pagination, sorting, and first-pass user filters.",
     inputSchema: s.object(
       "The input payload for listing Rocketlane users.",
@@ -316,6 +313,7 @@ export const rocketlaneActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Get one Rocketlane user by numeric user ID.",
     inputSchema: s.object(
       "The input payload for getting one Rocketlane user.",

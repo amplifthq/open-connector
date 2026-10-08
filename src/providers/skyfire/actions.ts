@@ -74,11 +74,10 @@ const createTokenOutputSchema = s.object(
   { optional: ["raw"] },
 );
 
-export type SkyfireActionName = "get_all_services" | "get_service" | "get_services_by_agent" | "create_token";
-
 export const skyfireActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_all_services",
+    operationType: "read",
     description: "List all approved and active services from the Skyfire marketplace directory.",
     inputSchema: s.object("No input is required for listing all Skyfire services.", {}),
     outputSchema: s.object("A list of approved Skyfire marketplace services.", {
@@ -87,6 +86,7 @@ export const skyfireActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_service",
+    operationType: "read",
     description: "Get one Skyfire marketplace service by its service ID.",
     inputSchema: s.object("Input parameters for reading one Skyfire service.", {
       serviceId: s.nonEmptyString("The Skyfire service ID to fetch."),
@@ -97,6 +97,7 @@ export const skyfireActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_services_by_agent",
+    operationType: "read",
     description: "List all approved and active Skyfire marketplace services owned by one seller agent.",
     inputSchema: s.object("Input parameters for listing a seller agent's Skyfire services.", {
       agentId: s.nonEmptyString("The seller agent ID whose services should be listed."),
@@ -107,6 +108,7 @@ export const skyfireActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_token",
+    operationType: "write",
     description:
       "Create a buyer token in Skyfire for one seller service or seller domain, including funded pay and identity-carrying KYA variants.",
     inputSchema: createTokenInputSchema,

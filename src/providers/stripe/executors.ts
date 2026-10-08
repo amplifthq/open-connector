@@ -1,9 +1,18 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { IntegrationDefinition } from "../../triggers/common/integration.ts";
+import type { PollDefinition } from "../../triggers/common/poll.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { StripeActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
-import { ProviderRequestError, defineApiKeyProviderExecutors, providerUserAgent } from "../provider-runtime.ts";
+import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
+import {
+  ProviderRequestError,
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  requiredResponseRecord,
+} from "../provider-runtime.ts";
+import { stripeEvent } from "./trigger-on-event.ts";
 
 type StripeActionContext = ApiKeyProviderContext;
 
@@ -22,7 +31,7 @@ const stripeApiBaseUrl = "https://api.stripe.com";
 const stripeApiVersion = "2024-06-20";
 const stripeAccountPath = "/v1/account";
 
-export const stripeActionHandlers: Record<StripeActionName, StripeActionHandler> = {
+export const stripeActionHandlers: ProviderActionHandlers<"stripe", StripeActionHandler> = {
   identify_account(_input, context) {
     return executeIdentifyAccount(context);
   },
@@ -112,6 +121,16 @@ export const stripeActionHandlers: Record<StripeActionName, StripeActionHandler>
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, stripeActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: stripeApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("stripe-version")) headers.set("stripe-version", stripeApiVersion);
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher }) {
     const profile = await validateStripeCredential(input.apiKey, fetcher);
@@ -130,7 +149,7 @@ async function validateStripeCredential(
   grantedScopes: string[];
   metadata: Record<string, unknown>;
 }> {
-  const payload = readObject(
+  const payload = requiredResponseRecord(
     await stripeRequest(stripeAccountPath, {
       apiKey,
       fetcher,
@@ -162,7 +181,7 @@ async function validateStripeCredential(
 }
 
 async function executeIdentifyAccount(context: StripeActionContext) {
-  const payload = readObject(
+  const payload = requiredResponseRecord(
     await stripeRequest(stripeAccountPath, {
       apiKey: context.apiKey,
       fetcher: context.fetcher,
@@ -249,11 +268,11 @@ async function executeStripeList(
     method: "GET",
     query: input,
   });
-  return { [outputKey]: readObject(payload, "stripe list response") };
+  return { [outputKey]: requiredResponseRecord(payload, "stripe list response") };
 }
 
 async function executeStripeDelete(path: string, context: StripeActionContext) {
-  const payload = readObject(
+  const payload = requiredResponseRecord(
     await stripeRequest(path, {
       apiKey: context.apiKey,
       fetcher: context.fetcher,
@@ -374,6 +393,4 @@ function mapStripeError(status: number, message: string): ProviderRequestError {
   return new ProviderRequestError(502, message, status);
 }
 
-function readObject(value: unknown, context: string): Record<string, unknown> {
-  return requiredRecord(value, context, (message) => new ProviderRequestError(502, message));
-}
+export const triggers: readonly (IntegrationDefinition | PollDefinition)[] = [stripeEvent];

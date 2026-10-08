@@ -5,8 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "mindbody";
 
-export type MindbodyActionName = "list_businesses";
-
 const businessIdSchema = s.nonEmptyString("A Mindbody business ID to filter the Business Directory.");
 
 const businessLocationSchema = s.looseObject("One Mindbody business location.", {
@@ -31,6 +29,7 @@ const businessSchema = s.looseObject("One Mindbody Business Directory business."
 export const mindbodyActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_businesses",
+    operationType: "read",
     description:
       "List businesses from the Mindbody Consumer API Business Directory, optionally filtered by business IDs.",
     inputSchema: s.object(

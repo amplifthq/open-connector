@@ -1,9 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { SendgridActionName } from "./actions.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { compactObject, optionalNumber, optionalRawString, optionalRecord } from "../../core/cast.ts";
 import {
   defineProviderExecutors,
+  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
@@ -63,7 +64,7 @@ function buildValidationProviderMetadata(
   });
 }
 
-export const sendgridActionHandlers: Record<SendgridActionName, SendgridActionHandler> = {
+export const sendgridActionHandlers: ProviderActionHandlers<"sendgrid", SendgridActionHandler> = {
   get_account_info(_input, context) {
     return getAccountInfo(context);
   },
@@ -76,7 +77,7 @@ export const sendgridActionHandlers: Record<SendgridActionName, SendgridActionHa
   send_email(input, context) {
     return sendEmail(input, context);
   },
-} satisfies Record<SendgridActionName, SendgridActionHandler>;
+};
 
 export const executors: ProviderExecutors = defineProviderExecutors<SendgridActionContext>({
   service: "sendgrid",
@@ -88,6 +89,19 @@ export const executors: ProviderExecutors = defineProviderExecutors<SendgridActi
       baseUrl: resolveSendgridBaseUrl(credential.values.baseUrl ?? credential.metadata.baseUrl),
       fetcher,
     };
+  },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service: "sendgrid",
+  async baseUrl(context) {
+    const credential = await requireApiKeyCredential(context, "sendgrid");
+    return resolveSendgridBaseUrl(credential.values.baseUrl ?? credential.metadata.baseUrl);
+  },
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
   },
 });
 

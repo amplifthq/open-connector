@@ -121,16 +121,10 @@ const dataPointSchema = s.object("A normalized Adafruit IO feed data point.", {
   raw: s.looseObject("The raw data point object returned by Adafruit IO."),
 });
 
-export type AdafruitIoActionName =
-  | "get_current_user"
-  | "list_feeds"
-  | "get_feed"
-  | "list_feed_data"
-  | "create_feed_data";
-
 export const adafruitIoActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Get the current Adafruit IO user for the connected API key.",
     inputSchema: emptyInputSchema,
     outputSchema: s.object("The current Adafruit IO user response.", {
@@ -139,6 +133,7 @@ export const adafruitIoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_feeds",
+    operationType: "read",
     description: "List Adafruit IO feeds for a username.",
     inputSchema: usernameInputSchema,
     outputSchema: s.object("The Adafruit IO feeds response.", {
@@ -147,6 +142,7 @@ export const adafruitIoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_feed",
+    operationType: "read",
     description: "Get one Adafruit IO feed by feed key.",
     inputSchema: feedInputSchema,
     outputSchema: s.object("The Adafruit IO feed response.", {
@@ -155,6 +151,7 @@ export const adafruitIoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_feed_data",
+    operationType: "read",
     description: "List data points for an Adafruit IO feed.",
     inputSchema: listFeedDataInputSchema,
     outputSchema: s.object("The Adafruit IO feed data list response.", {
@@ -163,6 +160,7 @@ export const adafruitIoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_feed_data",
+    operationType: "write",
     description: "Create a new data point on an Adafruit IO feed.",
     inputSchema: createFeedDataInputSchema,
     outputSchema: s.object("The Adafruit IO created data point response.", {

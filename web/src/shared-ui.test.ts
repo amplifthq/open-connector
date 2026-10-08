@@ -32,10 +32,10 @@ describe("providerIconSource", () => {
     ).toEqual({ kind: "url", value: "https://static.oomol.com/example.svg" });
   });
 
-  it("uses Google's favicon service when no icon is mapped", () => {
+  it("uses favicon.im when no icon is mapped", () => {
     expect(providerIconSource(provider({ service: "example", homepageUrl: "https://example.com/docs" }), {})).toEqual({
       kind: "url",
-      value: "https://www.google.com/s2/favicons?sz=64&domain=example.com",
+      value: "https://a.favicon.im/example.com?larger=true&throw-error-on-404=true",
     });
   });
 

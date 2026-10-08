@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { randomUUID } from "node:crypto";
@@ -7,13 +8,13 @@ import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
   defineProviderProxy,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
 const service = "govee";
 const goveeApiBaseUrl = "https://openapi.api.govee.com";
-const goveeRequestTimeoutMs = 30_000;
 
 type GoveeRequestPhase = "validate" | "execute";
 
@@ -27,7 +28,7 @@ interface GoveeRequestInput {
   body?: Record<string, unknown>;
 }
 
-const handlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+const handlers: ProviderActionHandlers<"govee", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   async list_devices(_input, context) {
     const payload = await requestGovee({
       path: "/router/api/v1/user/devices",
@@ -170,7 +171,7 @@ function buildDevicePayload(input: Record<string, unknown>): Record<string, unkn
 }
 
 async function requestGovee(input: GoveeRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, goveeRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   let response: Response;
   let payload: unknown;
   try {
@@ -270,8 +271,4 @@ function readGoveeErrorMessage(payload: unknown): string | undefined {
 
 function readGoveeMessage(payload: Record<string, unknown>): string | undefined {
   return optionalString(payload.message) ?? optionalString(payload.msg);
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

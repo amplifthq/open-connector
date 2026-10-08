@@ -1,14 +1,20 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { OAuthProviderContext } from "../provider-runtime.ts";
 
-import { defineOAuthProviderExecutors } from "../provider-runtime.ts";
-import { executeHubspotAction, fetchHubspotCurrentAccount, mapHubspotMcpDetailsToConnectorScopes } from "./runtime.ts";
+import { defineOAuthProviderExecutors, defineProviderProxy } from "../provider-runtime.ts";
+import { executeHubspotAction, fetchHubspotCurrentAccount, hubspotMcpEndpoint } from "./runtime.ts";
 
 const service = "hubspot";
 
 type HubspotActionHandler = (input: Record<string, unknown>, context: OAuthProviderContext) => Promise<unknown>;
 
-export const hubspotActionHandlers: Record<string, HubspotActionHandler> = {
+export const hubspotActionHandlers: ProviderActionHandlers<"hubspot", HubspotActionHandler> = {
   search_crm_objects(input, context) {
     return executeHubspotAction(
       { actionName: "search_crm_objects", input, accessToken: context.accessToken },
@@ -166,22 +172,26 @@ export const hubspotActionHandlers: Record<string, HubspotActionHandler> = {
 
 export const executors: ProviderExecutors = defineOAuthProviderExecutors(service, hubspotActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: hubspotMcpEndpoint,
+  auth: { type: "oauth_bearer" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json, text/event-stream");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async oauth2(input, { fetcher }): Promise<CredentialValidationResult> {
     const profile = await fetchHubspotCurrentAccount(input.accessToken, fetcher);
-    const userDetails = profile.providerMetadata.userDetails;
-    const grantedScopes = mapHubspotMcpDetailsToConnectorScopes(userDetails);
-
     return {
       profile: {
         accountId: profile.providerAccountId,
         displayName: profile.accountLabel,
       },
-      grantedScopes,
-      metadata: {
-        ...profile.providerMetadata,
-        connectorScopes: grantedScopes,
-      },
+      grantedScopes: ["mcp:tools"],
+      metadata: profile.providerMetadata,
     };
   },
 };

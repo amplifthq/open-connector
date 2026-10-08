@@ -12,15 +12,8 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-class ConnectorError extends ProviderRequestError {
-  constructor(_code: string, message: string, status = 502, _executionId?: string, data?: unknown) {
-    super(status, message, data);
-  }
-}
-
 export const captainBiApiBaseUrl: string = "https://openapi.captainbi.com";
 export const captainBiTokenUrl: string = `${captainBiApiBaseUrl}/oauth2/token`;
-const captainBiRequestTimeoutMs = 30_000;
 const defaultPage = 1;
 const defaultRows = 100;
 
@@ -179,7 +172,7 @@ export async function executeCaptainBiAction(
       return normalizePage(response, page, rows, "refunds", normalizeRefund);
     }
     default: {
-      throw new ConnectorError("invalid_input", `unsupported captainbi action: ${actionInput.actionName}`);
+      throw new ProviderRequestError(502, `unsupported captainbi action: ${actionInput.actionName}`);
     }
   }
 }
@@ -246,7 +239,7 @@ export async function exchangeCaptainBiAccessToken(
   }
   const accessToken = asOptionalString(body?.access_token)?.trim();
   if (!accessToken) {
-    throw new ConnectorError("provider_error", "CaptainBI access token is missing", 502);
+    throw new ProviderRequestError(502, "CaptainBI access token is missing");
   }
   return accessToken;
 }
@@ -305,14 +298,14 @@ async function requestCaptainBiPage(input: {
   }
   const body = asOptionalObject(payload);
   if (!body) {
-    throw new ConnectorError("provider_error", `CaptainBI ${input.operation} returned an invalid response`, 502);
+    throw new ProviderRequestError(502, `CaptainBI ${input.operation} returned an invalid response`);
   }
   const code = readNumber(body, "code");
   if (code !== 200) {
     throw mapCaptainBiBusinessError(code, body, "execute", input.operation);
   }
   if (!Array.isArray(body.data)) {
-    throw new ConnectorError("provider_error", `CaptainBI ${input.operation} response is missing data`, 502);
+    throw new ProviderRequestError(502, `CaptainBI ${input.operation} response is missing data`);
   }
   const total = readInteger(body, "max_result");
   return {
@@ -328,15 +321,15 @@ async function fetchCaptainBiResponse(input: {
   init: RequestInit;
   operation: string;
 }) {
-  const timeout = createProviderTimeout(undefined, captainBiRequestTimeoutMs);
+  const timeout = createProviderTimeout(undefined);
   try {
     return await input.fetcher(input.url, { ...input.init, signal: timeout.signal });
   } catch (error) {
     if (timeout.didTimeout()) {
-      throw new ConnectorError("provider_error", `CaptainBI ${input.operation} request timed out`, 504);
+      throw new ProviderRequestError(504, `CaptainBI ${input.operation} request timed out`);
     }
     const message = error instanceof Error ? error.message : String(error);
-    throw new ConnectorError("provider_error", `CaptainBI ${input.operation} request failed: ${message}`, 502);
+    throw new ProviderRequestError(502, `CaptainBI ${input.operation} request failed: ${message}`);
   } finally {
     timeout.cleanup();
   }
@@ -351,7 +344,7 @@ async function readCaptainBiPayload(response: Response, operation: string) {
     return JSON.parse(text) as unknown;
   } catch {
     if (response.ok) {
-      throw new ConnectorError("provider_error", `CaptainBI ${operation} returned malformed JSON`, 502);
+      throw new ProviderRequestError(502, `CaptainBI ${operation} returned malformed JSON`);
     }
     return text;
   }
@@ -360,21 +353,21 @@ async function readCaptainBiPayload(response: Response, operation: string) {
 function mapCaptainBiHttpError(status: number, payload: unknown, phase: CaptainBiRequestPhase, operation: string) {
   const message = readCaptainBiErrorMessage(payload) ?? `CaptainBI ${operation} failed with status ${status}`;
   if (status === 429) {
-    return new ConnectorError("rate_limited", message, 429);
+    return new ProviderRequestError(429, message);
   }
   if (phase === "validate" && [400, 401, 403].includes(status)) {
-    return new ConnectorError("invalid_input", message, 400);
+    return new ProviderRequestError(400, message);
   }
   if (status === 401 || (operation === "access token exchange" && [400, 403].includes(status))) {
-    return new ConnectorError("credential_expired", message, 401);
+    return new ProviderRequestError(401, message);
   }
   if (status === 403) {
-    return new ConnectorError("scope_missing", message, 403);
+    return new ProviderRequestError(403, message);
   }
   if ([400, 404, 409, 422].includes(status)) {
-    return new ConnectorError("invalid_input", message, status === 404 ? 404 : 400);
+    return new ProviderRequestError(status === 404 ? 404 : 400, message);
   }
-  return new ConnectorError("provider_error", message, 502);
+  return new ProviderRequestError(502, message);
 }
 
 function mapCaptainBiBusinessError(
@@ -388,16 +381,14 @@ function mapCaptainBiBusinessError(
     `CaptainBI ${operation} failed${code == null ? "" : ` with code ${code}`}`;
   switch (code) {
     case 100903:
-      return new ConnectorError("invalid_input", message, 400);
+      return new ProviderRequestError(400, message);
     case 100904:
     case 100910:
-      return new ConnectorError("rate_limited", message, 429);
+      return new ProviderRequestError(429, message);
     case 100902:
     case 100906:
     case 100907:
-      return phase === "validate"
-        ? new ConnectorError("invalid_input", message, 400)
-        : new ConnectorError("credential_expired", message, 401);
+      return phase === "validate" ? new ProviderRequestError(400, message) : new ProviderRequestError(401, message);
     case 100901:
     case 100905:
     case 100908:
@@ -406,9 +397,9 @@ function mapCaptainBiBusinessError(
     case 100912:
     case 100913:
     case 100914:
-      return new ConnectorError("scope_missing", message, 403);
+      return new ProviderRequestError(403, message);
     default:
-      return new ConnectorError("provider_error", message, 502);
+      return new ProviderRequestError(502, message);
   }
 }
 
@@ -617,13 +608,13 @@ function requiredEnum<T extends string>(value: unknown, fieldName: string, value
   if (typeof value === "string" && values.includes(value as T)) {
     return value as T;
   }
-  throw new ConnectorError("invalid_input", `${fieldName} is invalid`, 400);
+  throw new ProviderRequestError(400, `${fieldName} is invalid`);
 }
 
 function requiredString(value: unknown, fieldName: string) {
   const text = asOptionalString(value)?.trim();
   if (!text) {
-    throw new ConnectorError("invalid_input", `${fieldName} is required`, 400);
+    throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return text;
 }

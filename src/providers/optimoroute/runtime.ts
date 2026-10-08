@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { OptimorouteActionName } from "./actions.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -13,13 +13,11 @@ import {
 export const optimorouteApiBaseUrl = "https://api.optimoroute.com/v1";
 export const optimorouteValidationPath = "/get_orders";
 
-const optimorouteDefaultRequestTimeoutMs = 30_000;
-
 type OptimoroutePhase = "validate" | "execute";
 type OptimorouteActionContext = ApiKeyProviderContext;
 type OptimorouteActionHandler = (input: Record<string, unknown>, context: OptimorouteActionContext) => Promise<unknown>;
 
-export const optimorouteActionHandlers: Record<OptimorouteActionName, OptimorouteActionHandler> = {
+export const optimorouteActionHandlers: ProviderActionHandlers<"optimoroute", OptimorouteActionHandler> = {
   create_or_update_orders(input, context) {
     return createOrUpdateOrders(input, context);
   },
@@ -133,7 +131,7 @@ async function optimorouteRequest(
   const normalizedPath = path.startsWith("/") ? path.slice(1) : path;
   const url = new URL(normalizedPath, `${optimorouteApiBaseUrl}/`);
   url.searchParams.set("key", context.apiKey);
-  const timeout = createProviderTimeout(context.signal, optimorouteDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
 
   try {
     const response = await context.fetcher(url.toString(), {

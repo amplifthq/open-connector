@@ -1,8 +1,10 @@
-import { compactObject } from "../../core/cast.ts";
-import { ProviderRequestError } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
+
+import { compactObject, optionalBoolean, optionalNumber } from "../../core/cast.ts";
+import { getProviderActionHandler, ProviderRequestError } from "../provider-runtime.ts";
 import { emptyWorkbookBytes, excelWorkbookMimeType } from "./workbook-template.ts";
 
-const graphBaseUrl = "https://graph.microsoft.com/v1.0";
+export const graphBaseUrl = "https://graph.microsoft.com/v1.0";
 const graphHost = "graph.microsoft.com";
 const defaultWorkbookExtensions = [".xlsx", ".xlsm", ".xlsb"] as const;
 const excelUploadChunkSizeBytes = 10 * 1024 * 1024;
@@ -64,12 +66,6 @@ type ExcelUploadSession = {
   nextExpectedRanges: string[];
 };
 
-class ExcelProviderRequestError extends ProviderRequestError {
-  constructor(_code: string, message: string, status = 500) {
-    super(status, message);
-  }
-}
-
 const excelCreateSessionRetryableStatus = 504;
 const excelCreateSessionAcceptedStatus = 202;
 const excelCreateSessionMaxRequestAttempts = 3;
@@ -77,7 +73,7 @@ const excelCreateSessionMaxPollAttempts = 8;
 const excelCreateSessionBaseDelayMs = 500;
 const excelCreateSessionPollDelayMs = 1_000;
 
-export const excelActionHandlers: Record<string, ExcelActionHandler> = {
+export const excelActionHandlers: ProviderActionHandlers<"excel", ExcelActionHandler> = {
   create_workbook(input, deps) {
     return createWorkbook(input, deps);
   },
@@ -174,9 +170,9 @@ export const excelActionHandlers: Record<string, ExcelActionHandler> = {
 };
 
 export async function executeExcelAction(input: ExcelActionInvocation, fetcher: typeof fetch): Promise<unknown> {
-  const handler = excelActionHandlers[input.actionName as string];
+  const handler = getProviderActionHandler(excelActionHandlers, input.actionName);
   if (!handler) {
-    throw new ExcelProviderRequestError("invalid_input", `unknown excel action: ${input.actionName}`, 400);
+    throw new ProviderRequestError(400, `unknown excel action: ${input.actionName}`);
   }
 
   return handler(input.input, {
@@ -202,10 +198,10 @@ async function excelRequest(path: string, input: ExcelRequestInput) {
   };
 
   if (hasJsonBody && hasRawBody) {
-    throw new ExcelProviderRequestError("invalid_input", "excel request must not include both body and rawBody", 400);
+    throw new ProviderRequestError(400, "excel request must not include both body and rawBody");
   }
   if ((method === "GET" || method === "HEAD") && (hasJsonBody || hasRawBody)) {
-    throw new ExcelProviderRequestError("invalid_input", `excel ${method} request must not include a body`, 400);
+    throw new ProviderRequestError(400, `excel ${method} request must not include a body`);
   }
 
   const response = await input.fetcher(target.toString(), {
@@ -230,7 +226,7 @@ async function excelRequest(path: string, input: ExcelRequestInput) {
 function buildExcelUrl(path: string, query?: Record<string, string | undefined>) {
   const target = new URL(path, `${graphBaseUrl}/`);
   if (target.hostname !== graphHost) {
-    throw new ExcelProviderRequestError("invalid_input", "excel request must target graph.microsoft.com", 400);
+    throw new ProviderRequestError(400, "excel request must target graph.microsoft.com");
   }
 
   for (const [key, value] of Object.entries(query ?? {})) {
@@ -255,25 +251,25 @@ export async function assertExcelResponse(response: Response): Promise<void> {
   const { code, message } = await extractExcelError(response);
 
   if (response.status === 400) {
-    throw new ExcelProviderRequestError("invalid_input", message, 400);
+    throw new ProviderRequestError(400, message);
   }
   if (response.status === 401) {
-    throw new ExcelProviderRequestError("credential_expired", message, 409);
+    throw new ProviderRequestError(401, message);
   }
   if (response.status === 403 && isScopeError(code, message)) {
-    throw new ExcelProviderRequestError("scope_missing", message, 403);
+    throw new ProviderRequestError(403, message);
   }
   if (response.status === 403) {
-    throw new ExcelProviderRequestError("provider_error", message, 403);
+    throw new ProviderRequestError(403, message);
   }
   if (response.status === 404) {
-    throw new ExcelProviderRequestError("invalid_input", message, 400);
+    throw new ProviderRequestError(400, message);
   }
   if (response.status === 429) {
-    throw new ExcelProviderRequestError("rate_limited", message, 429);
+    throw new ProviderRequestError(429, message);
   }
 
-  throw new ExcelProviderRequestError("provider_error", message, response.status);
+  throw new ProviderRequestError(response.status, message);
 }
 
 async function extractExcelError(response: Response) {
@@ -341,7 +337,7 @@ async function createWorkbook(input: Record<string, unknown>, deps: ExcelRuntime
   const targetPath = buildDrivePathFromSegments([...normalizedPath.folderSegments, normalizedPath.fileName], driveId);
   const existingItem = await fetchOptionalDriveItem(targetPath, deps);
   if (existingItem) {
-    throw new ExcelProviderRequestError("invalid_input", `path already exists: ${normalizedPath.normalizedPath}`, 400);
+    throw new ProviderRequestError(400, `path already exists: ${normalizedPath.normalizedPath}`);
   }
 
   const parentItemId = await ensureFolderPathExists(normalizedPath.folderSegments, driveId, deps);
@@ -568,7 +564,7 @@ async function createWorkbookFile(
   );
 
   if (response.status === 409) {
-    throw new ExcelProviderRequestError("invalid_input", `path already exists: ${input.pathLabel}`, 400);
+    throw new ProviderRequestError(400, `path already exists: ${input.pathLabel}`);
   }
 
   const session = asUploadSession(
@@ -579,7 +575,7 @@ async function createWorkbookFile(
 
 async function uploadSessionBytes(uploadUrl: string, bytes: Uint8Array, fetcher: typeof fetch) {
   if (bytes.byteLength <= 0) {
-    throw new ExcelProviderRequestError("invalid_input", "file content must not be empty", 400);
+    throw new ProviderRequestError(400, "file content must not be empty");
   }
 
   let start = 0;
@@ -612,11 +608,7 @@ async function uploadSessionBytes(uploadUrl: string, bytes: Uint8Array, fetcher:
     start = nextStart ?? endExclusive;
   }
 
-  throw new ExcelProviderRequestError(
-    "provider_error",
-    "excel upload session finished without a final drive item response",
-    502,
-  );
+  throw new ProviderRequestError(502, "excel upload session finished without a final drive item response");
 }
 
 async function fetchDriveItemMetadata(path: string, deps: ExcelRuntimeDeps) {
@@ -669,7 +661,7 @@ async function ensureFolderPathExists(folderSegments: string[], driveId: string 
     const existingItem = await fetchOptionalDriveItem(buildDrivePathFromSegments(currentSegments, driveId), deps);
     if (existingItem) {
       if (!isFolderDriveItem(existingItem)) {
-        throw new ExcelProviderRequestError("invalid_input", `folder path segment "${segment}" points to a file`, 400);
+        throw new ProviderRequestError(400, `folder path segment "${segment}" points to a file`);
       }
       currentItem = existingItem;
       continue;
@@ -692,14 +684,10 @@ async function ensureFolderPathExists(folderSegments: string[], driveId: string 
     if (response.status === 409) {
       const conflictedItem = await fetchOptionalDriveItem(buildDrivePathFromSegments(currentSegments, driveId), deps);
       if (!conflictedItem) {
-        throw new ExcelProviderRequestError(
-          "provider_error",
-          `excel folder creation conflict could not be resolved for "${segment}"`,
-          502,
-        );
+        throw new ProviderRequestError(502, `excel folder creation conflict could not be resolved for "${segment}"`);
       }
       if (!isFolderDriveItem(conflictedItem)) {
-        throw new ExcelProviderRequestError("invalid_input", `folder path segment "${segment}" points to a file`, 400);
+        throw new ProviderRequestError(400, `folder path segment "${segment}" points to a file`);
       }
       currentItem = conflictedItem;
       continue;
@@ -714,7 +702,7 @@ async function ensureFolderPathExists(folderSegments: string[], driveId: string 
 async function getRootItemId(driveId: string | undefined, deps: ExcelRuntimeDeps) {
   const root = await fetchDriveItemMetadata(buildDriveRootPath(driveId), deps);
   if (!isFolderDriveItem(root)) {
-    throw new ExcelProviderRequestError("provider_error", "excel drive root is not a folder", 502);
+    throw new ProviderRequestError(502, "excel drive root is not a folder");
   }
   return requireString(root.id, "root.id");
 }
@@ -730,21 +718,21 @@ function asUploadSession(value: Record<string, unknown>) {
 async function buildUploadSessionError(response: Response) {
   const { message } = await extractExcelError(response);
   if (response.status === 400 || response.status === 409 || response.status === 412) {
-    return new ExcelProviderRequestError("invalid_input", message, 400);
+    return new ProviderRequestError(400, message);
   }
   if (response.status === 404) {
-    return new ExcelProviderRequestError("provider_error", "excel upload session expired", 404);
+    return new ProviderRequestError(404, "excel upload session expired");
   }
   if (response.status === 416) {
-    return new ExcelProviderRequestError("provider_error", message || "invalid upload byte range", 416);
+    return new ProviderRequestError(416, message || "invalid upload byte range");
   }
   if (response.status === 429) {
-    return new ExcelProviderRequestError("rate_limited", message, 429);
+    return new ProviderRequestError(429, message);
   }
   if (response.status === 507) {
-    return new ExcelProviderRequestError("provider_error", message, 507);
+    return new ProviderRequestError(507, message);
   }
-  return new ExcelProviderRequestError("provider_error", message, response.status);
+  return new ProviderRequestError(response.status, message);
 }
 
 function resolveUploadChunkSize(remainingBytes: number) {
@@ -780,7 +768,7 @@ function toArrayBuffer(bytes: Uint8Array) {
 }
 
 async function createSession(input: Record<string, unknown>, deps: ExcelRuntimeDeps) {
-  const persistChanges = readOptionalBoolean(input.persistChanges) ?? true;
+  const persistChanges = optionalBoolean(input.persistChanges) ?? true;
   const payload = asObject(await createWorkbookSession(buildWorkbookPath(input), persistChanges, deps));
 
   return {
@@ -813,18 +801,14 @@ async function createWorkbookSession(workbookPath: string, persistChanges: boole
     return resolveCreateSessionResponse(response, deps);
   }
 
-  throw new ExcelProviderRequestError("provider_error", "excel create session exhausted retry attempts", 504);
+  throw new ProviderRequestError(504, "excel create session exhausted retry attempts");
 }
 
 async function resolveCreateSessionResponse(response: Response, deps: ExcelRuntimeDeps) {
   if (response.status === excelCreateSessionAcceptedStatus) {
     const location = readOptionalString(response.headers.get("Location"));
     if (!location) {
-      throw new ExcelProviderRequestError(
-        "provider_error",
-        "excel create session accepted response is missing Location header",
-        502,
-      );
+      throw new ProviderRequestError(502, "excel create session accepted response is missing Location header");
     }
     return pollCreateSession(location, deps);
   }
@@ -860,11 +844,7 @@ async function pollCreateSession(location: string, deps: ExcelRuntimeDeps) {
       if (readOptionalString(payload.id)) {
         return payload;
       }
-      throw new ExcelProviderRequestError(
-        "provider_error",
-        "excel create session status response is missing both status and id",
-        502,
-      );
+      throw new ProviderRequestError(502, "excel create session status response is missing both status and id");
     }
 
     if (status === "succeeded") {
@@ -875,10 +855,9 @@ async function pollCreateSession(location: string, deps: ExcelRuntimeDeps) {
       if (readOptionalString(payload.id)) {
         return payload;
       }
-      throw new ExcelProviderRequestError(
-        "provider_error",
-        "excel create session succeeded response is missing both resourceLocation and id",
+      throw new ProviderRequestError(
         502,
+        "excel create session succeeded response is missing both resourceLocation and id",
       );
     }
 
@@ -893,7 +872,7 @@ async function pollCreateSession(location: string, deps: ExcelRuntimeDeps) {
     await delay(readRetryDelayMs(response.headers, attempt, excelCreateSessionPollDelayMs));
   }
 
-  throw new ExcelProviderRequestError("provider_error", "excel create session timed out", 504);
+  throw new ProviderRequestError(504, "excel create session timed out");
 }
 
 async function readCreateSessionResource(location: string, deps: ExcelRuntimeDeps) {
@@ -915,7 +894,7 @@ async function readCreateSessionResource(location: string, deps: ExcelRuntimeDep
     return readJsonObjectResponse(response, "excel create session resource response");
   }
 
-  throw new ExcelProviderRequestError("provider_error", "excel create session resource retry failed", 504);
+  throw new ProviderRequestError(504, "excel create session resource retry failed");
 }
 
 async function getWorkbook(input: Record<string, unknown>, deps: ExcelRuntimeDeps) {
@@ -989,7 +968,7 @@ async function updateWorksheet(input: Record<string, unknown>, deps: ExcelRuntim
   const body = requireNonEmptyMutationBody(
     {
       name: readOptionalString(input.name),
-      position: readOptionalNumber(input.position),
+      position: optionalNumber(input.position),
       visibility: readOptionalString(input.visibility),
     },
     "At least one worksheet field must be provided.",
@@ -1062,8 +1041,8 @@ async function updateRange(input: Record<string, unknown>, deps: ExcelRuntimeDep
       formulasLocal: readOptionalMatrix(input.formulasLocal),
       formulasR1C1: readOptionalMatrix(input.formulasR1C1),
       numberFormat: readOptionalMatrix(input.numberFormat),
-      rowHidden: readOptionalBoolean(input.rowHidden),
-      columnHidden: readOptionalBoolean(input.columnHidden),
+      rowHidden: optionalBoolean(input.rowHidden),
+      columnHidden: optionalBoolean(input.columnHidden),
     },
     "At least one range mutation field must be provided.",
   );
@@ -1121,7 +1100,7 @@ async function mergeCells(input: Record<string, unknown>, deps: ExcelRuntimeDeps
     method: "POST",
     sessionId: readOptionalString(input.sessionId),
     body: compactObject({
-      across: readOptionalBoolean(input.across),
+      across: optionalBoolean(input.across),
     }),
   });
 
@@ -1136,8 +1115,8 @@ async function sortRange(input: Record<string, unknown>, deps: ExcelRuntimeDeps)
     sessionId: readOptionalString(input.sessionId),
     body: compactObject({
       fields: readObjectArray(input.fields),
-      matchCase: readOptionalBoolean(input.matchCase),
-      hasHeaders: readOptionalBoolean(input.hasHeaders),
+      matchCase: optionalBoolean(input.matchCase),
+      hasHeaders: optionalBoolean(input.hasHeaders),
       orientation: readOptionalString(input.orientation),
       method: readOptionalString(input.method),
     }),
@@ -1194,8 +1173,8 @@ async function updateTable(input: Record<string, unknown>, deps: ExcelRuntimeDep
     {
       name: readOptionalString(input.name),
       style: readOptionalString(input.style),
-      showTotals: readOptionalBoolean(input.showTotals),
-      showHeaders: readOptionalBoolean(input.showHeaders),
+      showTotals: optionalBoolean(input.showTotals),
+      showHeaders: optionalBoolean(input.showHeaders),
     },
     "At least one table field must be provided.",
   );
@@ -1252,7 +1231,7 @@ async function addTableRow(input: Record<string, unknown>, deps: ExcelRuntimeDep
       method: "POST",
       sessionId: readOptionalString(input.sessionId),
       body: compactObject({
-        index: readOptionalNumber(input.index),
+        index: optionalNumber(input.index),
         values: requireMatrix(input.values, "values"),
       }),
     }),
@@ -1317,7 +1296,7 @@ async function addTableColumn(input: Record<string, unknown>, deps: ExcelRuntime
       method: "POST",
       sessionId: readOptionalString(input.sessionId),
       body: compactObject({
-        index: readOptionalNumber(input.index),
+        index: optionalNumber(input.index),
         values: readOptionalMatrix(input.values),
       }),
     }),
@@ -1381,7 +1360,7 @@ async function applyTableSort(input: Record<string, unknown>, deps: ExcelRuntime
     sessionId: readOptionalString(input.sessionId),
     body: compactObject({
       fields: readObjectArray(input.fields),
-      matchCase: readOptionalBoolean(input.matchCase),
+      matchCase: optionalBoolean(input.matchCase),
       method: readOptionalString(input.method),
     }),
   });
@@ -1432,7 +1411,7 @@ function buildWorksheetRangePath(input: Record<string, unknown>) {
 function buildWorksheetUsedRangePath(input: Record<string, unknown>) {
   return `${buildWorkbookPath(input)}/worksheets/${encodeURIComponent(
     requireString(input.worksheetId, "worksheetId"),
-  )}/usedRange(valuesOnly=${readOptionalBoolean(input.valuesOnly) === true ? "true" : "false"})`;
+  )}/usedRange(valuesOnly=${optionalBoolean(input.valuesOnly) === true ? "true" : "false"})`;
 }
 
 function buildTablePath(input: Record<string, unknown>) {
@@ -1465,7 +1444,7 @@ async function readJsonObjectResponse(response: Response, label: string) {
   const payload = await readJsonResponse(response, label);
   const parsed = asObjectSafe(payload);
   if (!parsed) {
-    throw new ExcelProviderRequestError("provider_error", `${label} must be a JSON object`, 502);
+    throw new ProviderRequestError(502, `${label} must be a JSON object`);
   }
   return parsed;
 }
@@ -1475,18 +1454,14 @@ async function readJsonResponse<T>(response: Response, label: string) {
     return (await response.json()) as T;
   } catch (error) {
     const suffix = error instanceof Error && error.message ? `: ${error.message}` : "";
-    throw new ExcelProviderRequestError(
-      "provider_error",
-      `${label} returned invalid JSON (status ${response.status})${suffix}`,
-      502,
-    );
+    throw new ProviderRequestError(502, `${label} returned invalid JSON (status ${response.status})${suffix}`);
   }
 }
 
 function buildExcelOperationError(payload: Record<string, unknown>, fallbackMessage: string) {
   const errorPayload = asObjectSafe(payload.error);
   const message = readOptionalString(errorPayload?.message) ?? readOptionalString(payload.message) ?? fallbackMessage;
-  return new ExcelProviderRequestError("provider_error", message, 502);
+  return new ProviderRequestError(502, message);
 }
 
 function normalizeExtensions(value: unknown) {
@@ -1526,7 +1501,7 @@ function asObjectSafe(value: unknown) {
 function asObject(value: unknown): Record<string, unknown> {
   const record = asObjectSafe(value);
   if (!record) {
-    throw new ExcelProviderRequestError("provider_error", "excel value must be a JSON object", 502);
+    throw new ProviderRequestError(502, "excel value must be a JSON object");
   }
   return record;
 }
@@ -1538,21 +1513,21 @@ function isFolderDriveItem(item: Record<string, unknown>) {
 function normalizeWorkbookCreatePath(path: string, fieldName: string) {
   const trimmed = path.trim();
   if (!trimmed) {
-    throw new ExcelProviderRequestError("invalid_input", `${fieldName} must not be blank`, 400);
+    throw new ProviderRequestError(400, `${fieldName} must not be blank`);
   }
 
   const rawPath = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
   const segments = rawPath.split("/");
   if (segments.some((segment) => segment.length === 0)) {
-    throw new ExcelProviderRequestError("invalid_input", `${fieldName} must not contain empty path segments`, 400);
+    throw new ProviderRequestError(400, `${fieldName} must not contain empty path segments`);
   }
 
   const fileName = segments.at(-1);
   if (!fileName) {
-    throw new ExcelProviderRequestError("invalid_input", `${fieldName} must include a file name`, 400);
+    throw new ProviderRequestError(400, `${fieldName} must include a file name`);
   }
   if (!fileName.toLowerCase().endsWith(".xlsx")) {
-    throw new ExcelProviderRequestError("invalid_input", `${fieldName} must end with .xlsx`, 400);
+    throw new ProviderRequestError(400, `${fieldName} must end with .xlsx`);
   }
 
   const folderSegments = segments.slice(0, -1);
@@ -1573,7 +1548,7 @@ function resolveCreateWorkbookWorksheetPlan(input: Record<string, unknown>) {
     const normalizedName = normalizeWorksheetName(worksheetName, "worksheetNames");
     const worksheetKey = normalizeWorksheetKey(normalizedName);
     if (worksheetNameKeys.has(worksheetKey)) {
-      throw new ExcelProviderRequestError("invalid_input", `worksheet name "${normalizedName}" is duplicated`, 400);
+      throw new ProviderRequestError(400, `worksheet name "${normalizedName}" is duplicated`);
     }
     worksheetNameKeys.add(worksheetKey);
     worksheetNames.push(normalizedName);
@@ -1608,7 +1583,7 @@ function readAliasedWorksheetData(input: Record<string, unknown>, keys: string[]
 function requireWorksheetDataMap(value: unknown, fieldName: string) {
   const parsed = asObjectSafe(value);
   if (!parsed) {
-    throw new ExcelProviderRequestError("invalid_input", `${fieldName} must be an object`, 400);
+    throw new ProviderRequestError(400, `${fieldName} must be an object`);
   }
 
   const normalized: Record<string, unknown[][]> = {};
@@ -1617,7 +1592,7 @@ function requireWorksheetDataMap(value: unknown, fieldName: string) {
     const worksheetName = normalizeWorksheetName(rawWorksheetName, fieldName);
     const worksheetKey = normalizeWorksheetKey(worksheetName);
     if (worksheetKeys.has(worksheetKey)) {
-      throw new ExcelProviderRequestError("invalid_input", `worksheet name "${worksheetName}" is duplicated`, 400);
+      throw new ProviderRequestError(400, `worksheet name "${worksheetName}" is duplicated`);
     }
     worksheetKeys.add(worksheetKey);
     normalized[worksheetName] = requireMatrix(rows, `${fieldName}.${worksheetName}`);
@@ -1629,7 +1604,7 @@ function requireWorksheetDataMap(value: unknown, fieldName: string) {
 function normalizeWorksheetName(value: string, fieldName: string) {
   const trimmed = value.trim();
   if (!trimmed) {
-    throw new ExcelProviderRequestError("invalid_input", `${fieldName} must not contain blank worksheet names`, 400);
+    throw new ProviderRequestError(400, `${fieldName} must not contain blank worksheet names`);
   }
   return trimmed;
 }
@@ -1661,7 +1636,7 @@ function buildMatrixRangeAddress(values: unknown[][]) {
   const rowCount = values.length;
   const columnCount = values[0]?.length ?? 0;
   if (rowCount === 0 || columnCount === 0) {
-    throw new ExcelProviderRequestError("invalid_input", "worksheet data must include at least one cell", 400);
+    throw new ProviderRequestError(400, "worksheet data must include at least one cell");
   }
 
   const lastCellAddress = `${toExcelColumnLabel(columnCount)}${rowCount}`;
@@ -1705,7 +1680,7 @@ function delay(ms: number) {
 }
 
 function formatOptionalNumber(value: unknown) {
-  const parsed = readOptionalNumber(value);
+  const parsed = optionalNumber(value);
   return parsed == null ? undefined : String(parsed);
 }
 
@@ -1740,10 +1715,10 @@ function readOptionalMatrix(value: unknown) {
 
 function requireMatrix(value: unknown, fieldName: string) {
   if (!Array.isArray(value)) {
-    throw new ExcelProviderRequestError("invalid_input", `${fieldName} must be a two-dimensional array`, 400);
+    throw new ProviderRequestError(400, `${fieldName} must be a two-dimensional array`);
   }
   if (!value.every((row) => Array.isArray(row))) {
-    throw new ExcelProviderRequestError("invalid_input", `${fieldName} must be a two-dimensional array`, 400);
+    throw new ProviderRequestError(400, `${fieldName} must be a two-dimensional array`);
   }
   return value;
 }
@@ -1751,7 +1726,7 @@ function requireMatrix(value: unknown, fieldName: string) {
 function requireString(value: unknown, fieldName: string) {
   const parsed = readOptionalString(value);
   if (!parsed) {
-    throw new ExcelProviderRequestError("invalid_input", `${fieldName} is required`, 400);
+    throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return parsed;
 }
@@ -1759,7 +1734,7 @@ function requireString(value: unknown, fieldName: string) {
 function requireAliasedString(input: Record<string, unknown>, keys: string[]) {
   const parsed = readAliasedString(input, keys);
   if (!parsed) {
-    throw new ExcelProviderRequestError("invalid_input", `${keys[0]} is required`, 400);
+    throw new ProviderRequestError(400, `${keys[0]} is required`);
   }
   return parsed;
 }
@@ -1782,26 +1757,18 @@ function readOptionalString(value: unknown) {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function readOptionalBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
-}
-
 function requireBoolean(value: unknown, fieldName: string) {
-  const parsed = readOptionalBoolean(value);
+  const parsed = optionalBoolean(value);
   if (parsed == null) {
-    throw new ExcelProviderRequestError("invalid_input", `${fieldName} is required`, 400);
+    throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return parsed;
 }
 
-function readOptionalNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
 function requireNumber(value: unknown, fieldName: string) {
-  const parsed = readOptionalNumber(value);
+  const parsed = optionalNumber(value);
   if (parsed == null) {
-    throw new ExcelProviderRequestError("invalid_input", `${fieldName} is required`, 400);
+    throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return parsed;
 }
@@ -1819,14 +1786,14 @@ function readAliasedStringArray(input: Record<string, unknown>, keys: string[]) 
 function requireNonEmptyMutationBody(input: Record<string, unknown>, message: string): Record<string, unknown> {
   const body = compactObject(input);
   if (Object.keys(body).length === 0) {
-    throw new ExcelProviderRequestError("invalid_input", message, 400);
+    throw new ProviderRequestError(400, message);
   }
   return body;
 }
 
 function readObjectArray(value: unknown) {
   if (!Array.isArray(value)) {
-    throw new ExcelProviderRequestError("invalid_input", "fields must be an array", 400);
+    throw new ProviderRequestError(400, "fields must be an array");
   }
   return value.map((item) => asObject(item));
 }

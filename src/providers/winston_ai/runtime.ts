@@ -1,15 +1,10 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { WinstonAiActionName } from "./actions.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { jsonObject } from "../../core/request.ts";
-import {
-  createProviderTimeout,
-  isAbortLikeError,
-  ProviderRequestError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
 
 type WinstonAiRequestPhase = "validate" | "execute";
 type WinstonAiActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
@@ -25,7 +20,7 @@ const winstonAiDefaultRequestTimeoutMs = 60_000;
 const winstonAiValidationText =
   "Winston AI validates this connector credential with a short AI content detection request. This sample text is intentionally long enough to satisfy the documented minimum length for reliable API analysis while avoiding any user data.";
 
-export const winstonAiActionHandlers: Record<WinstonAiActionName, WinstonAiActionHandler> = {
+export const winstonAiActionHandlers: ProviderActionHandlers<"winston_ai", WinstonAiActionHandler> = {
   detect_ai_text(input, context) {
     return requestWinstonAiJson(
       { path: "/v2/ai-content-detection", body: buildScanBody(input), phase: "execute" },
@@ -102,34 +97,25 @@ async function requestWinstonAiJson(
   input: WinstonAiRequestInput,
   context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, winstonAiDefaultRequestTimeoutMs);
-  try {
-    const response = await context.fetcher(new URL(input.path, winstonAiApiBaseUrl), {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        authorization: `Bearer ${context.apiKey}`,
-        "content-type": "application/json",
-        "user-agent": providerUserAgent,
-      },
-      body: JSON.stringify(input.body),
-      signal: timeout.signal,
-    });
-    const payload = await readWinstonAiPayload(response);
-    if (!response.ok) throw createWinstonAiError(response, payload, input.phase);
-    return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) throw error;
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Winston AI request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Winston AI request failed: ${error.message}` : "Winston AI request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  return runProviderRequest(
+    { signal: context.signal, timeoutMs: winstonAiDefaultRequestTimeoutMs, label: "Winston AI" },
+    async (signal) => {
+      const response = await context.fetcher(new URL(input.path, winstonAiApiBaseUrl), {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          authorization: `Bearer ${context.apiKey}`,
+          "content-type": "application/json",
+          "user-agent": providerUserAgent,
+        },
+        body: JSON.stringify(input.body),
+        signal,
+      });
+      const payload = await readWinstonAiPayload(response);
+      if (!response.ok) throw createWinstonAiError(response, payload, input.phase);
+      return payload;
+    },
+  );
 }
 
 async function readWinstonAiPayload(response: Response): Promise<Record<string, unknown>> {
@@ -156,7 +142,7 @@ function createWinstonAiError(
     return new ProviderRequestError(400, message, payload);
   }
   if (phase === "execute" && (response.status === 401 || response.status === 403)) {
-    return new ProviderRequestError(409, message, payload);
+    return new ProviderRequestError(401, message, payload);
   }
   if (phase === "execute" && response.status >= 400 && response.status < 500) {
     return new ProviderRequestError(400, message, payload);

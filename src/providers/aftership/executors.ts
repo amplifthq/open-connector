@@ -6,8 +6,8 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { AftershipActionName } from "./actions.ts";
 
 import { CastError, compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
@@ -17,6 +17,7 @@ import {
   ProviderRequestError,
   providerUserAgent,
   requireApiKeyCredential,
+  toProviderExecutionError,
 } from "../provider-runtime.ts";
 
 const service = "aftership";
@@ -33,7 +34,7 @@ interface AftershipRequest {
   body?: Record<string, unknown>;
 }
 
-export const aftershipActionHandlers: Record<AftershipActionName, AftershipActionHandler> = {
+export const aftershipActionHandlers: ProviderActionHandlers<"aftership", AftershipActionHandler> = {
   async create_tracking(input, context) {
     const payload = await requestAftership(
       { method: "POST", path: "/trackings", body: compactObject(input) },
@@ -256,15 +257,6 @@ async function readAftershipPayload(response: Response): Promise<unknown> {
   }
 }
 
-class AftershipExecutionError extends ProviderRequestError {
-  readonly code: string;
-
-  constructor(status: number, code: string, message: string, details?: unknown) {
-    super(status, message, details);
-    this.code = code;
-  }
-}
-
 function createAftershipError(
   response: Response,
   payload: unknown,
@@ -276,18 +268,18 @@ function createAftershipError(
     if (phase === "validate") {
       return new ProviderRequestError(400, message);
     }
-    return new AftershipExecutionError(response.status, "credential_expired", message, payload);
+    return new ProviderRequestError(response.status, message, payload);
   }
 
   if (response.status === 400 || response.status === 404 || response.status === 422) {
     return phase === "validate"
       ? new ProviderRequestError(response.status, message)
-      : new AftershipExecutionError(response.status, "invalid_input", message, payload);
+      : new ProviderRequestError(response.status, message, payload, "invalid_input");
   }
 
   return phase === "validate"
     ? new ProviderRequestError(response.status || 502, message)
-    : new AftershipExecutionError(response.status || 502, "provider_error", message, payload);
+    : new ProviderRequestError(response.status || 502, message, payload, "provider_error");
 }
 
 function readAftershipErrorMessage(payload: unknown): string | undefined {
@@ -397,47 +389,8 @@ function createAftershipContext(apiKey: string, executionContext: ExecutionConte
 }
 
 function toAftershipExecutionResult(error: unknown): ExecutionResult {
-  if (error instanceof AftershipExecutionError) {
-    return {
-      ok: false,
-      error: {
-        code: error.code,
-        message: error.message,
-        details: {
-          status: error.status,
-          details: error.details,
-        },
-      },
-    };
-  }
-
-  if (error instanceof ProviderRequestError) {
-    return {
-      ok: false,
-      error: {
-        code:
-          error.status === 401 || error.status === 403
-            ? "authorization_failed"
-            : error.status < 500
-              ? "invalid_input"
-              : "provider_error",
-        message: error.message,
-        details: {
-          status: error.status,
-          details: error.details,
-        },
-      },
-    };
-  }
-
-  if (error instanceof CastError) {
-    return {
-      ok: false,
-      error: {
-        code: "invalid_input",
-        message: error.message,
-      },
-    };
+  if (error instanceof ProviderRequestError || error instanceof CastError) {
+    return toProviderExecutionError(error, "AfterShip request failed");
   }
 
   return {

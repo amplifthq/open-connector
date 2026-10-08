@@ -71,19 +71,10 @@ const updateCustomerInputSchema = {
   ],
 };
 
-export type PaystackActionName =
-  | "create_customer"
-  | "list_customers"
-  | "get_customer"
-  | "update_customer"
-  | "initialize_transaction"
-  | "list_transactions"
-  | "get_transaction"
-  | "verify_transaction";
-
 export const paystackActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "create_customer",
+    operationType: "write",
     description: "Create a customer in Paystack.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for creating a Paystack customer.", customerPayloadProperties, {
@@ -95,6 +86,7 @@ export const paystackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_customers",
+    operationType: "read",
     description: "List customers available in Paystack.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for listing Paystack customers.", listInputProperties, {
@@ -111,6 +103,7 @@ export const paystackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_customer",
+    operationType: "read",
     description: "Fetch a customer in Paystack by email address or customer code.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for fetching a Paystack customer.", {
@@ -122,6 +115,7 @@ export const paystackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_customer",
+    operationType: "write",
     description: "Update a Paystack customer by customer code.",
     requiredScopes: [],
     inputSchema: updateCustomerInputSchema,
@@ -131,6 +125,7 @@ export const paystackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "initialize_transaction",
+    operationType: "read",
     description: "Initialize a Paystack transaction and return checkout details.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -153,6 +148,7 @@ export const paystackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_transactions",
+    operationType: "read",
     description: "List transactions available in Paystack.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -175,6 +171,7 @@ export const paystackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_transaction",
+    operationType: "read",
     description: "Fetch a Paystack transaction by transaction ID.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for fetching a Paystack transaction.", {
@@ -186,6 +183,7 @@ export const paystackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "verify_transaction",
+    operationType: "read",
     description: "Verify a Paystack transaction by reference.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for verifying a Paystack transaction.", {

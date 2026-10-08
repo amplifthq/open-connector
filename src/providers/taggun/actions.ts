@@ -5,13 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "taggun" as const;
 
-export type TaggunActionName =
-  | "extract_receipt_simple_url"
-  | "extract_receipt_verbose_url"
-  | "list_campaign_ids"
-  | "get_campaign_settings"
-  | "validate_receipt_url";
-
 const languageSchema = s.stringEnum("Optional language hint for Taggun OCR. Leave unset for automatic detection.", [
   "en",
   "es",
@@ -135,6 +128,7 @@ const validationOutputSchema = s.object(
 
 const extractReceiptSimpleUrlAction = defineProviderAction(service, {
   name: "extract_receipt_simple_url",
+  operationType: "read",
   description: "Extract basic receipt or invoice data from a public HTTPS file URL with Taggun.",
   inputSchema: s.object(
     "Input parameters for extracting basic receipt or invoice data by URL.",
@@ -149,6 +143,7 @@ const extractReceiptSimpleUrlAction = defineProviderAction(service, {
 
 const extractReceiptVerboseUrlAction = defineProviderAction(service, {
   name: "extract_receipt_verbose_url",
+  operationType: "read",
   description: "Extract detailed receipt or invoice OCR data from a public HTTPS file URL with Taggun.",
   inputSchema: s.object(
     "Input parameters for extracting detailed receipt or invoice data by URL.",
@@ -164,6 +159,7 @@ const extractReceiptVerboseUrlAction = defineProviderAction(service, {
 
 const listCampaignIdsAction = defineProviderAction(service, {
   name: "list_campaign_ids",
+  operationType: "read",
   description: "List Taggun campaign IDs linked to the connected account.",
   inputSchema: s.object("Input parameters for listing Taggun campaign IDs.", {}),
   outputSchema: s.object(
@@ -177,6 +173,7 @@ const listCampaignIdsAction = defineProviderAction(service, {
 
 const getCampaignSettingsAction = defineProviderAction(service, {
   name: "get_campaign_settings",
+  operationType: "read",
   description: "Get Taggun validation settings for an existing campaign ID.",
   inputSchema: s.object(
     "Input parameters for retrieving Taggun campaign settings.",
@@ -197,6 +194,7 @@ const getCampaignSettingsAction = defineProviderAction(service, {
 
 const validateReceiptUrlAction = defineProviderAction(service, {
   name: "validate_receipt_url",
+  operationType: "read",
   description: "Validate a public HTTPS receipt or invoice URL against existing Taggun campaign settings.",
   inputSchema: validationInputSchema,
   outputSchema: validationOutputSchema,

@@ -6,12 +6,13 @@ import type {
   ProviderProxyExecutor,
   ResolvedCredential,
 } from "../../core/types.ts";
-import type { KnackActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
 import {
   defineProviderExecutors,
   defineProviderProxy,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
@@ -37,7 +38,7 @@ interface KnackListPayload extends Record<string, unknown> {
   total_records?: unknown;
 }
 
-export const knackActionHandlers: Record<KnackActionName, KnackActionHandler> = {
+export const knackActionHandlers: ProviderActionHandlers<"knack", KnackActionHandler> = {
   list_records(input, context) {
     return listKnackRecords(input, context);
   },
@@ -186,7 +187,7 @@ async function createKnackRecord(input: Record<string, unknown>, context: KnackA
     url,
     {
       method: "POST",
-      body: JSON.stringify(requiredRecord(input.record, "record", inputError)),
+      body: JSON.stringify(requiredRecord(input.record, "record", providerInputError)),
     },
     context,
     "execute",
@@ -207,7 +208,7 @@ async function updateKnackRecord(input: Record<string, unknown>, context: KnackA
     url,
     {
       method: "PUT",
-      body: JSON.stringify(requiredRecord(input.record, "record", inputError)),
+      body: JSON.stringify(requiredRecord(input.record, "record", providerInputError)),
     },
     context,
     "execute",
@@ -356,10 +357,6 @@ function requireKnackRecordId(input: Record<string, unknown>): string {
     throw new ProviderRequestError(400, "recordId is required");
   }
   return recordId;
-}
-
-function inputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function responseError(message: string): ProviderRequestError {

@@ -1,6 +1,11 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ScrapingdogActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -10,7 +15,13 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerInputError,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "scrapingdog";
 const scrapingdogBaseUrl = "https://api.scrapingdog.com";
@@ -19,12 +30,12 @@ type ScrapingdogPhase = "validate" | "execute";
 type ScrapingdogQueryValue = string | number | boolean | undefined;
 type ScrapingdogActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const scrapingdogActionHandlers: Record<ScrapingdogActionName, ScrapingdogActionHandler> = {
+export const scrapingdogActionHandlers: ProviderActionHandlers<"scrapingdog", ScrapingdogActionHandler> = {
   async fetch_html(input, context): Promise<unknown> {
     const response = await requestScrapingdogRaw(
       "scrape",
       compactObject({
-        url: requiredString(input.url, "url", invalidInputError),
+        url: requiredString(input.url, "url", providerInputError),
         dynamic: optionalBoolean(input.dynamic),
       }),
       context,
@@ -44,7 +55,7 @@ export const scrapingdogActionHandlers: Record<ScrapingdogActionName, Scrapingdo
     const payload = await requestScrapingdogJson(
       "google",
       compactObject({
-        query: requiredString(input.query, "query", invalidInputError),
+        query: requiredString(input.query, "query", providerInputError),
         domain: optionalString(input.domain),
         country: optionalString(input.country),
         cr: optionalString(input.cr),
@@ -78,7 +89,7 @@ export const scrapingdogActionHandlers: Record<ScrapingdogActionName, Scrapingdo
     const payload = await requestScrapingdogJson(
       "google_maps",
       compactObject({
-        query: requiredString(input.query, "query", invalidInputError),
+        query: requiredString(input.query, "query", providerInputError),
         ll: optionalString(input.ll),
         domain: optionalString(input.domain),
         language: optionalString(input.language),
@@ -116,7 +127,7 @@ export const scrapingdogActionHandlers: Record<ScrapingdogActionName, Scrapingdo
     const payload = await requestScrapingdogJson(
       "google_scholar",
       compactObject({
-        query: requiredString(input.query, "query", invalidInputError),
+        query: requiredString(input.query, "query", providerInputError),
         html: optionalBoolean(input.html),
         country: optionalString(input.country),
         language: optionalString(input.language),
@@ -145,6 +156,13 @@ export const scrapingdogActionHandlers: Record<ScrapingdogActionName, Scrapingdo
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, scrapingdogActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: scrapingdogBaseUrl,
+  auth: { type: "api_key_query", name: "api_key" },
+  skipDnsValidation: true,
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {
@@ -274,10 +292,6 @@ function optionalBooleanAsInteger(value: unknown): number | undefined {
     return undefined;
   }
   return booleanValue ? 1 : 0;
-}
-
-function invalidInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function ensureTrailingSlash(url: string): string {

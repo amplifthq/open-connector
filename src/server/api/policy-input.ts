@@ -15,10 +15,15 @@ export function readRuntimePolicyRules(body: JsonRequestBody): PolicyRules {
     blockedActions: readRules(body.blockedActions, "blockedActions", "action"),
     allowedProxies: readRules(body.allowedProxies, "allowedProxies", "proxy"),
     blockedProxies: readRules(body.blockedProxies, "blockedProxies", "proxy"),
+    allowedTriggers: readRules(body.allowedTriggers, "allowedTriggers", "action", true),
+    blockedTriggers: readRules(body.blockedTriggers, "blockedTriggers", "action", true),
   };
 }
 
 export function readTokenPolicy(body: JsonRequestBody, allowOmitted = false): TokenPolicy {
+  if (body.blockedTriggers !== undefined) {
+    throw invalidInput("Token policy does not support Trigger block rules.");
+  }
   if (body.blockedProxies !== undefined) {
     throw invalidInput("Token policy does not support proxy block rules.");
   }
@@ -26,6 +31,8 @@ export function readTokenPolicy(body: JsonRequestBody, allowOmitted = false): To
     allowedActions: readRules(body.allowedActions, "allowedActions", "action", allowOmitted),
     blockedActions: readRules(body.blockedActions, "blockedActions", "action", allowOmitted),
     allowedProxies: readRules(body.allowedProxies, "allowedProxies", "proxy", allowOmitted),
+    allowedTriggers: readRules(body.allowedTriggers, "allowedTriggers", "action", true),
+    allowedConnections: readConnectionIds(body.allowedConnections, "allowedConnections", allowOmitted),
   };
 }
 
@@ -54,6 +61,32 @@ function readRules(value: unknown, fieldName: string, kind: "action" | "proxy", 
     throw invalidInput(`${fieldName} must not contain more than ${policyRuleListMaxItems} rules.`);
   }
   return rules;
+}
+
+function readConnectionIds(value: unknown, fieldName: string, allowOmitted = false): string[] {
+  if (value === undefined && allowOmitted) {
+    return [];
+  }
+  const values = requiredStringArray(value, fieldName, invalidInput);
+  const connectionIds: string[] = [];
+  const seen = new Set<string>();
+  for (const item of values) {
+    const connectionId = item.trim();
+    if (!connectionId) {
+      throw invalidInput(`${fieldName} must not contain empty connection IDs.`);
+    }
+    if (Buffer.byteLength(connectionId, "utf8") > policyRuleMaxBytes) {
+      throw invalidInput(`${fieldName} IDs must not exceed ${policyRuleMaxBytes} UTF-8 bytes.`);
+    }
+    if (!seen.has(connectionId)) {
+      seen.add(connectionId);
+      connectionIds.push(connectionId);
+    }
+  }
+  if (connectionIds.length > policyRuleListMaxItems) {
+    throw invalidInput(`${fieldName} must not contain more than ${policyRuleListMaxItems} rules.`);
+  }
+  return connectionIds;
 }
 
 function assertRuleSyntax(rule: string, fieldName: string, kind: "action" | "proxy"): void {

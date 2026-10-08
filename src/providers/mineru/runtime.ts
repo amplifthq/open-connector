@@ -1,18 +1,12 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
 
-import {
-  compactObject,
-  optionalBoolean,
-  optionalInteger,
-  optionalRecord,
-  optionalString,
-  requiredString,
-} from "../../core/cast.ts";
+import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
-const mineruApiBaseUrl = "https://mineru.net";
+export const mineruApiBaseUrl = "https://mineru.net";
 const mineruValidationTaskId = "oomol-connector-validation";
 
 type MineruRequestPhase = "validate" | "execute";
@@ -26,7 +20,7 @@ interface MineruRequestInput {
   phase: MineruRequestPhase;
 }
 
-export const mineruActionHandlers: Record<string, MineruActionHandler> = {
+export const mineruActionHandlers: ProviderActionHandlers<"mineru", MineruActionHandler> = {
   create_extract_task(input, context) {
     return createExtractTask(input, context);
   },
@@ -389,8 +383,4 @@ function optionalStringArray(value: unknown): string[] | undefined {
     throw new ProviderRequestError(400, "string array input is required");
   }
   return value.map((item) => String(item));
-}
-
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }

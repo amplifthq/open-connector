@@ -1,31 +1,32 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
-import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { compactObject, optionalInteger, optionalRecord, optionalString, rawStringOrNull } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
   ProviderRequestError,
   providerUserAgent,
   readProviderJsonBody,
+  requiredInputString,
   setSearchParams,
 } from "../provider-runtime.ts";
 
 const webOfScienceApiBaseUrl = "https://api.clarivate.com/apis/wos-starter/v1";
-const webOfScienceRequestTimeoutMs = 30_000;
 
 type WebOfSciencePhase = "validate" | "execute";
 type WebOfScienceContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type WebOfScienceActionHandler = (input: Record<string, unknown>, context: WebOfScienceContext) => Promise<unknown>;
 
-export const webOfScienceActionHandlers: Record<string, WebOfScienceActionHandler> = {
+export const webOfScienceActionHandlers: ProviderActionHandlers<"web_of_science", WebOfScienceActionHandler> = {
   async search_documents(input, context) {
     validateDocumentSearchInput(input);
     const payload = await requestWebOfScienceJson(
       {
         path: "/documents",
         query: {
-          q: readRequiredInput(input.query, "query"),
+          q: requiredInputString(input.query, "query"),
           db: optionalString(input.database),
           limit: readOptionalIntegerString(input.limit),
           page: readOptionalIntegerString(input.page),
@@ -45,7 +46,7 @@ export const webOfScienceActionHandlers: Record<string, WebOfScienceActionHandle
   },
 
   async get_document(input, context) {
-    const uid = readRequiredInput(input.uid, "uid");
+    const uid = requiredInputString(input.uid, "uid");
     const payload = await requestWebOfScienceJson(
       {
         path: `/documents/${encodeURIComponent(uid)}`,
@@ -72,7 +73,7 @@ export const webOfScienceActionHandlers: Record<string, WebOfScienceActionHandle
   },
 
   async get_journal(input, context) {
-    const id = readRequiredInput(input.id, "id");
+    const id = requiredInputString(input.id, "id");
     const payload = await requestWebOfScienceJson(
       {
         path: `/journals/${encodeURIComponent(id)}`,
@@ -127,7 +128,7 @@ async function requestWebOfScienceJson(
   input: WebOfScienceRequest,
   context: WebOfScienceContext,
 ): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(context.signal, webOfScienceRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(buildWebOfScienceUrl(input.path, input.query), {
       method: "GET",
@@ -247,7 +248,7 @@ function normalizeDocument(value: unknown) {
 
   return {
     uid,
-    title: readNullableString(document.title),
+    title: rawStringOrNull(document.title),
     types: readStringArray(document.types),
     sourceTypes: readStringArray(document.sourceTypes),
     source: optionalRecord(document.source) ?? null,
@@ -263,12 +264,12 @@ function normalizeDocument(value: unknown) {
 function normalizeJournal(value: unknown) {
   const journal = requireResponseRecord(value, "Web of Science returned an invalid journal");
   return {
-    id: readNullableString(journal.id),
-    name: readNullableString(journal.name),
-    jcrTitle: readNullableString(journal.jcrTitle),
-    isoTitle: readNullableString(journal.isoTitle),
-    issn: readNullableString(journal.issn),
-    eIssn: readNullableString(journal.eIssn),
+    id: rawStringOrNull(journal.id),
+    name: rawStringOrNull(journal.name),
+    jcrTitle: rawStringOrNull(journal.jcrTitle),
+    isoTitle: rawStringOrNull(journal.isoTitle),
+    issn: rawStringOrNull(journal.issn),
+    eIssn: rawStringOrNull(journal.eIssn),
     previousIssn: readStringArray(journal.previousIssn),
     links: readRecordArray(journal.links),
     raw: journal,
@@ -297,10 +298,6 @@ function requireResponseRecord(value: unknown, message: string): Record<string, 
   return record;
 }
 
-function readRequiredInput(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function readOptionalIntegerString(value: unknown): string | undefined {
   const integer = optionalInteger(value);
   return integer === undefined ? undefined : String(integer);
@@ -308,10 +305,6 @@ function readOptionalIntegerString(value: unknown): string | undefined {
 
 function readNullableInteger(value: unknown): number | null {
   return optionalInteger(value) ?? null;
-}
-
-function readNullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
 }
 
 function mapDetail(value: unknown): string | undefined {

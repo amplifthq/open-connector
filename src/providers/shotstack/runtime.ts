@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { optionalBoolean, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -8,11 +9,12 @@ import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "
 const shotstackApiBaseUrl = "https://api.shotstack.io/edit/v1";
 export const shotstackProxyBaseUrl = "https://api.shotstack.io";
 
-const shotstackRequestTimeoutMs = 30_000;
-
 type ShotstackRequestPhase = "validate" | "execute";
 
-export const shotstackActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const shotstackActionHandlers: ProviderActionHandlers<
+  "shotstack",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   render_edit(input, context) {
     return renderEdit(input, context);
   },
@@ -124,7 +126,7 @@ async function requestShotstackJson(input: {
   signal?: AbortSignal;
   phase: ShotstackRequestPhase;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, shotstackRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   const headers: Record<string, string> = {
     accept: "application/json",
     "x-api-key": input.apiKey,

@@ -5,20 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "buildkite";
 
-export type BuildkiteActionName =
-  | "get_current_access_token"
-  | "get_current_user"
-  | "list_organizations"
-  | "get_organization"
-  | "list_pipelines"
-  | "get_pipeline"
-  | "list_builds_for_organization"
-  | "list_builds_for_pipeline"
-  | "get_build"
-  | "create_build"
-  | "cancel_build"
-  | "rebuild_build";
-
 const readUserPermission = ["read_user"];
 const readOrganizationsPermission = ["read_organizations"];
 const readPipelinesPermission = ["read_pipelines"];
@@ -208,6 +194,7 @@ const buildListInputFields = {
 export const buildkiteActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_access_token",
+    operationType: "read",
     description: "Inspect the current Buildkite API access token, including scopes and owner summary.",
     requiredScopes: [],
     providerPermissions: [],
@@ -217,6 +204,7 @@ export const buildkiteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Get the Buildkite user account that owns the current API access token.",
     requiredScopes: readUserPermission,
     providerPermissions: readUserPermission,
@@ -226,6 +214,7 @@ export const buildkiteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_organizations",
+    operationType: "read",
     description: "List Buildkite organizations accessible to the current API token.",
     requiredScopes: readOrganizationsPermission,
     providerPermissions: readOrganizationsPermission,
@@ -237,6 +226,7 @@ export const buildkiteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_organization",
+    operationType: "read",
     description: "Get a single Buildkite organization by slug.",
     requiredScopes: readOrganizationsPermission,
     providerPermissions: readOrganizationsPermission,
@@ -254,6 +244,7 @@ export const buildkiteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_pipelines",
+    operationType: "read",
     description: "List Buildkite pipelines for an organization.",
     requiredScopes: readPipelinesPermission,
     providerPermissions: readPipelinesPermission,
@@ -274,6 +265,7 @@ export const buildkiteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_pipeline",
+    operationType: "read",
     description: "Get a single Buildkite pipeline by organization and pipeline slug.",
     requiredScopes: readPipelinesPermission,
     providerPermissions: readPipelinesPermission,
@@ -291,6 +283,7 @@ export const buildkiteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_builds_for_organization",
+    operationType: "read",
     description: "List builds across all pipelines in a Buildkite organization.",
     requiredScopes: readBuildsPermission,
     providerPermissions: readBuildsPermission,
@@ -309,6 +302,7 @@ export const buildkiteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_builds_for_pipeline",
+    operationType: "read",
     description: "List builds for a single Buildkite pipeline.",
     requiredScopes: readBuildsPermission,
     providerPermissions: readBuildsPermission,
@@ -328,6 +322,7 @@ export const buildkiteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_build",
+    operationType: "read",
     description: "Get a single Buildkite build by organization, pipeline slug, and build number.",
     requiredScopes: readBuildsPermission,
     providerPermissions: readBuildsPermission,
@@ -348,6 +343,7 @@ export const buildkiteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_build",
+    operationType: "write",
     description: "Create a new Buildkite build for a pipeline.",
     requiredScopes: writeBuildsPermission,
     providerPermissions: writeBuildsPermission,
@@ -377,6 +373,7 @@ export const buildkiteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "cancel_build",
+    operationType: "destructive",
     description: "Cancel a Buildkite build by build number.",
     requiredScopes: writeBuildsPermission,
     providerPermissions: writeBuildsPermission,
@@ -395,6 +392,7 @@ export const buildkiteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "rebuild_build",
+    operationType: "write",
     description: "Rebuild a Buildkite build by build number.",
     requiredScopes: writeBuildsPermission,
     providerPermissions: writeBuildsPermission,

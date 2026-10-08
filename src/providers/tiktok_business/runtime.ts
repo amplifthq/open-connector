@@ -1,11 +1,12 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { BearerProviderContext } from "../provider-runtime.ts";
-import type { TikTokBusinessActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord } from "../../core/cast.ts";
+import { compactObject, looseArray, optionalRecord, recordOrEmpty } from "../../core/cast.ts";
 import { ProviderRequestError } from "../provider-runtime.ts";
 
 const tiktokBusinessApiBaseUrl = "https://business-api.tiktok.com";
+const tiktokBusinessUserInfoUrl = `${tiktokBusinessApiBaseUrl}/open_api/v1.3/user/info/`;
 const tiktokBusinessAdvertiserUrl = `${tiktokBusinessApiBaseUrl}/open_api/v1.3/oauth2/advertiser/get/`;
 
 const tiktokBusinessPermissionScopeHint =
@@ -37,7 +38,7 @@ type TikTokBusinessQueryValue =
 
 type TikTokBusinessApiVersion = "v1.3" | "v2.0";
 
-export const tiktokBusinessActionHandlers: Record<TikTokBusinessActionName, TikTokBusinessActionHandler> = {
+export const tiktokBusinessActionHandlers: ProviderActionHandlers<"tiktok_business", TikTokBusinessActionHandler> = {
   list_advertisers(input, context) {
     return listAdvertisers(input, context);
   },
@@ -90,31 +91,36 @@ export async function validateTikTokBusinessCredential(
   fetcher: typeof fetch,
 ): Promise<CredentialValidationResult> {
   const envelope = await tiktokBusinessJsonEnvelopeRequest<{
-    list?: unknown[];
-    advertiser_list?: unknown[];
+    core_user_id?: unknown;
+    display_name?: unknown;
+    email?: unknown;
+    avatar_url?: unknown;
+    id?: unknown;
   }>({
-    url: tiktokBusinessAdvertiserUrl,
+    url: tiktokBusinessUserInfoUrl,
     fetcher,
     accessToken: input.accessToken,
   });
-  const advertisers = readTikTokBusinessAdvertisers(dataObject(envelope.data));
-  const firstAdvertiser = advertisers[0];
-  if (!firstAdvertiser) {
-    throw new ProviderRequestError(502, "tiktok business advertiser discovery returned no advertisers");
+  const user = recordOrEmpty(envelope.data);
+  const userId = stringOrUndefined(user.core_user_id) ?? stringOrUndefined(user.id);
+  if (!userId) {
+    throw new ProviderRequestError(502, "tiktok business user info is missing core_user_id");
   }
 
+  const displayName = stringOrUndefined(user.display_name) || userId;
   const grantedScopes = normalizeProviderScopes(input.metadata.scope);
   return {
     profile: {
-      accountId: firstAdvertiser.advertiserId,
-      displayName: firstAdvertiser.advertiserName || firstAdvertiser.advertiserId,
+      accountId: userId,
+      displayName,
       grantedScopes,
     },
     grantedScopes,
-    metadata: {
-      advertisers,
-      selectedAdvertiserId: firstAdvertiser.advertiserId,
-    },
+    metadata: compactObject({
+      coreUserId: userId,
+      email: stringOrUndefined(user.email),
+      avatarUrl: stringOrUndefined(user.avatar_url),
+    }),
   };
 }
 
@@ -126,9 +132,9 @@ async function listGmvMaxStores(input: Record<string, unknown>, context: TikTokB
   });
 
   return {
-    stores: arrayValue(envelope.data?.store_list).map(normalizeStore),
+    stores: looseArray(envelope.data?.store_list).map(normalizeStore),
     requestId: envelope.request_id ?? "",
-    raw: dataObject(envelope.data),
+    raw: recordOrEmpty(envelope.data),
   };
 }
 
@@ -143,9 +149,9 @@ async function listAdvertisers(input: Record<string, unknown>, context: TikTokBu
   });
 
   return {
-    advertisers: readTikTokBusinessAdvertisers(dataObject(envelope.data)),
+    advertisers: readTikTokBusinessAdvertisers(recordOrEmpty(envelope.data)),
     requestId: envelope.request_id ?? "",
-    raw: dataObject(envelope.data),
+    raw: recordOrEmpty(envelope.data),
   };
 }
 
@@ -158,11 +164,11 @@ async function listCampaigns(input: Record<string, unknown>, context: TikTokBusi
     page: numberOrUndefined(input.page),
     page_size: numberOrUndefined(input.pageSize),
   });
-  const data = dataObject(envelope.data);
+  const data = recordOrEmpty(envelope.data);
 
   return {
-    campaigns: arrayValue(data.list),
-    pageInfo: dataObject(data.page_info),
+    campaigns: looseArray(data.list),
+    pageInfo: recordOrEmpty(data.page_info),
     requestId: envelope.request_id ?? "",
     raw: data,
   };
@@ -173,7 +179,7 @@ async function checkGmvMaxShopAdUsage(input: Record<string, unknown>, context: T
     advertiser_id: stringValue(input.advertiserId),
     store_id: stringValue(input.storeId),
   });
-  const data = dataObject(envelope.data);
+  const data = recordOrEmpty(envelope.data);
 
   return {
     runningCustomShopAds: booleanValue(data.has_roi1_ads),
@@ -189,7 +195,7 @@ async function getGmvMaxExclusiveAuthorization(input: Record<string, unknown>, c
     store_id: stringValue(input.storeId),
     store_authorized_bc_id: stringValue(input.storeAuthorizedBcId),
   });
-  const data = dataObject(envelope.data);
+  const data = recordOrEmpty(envelope.data);
 
   return compactObject({
     advertiserId: stringOrUndefined(data.advertiser_id),
@@ -213,9 +219,9 @@ async function getGmvMaxIdentities(input: Record<string, unknown>, context: TikT
   });
 
   return {
-    identities: arrayValue(envelope.data?.identity_list).map(normalizeIdentity),
+    identities: looseArray(envelope.data?.identity_list).map(normalizeIdentity),
     requestId: envelope.request_id ?? "",
-    raw: dataObject(envelope.data),
+    raw: recordOrEmpty(envelope.data),
   };
 }
 
@@ -234,11 +240,11 @@ async function getGmvMaxVideos(input: Record<string, unknown>, context: TikTokBu
     page: numberOrUndefined(input.page),
     page_size: numberOrUndefined(input.pageSize),
   });
-  const data = dataObject(envelope.data);
+  const data = recordOrEmpty(envelope.data);
 
   return {
-    videos: arrayValue(data.video_list ?? data.list),
-    pageInfo: dataObject(data.page_info),
+    videos: looseArray(data.video_list ?? data.list),
+    pageInfo: recordOrEmpty(data.page_info),
     requestId: envelope.request_id ?? "",
     raw: data,
   };
@@ -255,10 +261,10 @@ async function listGmvMaxOccupiedCustomShopAds(input: Record<string, unknown>, c
       occupied_asset_type: stringValue(input.occupiedAssetType),
     },
   );
-  const data = dataObject(envelope.data);
+  const data = recordOrEmpty(envelope.data);
 
   return {
-    occupiedCustomShopAds: arrayValue(data.occupied_shop_ads ?? data.occupied_custom_shop_ads ?? data.list),
+    occupiedCustomShopAds: looseArray(data.occupied_shop_ads ?? data.occupied_custom_shop_ads ?? data.list),
     requestId: envelope.request_id ?? "",
     raw: data,
   };
@@ -275,10 +281,10 @@ async function getGmvMaxCustomAnchorVideoList(input: Record<string, unknown>, co
     },
     "v2.0",
   );
-  const data = dataObject(envelope.data);
+  const data = recordOrEmpty(envelope.data);
 
   return {
-    customAnchorVideos: arrayValue(data.custom_anchor_video_list ?? data.anchor_video_list ?? data.list),
+    customAnchorVideos: looseArray(data.custom_anchor_video_list ?? data.anchor_video_list ?? data.list),
     requestId: envelope.request_id ?? "",
     raw: data,
   };
@@ -298,11 +304,11 @@ async function getGmvMaxShopVideoAnchors(input: Record<string, unknown>, context
     },
     "v2.0",
   );
-  const data = dataObject(envelope.data);
+  const data = recordOrEmpty(envelope.data);
 
   return {
-    videoAnchors: arrayValue(data.video_anchor_list ?? data.video_anchors ?? data.list),
-    pageInfo: dataObject(data.page_info),
+    videoAnchors: looseArray(data.video_anchor_list ?? data.video_anchors ?? data.list),
+    pageInfo: recordOrEmpty(data.page_info),
     requestId: envelope.request_id ?? "",
     raw: data,
   };
@@ -317,9 +323,9 @@ async function getGmvMaxCampaignInfo(input: Record<string, unknown>, context: Ti
   });
 
   return {
-    campaign: dataObject(envelope.data?.gmv_max_data),
+    campaign: recordOrEmpty(envelope.data?.gmv_max_data),
     requestId: envelope.request_id ?? "",
-    raw: dataObject(envelope.data),
+    raw: recordOrEmpty(envelope.data),
   };
 }
 
@@ -354,7 +360,7 @@ async function getGmvMaxBidRecommendation(input: Record<string, unknown>, contex
     item_group_ids: optionalStringArrayValue(input.itemGroupIds),
     identity_id: stringOrUndefined(input.identityId),
   });
-  const data = dataObject(envelope.data);
+  const data = recordOrEmpty(envelope.data);
 
   return {
     budget: data.budget,
@@ -381,12 +387,12 @@ async function getGmvMaxReport(input: Record<string, unknown>, context: TikTokBu
     page_size: numberOrUndefined(input.pageSize),
     context_info: normalizeContextInfo(input.contextInfo),
   });
-  const data = dataObject(envelope.data);
+  const data = recordOrEmpty(envelope.data);
 
   return {
-    rows: arrayValue(data.list),
-    pageInfo: dataObject(data.page_info),
-    totalMetrics: dataObject(data.total_metrics),
+    rows: looseArray(data.list),
+    pageInfo: recordOrEmpty(data.page_info),
+    totalMetrics: recordOrEmpty(data.total_metrics),
     requestId: envelope.request_id ?? "",
     raw: data,
   };
@@ -512,9 +518,9 @@ function normalizeProviderScope(value: string) {
 }
 
 function readTikTokBusinessAdvertisers(data: { list?: unknown[]; advertiser_list?: unknown[] }) {
-  return arrayValue(data.list ?? data.advertiser_list)
+  return looseArray(data.list ?? data.advertiser_list)
     .map((item) => {
-      const record = dataObject(item);
+      const record = recordOrEmpty(item);
       const advertiserId = stringValue(record.advertiser_id);
       if (!advertiserId) {
         return null;
@@ -550,7 +556,7 @@ function buildTikTokBusinessUrl(
 }
 
 function normalizeStore(item: unknown) {
-  const record = dataObject(item);
+  const record = recordOrEmpty(item);
   return compactObject({
     storeId: stringValue(record.store_id),
     storeName: stringValue(record.store_name),
@@ -567,7 +573,7 @@ function normalizeStore(item: unknown) {
 }
 
 function normalizeIdentity(item: unknown) {
-  const record = dataObject(item);
+  const record = recordOrEmpty(item);
   return compactObject({
     identityId: stringValue(record.identity_id),
     identityType: stringOrUndefined(record.identity_type),
@@ -587,14 +593,14 @@ function normalizeIdentity(item: unknown) {
 
 function normalizeSessionEnvelope(envelope: TikTokBusinessEnvelope<{ session_list?: unknown[] }>) {
   return {
-    sessions: arrayValue(envelope.data?.session_list).map(normalizeSession),
+    sessions: looseArray(envelope.data?.session_list).map(normalizeSession),
     requestId: envelope.request_id ?? "",
-    raw: dataObject(envelope.data),
+    raw: recordOrEmpty(envelope.data),
   };
 }
 
 function normalizeSession(item: unknown) {
-  const record = dataObject(item);
+  const record = recordOrEmpty(item);
   return compactObject({
     sessionId: stringValue(record.id),
     campaignId: stringOrUndefined(record.campaign_id),
@@ -604,7 +610,7 @@ function normalizeSession(item: unknown) {
     scheduleStartTime: record.schedule_start_time,
     scheduleEndTime: record.schedule_end_time,
     productList: Array.isArray(record.product_list)
-      ? record.product_list.map((product) => dataObject(product))
+      ? record.product_list.map((product) => recordOrEmpty(product))
       : undefined,
     itemId: stringOrUndefined(record.item_id),
     raw: record,
@@ -674,23 +680,15 @@ function normalizeContextInfo(value: unknown) {
   });
 }
 
-function dataObject(value: unknown): Record<string, unknown> {
-  return optionalRecord(value) ?? {};
-}
-
-function arrayValue(value: unknown) {
-  return Array.isArray(value) ? value : [];
-}
-
 function optionalObjectArrayValue(value: unknown) {
-  const values = arrayValue(value)
-    .map(dataObject)
+  const values = looseArray(value)
+    .map(recordOrEmpty)
     .filter((item) => Object.keys(item).length > 0);
   return values.length > 0 ? values : undefined;
 }
 
 function objectArrayValue(value: unknown) {
-  return arrayValue(value).map(dataObject).filter(Boolean);
+  return looseArray(value).map(recordOrEmpty).filter(Boolean);
 }
 
 function stringArrayValue(value: unknown) {

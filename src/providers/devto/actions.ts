@@ -37,23 +37,10 @@ const articleBodyFields: Record<string, JsonSchema> = {
   organizationId: s.nullableInteger("The optional organization identifier.", { minimum: 1 }),
 };
 
-export type DevtoActionName =
-  | "list_articles"
-  | "list_latest_articles"
-  | "get_article"
-  | "get_article_by_path"
-  | "list_organization_articles"
-  | "get_organization"
-  | "list_videos"
-  | "list_tags"
-  | "get_current_user"
-  | "list_my_articles"
-  | "create_article"
-  | "update_article";
-
 export const devtoActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_articles",
+    operationType: "read",
     description: "List published Dev.to articles with query filters.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -74,6 +61,7 @@ export const devtoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_latest_articles",
+    operationType: "read",
     description: "List latest Dev.to articles.",
     requiredScopes: [],
     inputSchema: s.object("The input parameters for listing the latest Dev.to articles.", pageFields, {
@@ -83,6 +71,7 @@ export const devtoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_article",
+    operationType: "read",
     description: "Get a Dev.to article by numeric id.",
     requiredScopes: [],
     inputSchema: s.object("The input parameters for fetching an article by id.", { articleId: idInput }),
@@ -90,6 +79,7 @@ export const devtoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_article_by_path",
+    operationType: "read",
     description: "Get a Dev.to article by username and slug.",
     requiredScopes: [],
     inputSchema: s.object("The input parameters for fetching an article by path.", {
@@ -100,6 +90,7 @@ export const devtoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_organization_articles",
+    operationType: "read",
     description: "List articles under a Dev.to organization.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -111,6 +102,7 @@ export const devtoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_organization",
+    operationType: "read",
     description: "Get Dev.to organization profile.",
     requiredScopes: [],
     inputSchema: s.object("The input parameters for fetching an organization profile.", {
@@ -120,6 +112,7 @@ export const devtoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_videos",
+    operationType: "read",
     description: "List Dev.to videos.",
     requiredScopes: [],
     inputSchema: s.object("The input parameters for listing Dev.to videos.", pageFields, {
@@ -129,6 +122,7 @@ export const devtoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tags",
+    operationType: "read",
     description: "List Dev.to tags.",
     requiredScopes: [],
     inputSchema: s.object("The input parameters for listing Dev.to tags.", pageFields, {
@@ -138,6 +132,7 @@ export const devtoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Get the current authenticated Dev.to user profile.",
     requiredScopes: [],
     inputSchema: noInput,
@@ -145,6 +140,7 @@ export const devtoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_my_articles",
+    operationType: "read",
     description: "List current user's own Dev.to articles by status.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -159,6 +155,7 @@ export const devtoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_article",
+    operationType: "write",
     description: "Create a new Dev.to article.",
     requiredScopes: [],
     inputSchema: s.object("The input parameters for creating an article.", articleBodyFields, {
@@ -169,6 +166,7 @@ export const devtoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_article",
+    operationType: "write",
     description: "Update an existing Dev.to article.",
     requiredScopes: [],
     inputSchema: s.object(

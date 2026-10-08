@@ -1,20 +1,14 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { HelpscoutDocsActionName } from "./actions.ts";
 
-import {
-  compactObject,
-  optionalBoolean,
-  optionalNumber,
-  optionalRecord,
-  optionalString,
-  requiredString,
-} from "../../core/cast.ts";
+import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 const service = "helpscout_docs";
@@ -26,7 +20,7 @@ type HelpscoutDocsActionHandler = (
   context: HelpscoutDocsActionContext,
 ) => Promise<unknown>;
 
-export const helpscoutDocsActionHandlers: Record<HelpscoutDocsActionName, HelpscoutDocsActionHandler> = {
+export const helpscoutDocsActionHandlers: ProviderActionHandlers<"helpscout_docs", HelpscoutDocsActionHandler> = {
   list_sites(input, context) {
     return executePagedRequest("sites", "sites", input, context);
   },
@@ -34,7 +28,7 @@ export const helpscoutDocsActionHandlers: Record<HelpscoutDocsActionName, Helpsc
     return executePagedRequest("collections", "collections", input, context);
   },
   list_categories(input, context) {
-    const collectionId = readRequiredString(input.collectionId, "collectionId");
+    const collectionId = requiredInputString(input.collectionId, "collectionId");
     return executePagedRequest(
       `collections/${encodeURIComponent(collectionId)}/categories`,
       "categories",
@@ -60,7 +54,7 @@ export const helpscoutDocsActionHandlers: Record<HelpscoutDocsActionName, Helpsc
       input,
       context,
       compactObject({
-        query: readRequiredString(input.query, "query"),
+        query: requiredInputString(input.query, "query"),
         collectionId: optionalString(input.collectionId),
         siteId: optionalString(input.siteId),
         visibility: optionalString(input.visibility),
@@ -68,7 +62,7 @@ export const helpscoutDocsActionHandlers: Record<HelpscoutDocsActionName, Helpsc
     );
   },
   async get_article(input, context): Promise<unknown> {
-    const articleIdOrNumber = readRequiredString(input.articleIdOrNumber, "articleIdOrNumber");
+    const articleIdOrNumber = requiredInputString(input.articleIdOrNumber, "articleIdOrNumber");
     const payload = await helpscoutDocsGetJson(
       `articles/${encodeURIComponent(articleIdOrNumber)}`,
       context,
@@ -251,10 +245,6 @@ function extractHelpScoutDocsErrorMessage(payload: unknown): string | undefined 
     return undefined;
   }
   return optionalString(object.message) ?? optionalString(object.error) ?? optionalString(object.Message);
-}
-
-function readRequiredString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function readOptionalQueryNumber(value: unknown): string | undefined {

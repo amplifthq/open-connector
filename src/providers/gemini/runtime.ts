@@ -2,12 +2,12 @@ import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import { jsonObject, readBoundedResponseBytes } from "../../core/request.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { isAbortLikeError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 export const geminiApiBaseUrl = "https://generativelanguage.googleapis.com/v1beta";
 export const geminiDefaultTextModel = "gemini-2.5-flash";
 export const geminiDefaultEmbeddingModel = "text-embedding-004";
-export const geminiDefaultTokenCountModel = "gemini-2.0-flash";
+export const geminiDefaultTokenCountModel = "gemini-3.6-flash";
 export const geminiDefaultImageModel = "gemini-3-pro-image-preview";
 export const geminiDefaultVideoModel = "veo-3.0-generate-001";
 export const geminiDefaultVideoPollIntervalMs = 10_000;
@@ -698,10 +698,6 @@ function shouldSendGeminiApiKey(url: string): boolean {
 
 function isGoogleHost(hostname: string): boolean {
   return hostname === "googleapis.com" || hostname.endsWith(".googleapis.com");
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
 }
 
 async function createTransitDownloadableFile(

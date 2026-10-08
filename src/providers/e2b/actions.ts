@@ -151,11 +151,10 @@ const sandboxIdInputSchema = s.object("The input payload for selecting an E2B sa
   sandboxID: sandboxIdSchema,
 });
 
-export type E2bActionName = "create_sandbox" | "list_sandboxes" | "get_sandbox" | "delete_sandbox";
-
 export const e2bActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "create_sandbox",
+    operationType: "write",
     description: "Create an E2B sandbox from a template.",
     inputSchema: createSandboxInputSchema,
     outputSchema: s.object("The response returned when creating an E2B sandbox.", {
@@ -164,6 +163,7 @@ export const e2bActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_sandboxes",
+    operationType: "read",
     description: "List E2B sandboxes visible to the current API key.",
     inputSchema: listSandboxesInputSchema,
     outputSchema: s.object("The response returned when listing E2B sandboxes.", {
@@ -172,6 +172,7 @@ export const e2bActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_sandbox",
+    operationType: "read",
     description: "Get one E2B sandbox by sandbox identifier.",
     inputSchema: sandboxIdInputSchema,
     outputSchema: s.object("The response returned when retrieving an E2B sandbox.", {
@@ -180,6 +181,7 @@ export const e2bActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_sandbox",
+    operationType: "destructive",
     description: "Kill an E2B sandbox by sandbox identifier.",
     inputSchema: sandboxIdInputSchema,
     outputSchema: s.object("The response returned after deleting an E2B sandbox.", {

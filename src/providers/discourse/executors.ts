@@ -4,30 +4,30 @@ import type {
   ExecutionContext,
   ProviderExecutors,
   ProviderProxyExecutor,
-  ProxyExecutionResult,
 } from "../../core/types.ts";
-import type { DiscourseActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { createHash } from "node:crypto";
-import { compactObject, optionalBoolean, optionalInteger, optionalString } from "../../core/cast.ts";
+import {
+  compactObject,
+  optionalBoolean,
+  optionalBooleanOrNull,
+  optionalInteger,
+  optionalString,
+  rawStringOrNull,
+} from "../../core/cast.ts";
 import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
 import {
   createProviderFetch,
-  createProviderProxyUrl,
   createProviderTimeout,
   defineProviderExecutors,
-  normalizeProviderProxyHeaders,
+  defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
-  readProviderProxyErrorMessage,
-  readProviderProxyResponse,
   requireApiKeyCredential,
-  toProviderProxyError,
 } from "../provider-runtime.ts";
 
 export const discourseDefaultRequestTimeoutMs = 30_000;
-
-const discourseProxyFetch = createProviderFetch({ allowPrivateNetwork: isPrivateNetworkAccessAllowed });
 
 type DiscourseHttpMethod = "GET" | "POST";
 type DiscoursePhase = "validate" | "execute";
@@ -47,7 +47,7 @@ interface DiscourseActionContext {
 
 type DiscourseActionHandler = (input: Record<string, unknown>, context: DiscourseActionContext) => Promise<unknown>;
 
-export const discourseActionHandlers: Record<DiscourseActionName, DiscourseActionHandler> = {
+export const discourseActionHandlers: ProviderActionHandlers<"discourse", DiscourseActionHandler> = {
   async list_latest_topics(input: Record<string, unknown>, context: DiscourseActionContext): Promise<unknown> {
     const payload = await requestDiscourseJson({
       credential: context.credential,
@@ -209,42 +209,33 @@ export const executors: ProviderExecutors = defineProviderExecutors<DiscourseAct
   allowPrivateNetwork: isPrivateNetworkAccessAllowed,
 });
 
-export const proxy: ProviderProxyExecutor = async (input, context): Promise<ProxyExecutionResult> => {
-  try {
-    const credential = await requireApiKeyCredential(context, "discourse");
-    const discourseCredential: DiscourseCredential = {
-      baseUrl: normalizeDiscourseBaseUrl(credential.values.baseUrl ?? credential.metadata.baseUrl),
-      apiKey: credential.apiKey,
-      apiUsername: requireCredentialField(
-        credential.values.apiUsername ?? credential.metadata.apiUsername,
-        "apiUsername",
-      ),
-    };
-    const url = createProviderProxyUrl(discourseCredential.baseUrl, input.endpoint, input.query);
-    const headers = normalizeProviderProxyHeaders(input.headers);
-    headers.set("api-key", discourseCredential.apiKey);
-    headers.set("api-username", discourseCredential.apiUsername);
-    headers.set("user-agent", providerUserAgent);
-    if (input.body !== undefined && !headers.has("content-type") && typeof input.body !== "string") {
-      headers.set("content-type", "application/json");
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service: "discourse",
+  baseUrl: async (context) => (await readDiscourseProxyCredential(context)).baseUrl,
+  auth: { type: "api_key_header", name: "api-key" },
+  allowPrivateNetwork: isPrivateNetworkAccessAllowed,
+  customizeRequest({ headers, credential }) {
+    if (credential?.authType !== "api_key") {
+      return;
     }
+    headers.set(
+      "api-username",
+      requireCredentialField(credential.values.apiUsername ?? credential.metadata.apiUsername, "apiUsername"),
+    );
+  },
+});
 
-    const response = await discourseProxyFetch(url, {
-      method: input.method,
-      headers,
-      body:
-        input.body === undefined ? undefined : typeof input.body === "string" ? input.body : JSON.stringify(input.body),
-      signal: context.signal,
-    });
-    if (!response.ok) {
-      const text = await readProviderProxyErrorMessage(response, "");
-      throw new ProviderRequestError(response.status, text || `provider request failed with HTTP ${response.status}`);
-    }
-    return { ok: true, response: await readProviderProxyResponse(response) };
-  } catch (error) {
-    return toProviderProxyError(error, "provider request failed");
-  }
-};
+async function readDiscourseProxyCredential(context: ExecutionContext): Promise<DiscourseCredential> {
+  const credential = await requireApiKeyCredential(context, "discourse");
+  return {
+    baseUrl: normalizeDiscourseBaseUrl(credential.values.baseUrl ?? credential.metadata.baseUrl),
+    apiKey: credential.apiKey,
+    apiUsername: requireCredentialField(
+      credential.values.apiUsername ?? credential.metadata.apiUsername,
+      "apiUsername",
+    ),
+  };
+}
 
 export const credentialValidators: CredentialValidators = {
   apiKey(input, { fetcher, signal }) {
@@ -497,9 +488,9 @@ function normalizeTopicListPayload(payload: unknown) {
   const record = requirePayloadObject(payload, "Discourse topic list response");
   const topicList = requirePayloadObject(record.topic_list, "Discourse topic_list response");
   return {
-    canCreateTopic: toNullableBoolean(topicList.can_create_topic),
+    canCreateTopic: optionalBooleanOrNull(topicList.can_create_topic),
     perPage: toNullableInteger(topicList.per_page),
-    moreTopicsUrl: toNullableString(topicList.more_topics_url),
+    moreTopicsUrl: rawStringOrNull(topicList.more_topics_url),
     topics: readPayloadObjectArray(topicList.topics, "Discourse topics").map(normalizeTopicSummary),
     users: readOptionalPayloadObjectArray(record.users).map(normalizeUserSummary),
     raw: record,
@@ -511,22 +502,22 @@ function normalizeTopicSummary(value: unknown) {
   return {
     id: requirePayloadInteger(record.id, "Discourse topic id"),
     title: requirePayloadString(record.title, "Discourse topic title"),
-    fancyTitle: toNullableString(record.fancy_title),
-    slug: toNullableString(record.slug),
+    fancyTitle: rawStringOrNull(record.fancy_title),
+    slug: rawStringOrNull(record.slug),
     postsCount: toNullableInteger(record.posts_count),
     replyCount: toNullableInteger(record.reply_count),
     highestPostNumber: toNullableInteger(record.highest_post_number),
-    createdAt: toNullableString(record.created_at),
-    lastPostedAt: toNullableString(record.last_posted_at),
-    bumpedAt: toNullableString(record.bumped_at),
+    createdAt: rawStringOrNull(record.created_at),
+    lastPostedAt: rawStringOrNull(record.last_posted_at),
+    bumpedAt: rawStringOrNull(record.bumped_at),
     categoryId: toNullableInteger(record.category_id),
     views: toNullableInteger(record.views),
     likeCount: toNullableInteger(record.like_count),
-    pinned: toNullableBoolean(record.pinned),
-    closed: toNullableBoolean(record.closed),
-    archived: toNullableBoolean(record.archived),
-    visible: toNullableBoolean(record.visible),
-    lastPosterUsername: toNullableString(record.last_poster_username),
+    pinned: optionalBooleanOrNull(record.pinned),
+    closed: optionalBooleanOrNull(record.closed),
+    archived: optionalBooleanOrNull(record.archived),
+    visible: optionalBooleanOrNull(record.visible),
+    lastPosterUsername: rawStringOrNull(record.last_poster_username),
     raw: record,
   };
 }
@@ -536,15 +527,15 @@ function normalizeCategorySummary(value: unknown) {
   return {
     id: requirePayloadInteger(record.id, "Discourse category id"),
     name: requirePayloadString(record.name, "Discourse category name"),
-    slug: toNullableString(record.slug),
-    color: toNullableString(record.color),
-    textColor: toNullableString(record.text_color),
-    description: toNullableString(record.description_text ?? record.description),
+    slug: rawStringOrNull(record.slug),
+    color: rawStringOrNull(record.color),
+    textColor: rawStringOrNull(record.text_color),
+    description: rawStringOrNull(record.description_text ?? record.description),
     topicCount: toNullableInteger(record.topic_count),
     postCount: toNullableInteger(record.post_count),
     position: toNullableInteger(record.position),
     parentCategoryId: toNullableInteger(record.parent_category_id),
-    readRestricted: toNullableBoolean(record.read_restricted),
+    readRestricted: optionalBooleanOrNull(record.read_restricted),
     raw: record,
   };
 }
@@ -555,11 +546,11 @@ function normalizeTopicDetail(payload: unknown) {
   return {
     id: requirePayloadInteger(record.id, "Discourse topic id"),
     title: requirePayloadString(record.title, "Discourse topic title"),
-    fancyTitle: toNullableString(record.fancy_title),
-    slug: toNullableString(record.slug),
+    fancyTitle: rawStringOrNull(record.fancy_title),
+    slug: rawStringOrNull(record.slug),
     postsCount: toNullableInteger(record.posts_count),
     categoryId: toNullableInteger(record.category_id),
-    createdAt: toNullableString(record.created_at),
+    createdAt: rawStringOrNull(record.created_at),
     posts: readOptionalPayloadObjectArray(postStream?.posts).map(normalizePostSummary),
     details: readOptionalPayloadObject(record.details) ?? {},
     raw: record,
@@ -571,15 +562,15 @@ function normalizePostSummary(value: unknown) {
   return {
     id: requirePayloadInteger(record.id, "Discourse post id"),
     topicId: toNullableInteger(record.topic_id),
-    topicSlug: toNullableString(record.topic_slug),
+    topicSlug: rawStringOrNull(record.topic_slug),
     postNumber: toNullableInteger(record.post_number),
     replyToPostNumber: toNullableInteger(record.reply_to_post_number),
-    username: toNullableString(record.username),
-    displayUsername: toNullableString(record.display_username),
-    name: toNullableString(record.name),
-    createdAt: toNullableString(record.created_at),
-    updatedAt: toNullableString(record.updated_at),
-    cooked: toNullableString(record.cooked),
+    username: rawStringOrNull(record.username),
+    displayUsername: rawStringOrNull(record.display_username),
+    name: rawStringOrNull(record.name),
+    createdAt: rawStringOrNull(record.created_at),
+    updatedAt: rawStringOrNull(record.updated_at),
+    cooked: rawStringOrNull(record.cooked),
     postType: toNullableInteger(record.post_type),
     raw: record,
   };
@@ -589,9 +580,9 @@ function normalizeUserSummary(value: unknown) {
   const record = requirePayloadObject(value, "Discourse user");
   return {
     id: toNullableInteger(record.id),
-    username: toNullableString(record.username),
-    name: toNullableString(record.name),
-    avatarTemplate: toNullableString(record.avatar_template),
+    username: rawStringOrNull(record.username),
+    name: rawStringOrNull(record.name),
+    avatarTemplate: rawStringOrNull(record.avatar_template),
     raw: record,
   };
 }
@@ -681,10 +672,6 @@ function requirePayloadInteger(value: unknown, fieldName: string) {
   return value as number;
 }
 
-function toNullableString(value: unknown) {
-  return typeof value === "string" ? value : null;
-}
-
 function toNullableInteger(value: unknown) {
   if (Number.isInteger(value)) {
     return value as number;
@@ -699,10 +686,6 @@ function toNullableInteger(value: unknown) {
   }
 
   return null;
-}
-
-function toNullableBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : null;
 }
 
 function hashValue(value: string) {

@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { InstantlyAiActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -10,7 +10,12 @@ import {
   optionalRecord,
   optionalString,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "instantly_ai";
 const instantlyAiApiBaseUrl = "https://api.instantly.ai";
@@ -21,7 +26,7 @@ type InstantlyAiMethod = "GET" | "POST";
 type InstantlyAiContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type InstantlyAiActionHandler = (input: Record<string, unknown>, context: InstantlyAiContext) => Promise<unknown>;
 
-export const instantlyAiActionHandlers: Record<InstantlyAiActionName, InstantlyAiActionHandler> = {
+export const instantlyAiActionHandlers: ProviderActionHandlers<"instantly_ai", InstantlyAiActionHandler> = {
   list_campaigns(input, context) {
     return instantlyAiGetJson(buildListCampaignsPath(input), context, "execute");
   },
@@ -39,6 +44,16 @@ export const instantlyAiActionHandlers: Record<InstantlyAiActionName, InstantlyA
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, instantlyAiActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: instantlyAiApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

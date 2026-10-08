@@ -1,18 +1,35 @@
-import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidationResult, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ReadwiseActionName } from "./actions.ts";
 
-import { optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { looseArray, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { compactJson, queryParams } from "../../core/request.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  ProviderRequestError,
+  providerUserAgent,
+  requiredInputString,
+} from "../provider-runtime.ts";
 
 const service = "readwise";
 const readwiseApiBaseUrl = "https://readwise.io/api";
 const validationPath = "/v2/auth/";
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: readwiseApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Token " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+    if (!headers.has("content-type")) headers.set("content-type", "application/json");
+  },
+});
+
 type ReadwiseActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const readwiseActionHandlers: Record<ReadwiseActionName, ReadwiseActionHandler> = {
+export const readwiseActionHandlers: ProviderActionHandlers<"readwise", ReadwiseActionHandler> = {
   async create_highlights(input, context) {
     const payload = await requestReadwiseJson({
       path: "/v2/highlights/",
@@ -21,7 +38,7 @@ export const readwiseActionHandlers: Record<ReadwiseActionName, ReadwiseActionHa
       context,
       mode: "execute",
     });
-    const books = readArray(payload);
+    const books = looseArray(payload);
     return {
       books: books.map(normalizeBook),
       raw: books,
@@ -41,7 +58,7 @@ export const readwiseActionHandlers: Record<ReadwiseActionName, ReadwiseActionHa
     return {
       count: optionalInteger(record.count) ?? null,
       nextPageCursor: optionalString(record.nextPageCursor) ?? null,
-      books: readArray(record.results).map(normalizeBook),
+      books: looseArray(record.results).map(normalizeBook),
       raw: record,
     };
   },
@@ -63,7 +80,7 @@ export const readwiseActionHandlers: Record<ReadwiseActionName, ReadwiseActionHa
       count: optionalInteger(record.count) ?? null,
       next: optionalString(record.next) ?? null,
       previous: optionalString(record.previous) ?? null,
-      books: readArray(record.results).map(normalizeBook),
+      books: looseArray(record.results).map(normalizeBook),
       raw: record,
     };
   },
@@ -84,7 +101,7 @@ export const readwiseActionHandlers: Record<ReadwiseActionName, ReadwiseActionHa
     return {
       count: optionalInteger(record.count) ?? null,
       nextPageCursor: optionalString(record.nextPageCursor) ?? null,
-      documents: readArray(record.results).map(normalizeDocument),
+      documents: looseArray(record.results).map(normalizeDocument),
       raw: record,
     };
   },
@@ -276,7 +293,7 @@ function normalizeBook(value: unknown): Record<string, unknown> {
     source: optionalString(record.source) ?? null,
     numHighlights: optionalInteger(record.num_highlights) ?? optionalInteger(record.numHighlights) ?? null,
     updatedAt: optionalString(record.updated) ?? optionalString(record.updated_at) ?? null,
-    highlights: readArray(record.highlights).map(normalizeHighlight),
+    highlights: looseArray(record.highlights).map(normalizeHighlight),
     raw: record,
   };
 }
@@ -313,16 +330,8 @@ function requireRecord(value: unknown, message: string): Record<string, unknown>
   return record;
 }
 
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
 function readStringArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
   const record = optionalRecord(value);
   return record ? Object.keys(record) : [];
-}
-
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }

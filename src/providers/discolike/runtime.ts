@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { DiscolikeActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -20,14 +20,12 @@ import {
 
 export const discolikeApiBaseUrl = "https://api.discolike.com/v1";
 
-const discolikeDefaultRequestTimeoutMs = 30_000;
-
 type DiscolikePhase = "validate" | "execute";
 type DiscolikeQueryValue = string | number | boolean | readonly string[] | undefined;
 type DiscolikeContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type DiscolikeActionHandler = (input: Record<string, unknown>, context: DiscolikeContext) => Promise<unknown>;
 
-export const discolikeActionHandlers: Record<DiscolikeActionName, DiscolikeActionHandler> = {
+export const discolikeActionHandlers: ProviderActionHandlers<"discolike", DiscolikeActionHandler> = {
   async discover_companies(input, context) {
     const payload = await requestDiscolikeJson({
       path: "/discover",
@@ -163,7 +161,7 @@ async function requestDiscolikeJson(input: {
   context: DiscolikeContext;
   phase: DiscolikePhase;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, discolikeDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const response = await input.context.fetcher(buildDiscolikeUrl(input.path, input.query), {
       method: "GET",

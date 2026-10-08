@@ -1,6 +1,6 @@
 import type { CredentialValidationResult, ExecutionResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { RoamScimActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError, toProviderExecutionError } from "../provider-runtime.ts";
@@ -26,16 +26,7 @@ interface RoamScimRequestInput {
   body?: unknown;
 }
 
-export class RoamScimRequestError extends ProviderRequestError {
-  readonly code: string;
-
-  constructor(code: string, status: number, message: string, details?: unknown) {
-    super(status, message, details);
-    this.code = code;
-  }
-}
-
-export const roamScimActionHandlers: Record<RoamScimActionName, RoamScimActionHandler> = {
+export const roamScimActionHandlers: ProviderActionHandlers<"roam_scim", RoamScimActionHandler> = {
   async get_service_provider_config(_input, context) {
     const payload = await requestRoamScimJson({
       path: serviceProviderConfigPath,
@@ -256,20 +247,6 @@ export async function validateRoamScimCredential(
 }
 
 export function toRoamScimExecutionError(error: unknown): ExecutionResult {
-  if (error instanceof RoamScimRequestError) {
-    return {
-      ok: false,
-      error: {
-        code: error.code,
-        message: error.message,
-        details: {
-          status: error.status,
-          details: error.details,
-        },
-      },
-    };
-  }
-
   return toProviderExecutionError(error, "Roam SCIM request failed");
 }
 
@@ -343,20 +320,15 @@ function createRoamScimError(response: Response, payload: unknown, phase: RoamSc
     response.statusText ??
     `Roam SCIM request failed with status ${response.status}`;
   if (response.status === 401 || response.status === 403) {
-    return new RoamScimRequestError(
-      phase === "validate" ? "invalid_input" : "credential_expired",
-      phase === "validate" ? 400 : response.status,
-      message,
-      payload,
-    );
+    return new ProviderRequestError(phase === "validate" ? 400 : response.status, message, payload);
   }
   if (response.status === 400 || response.status === 404 || response.status === 409) {
-    return new RoamScimRequestError("invalid_input", response.status, message, payload);
+    return new ProviderRequestError(response.status, message, payload, "invalid_input");
   }
   if (response.status === 429) {
-    return new RoamScimRequestError("rate_limited", 429, message, payload);
+    return new ProviderRequestError(429, message, payload, "rate_limited");
   }
-  return new RoamScimRequestError("provider_error", response.status || 502, message, payload);
+  return new ProviderRequestError(response.status || 502, message, payload, "provider_error");
 }
 
 function extractRoamScimErrorMessage(payload: unknown): string | undefined {
@@ -452,24 +424,28 @@ function normalizeGroup(payload: unknown): Record<string, unknown> {
 function requireObjectPayload(payload: unknown, label: string): Record<string, unknown> {
   const object = optionalRecord(payload);
   if (!object) {
-    throw new RoamScimRequestError("provider_error", 502, `${label} response was not an object`, payload);
+    throw new ProviderRequestError(502, `${label} response was not an object`, payload, "provider_error");
   }
 
   return object;
 }
 
 function readRequiredString(input: Record<string, unknown>, key: string): string {
-  return requiredString(input[key], key, (message) => new RoamScimRequestError("invalid_input", 400, message));
+  return requiredString(
+    input[key],
+    key,
+    (message) => new ProviderRequestError(400, message, undefined, "invalid_input"),
+  );
 }
 
 function readStringArray(value: unknown, key: string): string[] {
   if (!Array.isArray(value)) {
-    throw new RoamScimRequestError("invalid_input", 400, `${key} must be an array`);
+    throw new ProviderRequestError(400, `${key} must be an array`, undefined, "invalid_input");
   }
 
   return value.map((item) => {
     if (typeof item !== "string" || !item.trim()) {
-      throw new RoamScimRequestError("invalid_input", 400, `${key} must contain only non-empty strings`);
+      throw new ProviderRequestError(400, `${key} must contain only non-empty strings`, undefined, "invalid_input");
     }
 
     return item.trim();

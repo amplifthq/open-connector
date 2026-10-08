@@ -1,3 +1,5 @@
+import type { ProviderActionHandlerSubset } from "../provider-runtime.ts";
+
 import {
   compactObject,
   optionalBoolean,
@@ -8,20 +10,14 @@ import {
   requiredString,
   requiredStringArray,
 } from "../../core/cast.ts";
-import { queryFlag, queryParams } from "../../core/request.ts";
+import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed, queryFlag, queryParams } from "../../core/request.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
 } from "../provider-runtime.ts";
-
-const homeAssistantRequestTimeoutMs = 30_000;
-
-/** Input guard failures surface as 400s, matching the other Home Assistant input checks. */
-export function badHomeAssistantRequest(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
 
 export interface HomeAssistantActionContext {
   apiKey: string;
@@ -35,7 +31,7 @@ export type HomeAssistantActionHandler = (
   context: HomeAssistantActionContext,
 ) => Promise<unknown>;
 
-export const homeAssistantActionHandlers: Record<string, HomeAssistantActionHandler> = {
+export const homeAssistantActionHandlers: ProviderActionHandlerSubset<"home_assistant", HomeAssistantActionHandler> = {
   async get_config(_input, context) {
     return {
       config: await requestHomeAssistantJson({
@@ -220,11 +216,11 @@ function presenceFlag(value: unknown): string | undefined {
  * unusable.
  */
 function readHistoryEntityIds(value: unknown): string {
-  const entityIds = requiredStringArray(value, "entityIds", badHomeAssistantRequest)
+  const entityIds = requiredStringArray(value, "entityIds", providerInputError)
     .map((entityId) => entityId.trim())
     .filter((entityId) => entityId.length > 0);
   if (entityIds.length === 0) {
-    throw badHomeAssistantRequest("entityIds must contain at least one entity id");
+    throw providerInputError("entityIds must contain at least one entity id");
   }
   return entityIds.join(",");
 }
@@ -278,7 +274,7 @@ export async function requestHomeAssistantText(input: HomeAssistantRequest): Pro
 }
 
 async function requestHomeAssistant(input: HomeAssistantRequest): Promise<Response> {
-  const timeout = createProviderTimeout(input.context.signal, homeAssistantRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const response = await input.context.fetcher(buildHomeAssistantUrl(input), {
       method: input.method,
@@ -393,20 +389,16 @@ function normalizeServiceCallResponse(payload: unknown): {
   };
 }
 
-function normalizeBaseUrl(value: unknown): string {
+function normalizeBaseUrl(value: unknown, allowPrivateNetwork: boolean = isPrivateNetworkAccessAllowed()): string {
   const raw = typeof value === "string" ? value.trim() : "";
   if (!raw) {
     throw new ProviderRequestError(400, "baseUrl is required");
   }
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    throw new ProviderRequestError(400, "baseUrl must be a valid http(s) URL");
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new ProviderRequestError(400, "baseUrl must be a valid http(s) URL");
-  }
+  const url = assertPublicHttpUrl(raw, {
+    fieldName: "baseUrl",
+    createError: (message) => new ProviderRequestError(400, message),
+    allowPrivateNetwork,
+  });
   if (url.username || url.password || url.search || url.hash) {
     throw new ProviderRequestError(400, "baseUrl must be a clean instance root URL");
   }

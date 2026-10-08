@@ -1,13 +1,13 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRawString, optionalRecord } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 export const zenscrapeApiBaseUrl = "https://app.zenscrape.com/api/v1";
@@ -18,7 +18,10 @@ const maxNonJsonErrorMessageLength = 300;
 
 type ZenscrapePhase = "validate" | "execute";
 
-export const zenscrapeActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const zenscrapeActionHandlers: ProviderActionHandlers<
+  "zenscrape",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   async fetch_url(input, context) {
     const forwardHeaders = buildForwardHeaders(input);
     const { response, bodyText } = await requestZenscrapeRaw(
@@ -64,34 +67,25 @@ async function requestZenscrapeRaw(
   context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
   phase: ZenscrapePhase,
 ): Promise<{ response: Response; bodyText: string }> {
-  const timeout = createProviderTimeout(context.signal, requestTimeoutMs);
-  try {
-    const response = await context.fetcher(buildZenscrapeUrl(query, context.apiKey), {
-      method: "GET",
-      headers: {
-        accept: "*/*",
-        "user-agent": providerUserAgent,
-        ...forwardHeaders,
-      },
-      signal: timeout.signal,
-    });
-    const bodyText = await readProviderTextBody(response, "Zenscrape response", maxResponseBytes);
-    if (!response.ok) {
-      throw createZenscrapeError(response.status, bodyText, phase);
-    }
-    return { response, bodyText };
-  } catch (error) {
-    if (error instanceof ProviderRequestError) throw error;
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Zenscrape request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Zenscrape request failed: ${error.message}` : "Zenscrape request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  return runProviderRequest(
+    { signal: context.signal, timeoutMs: requestTimeoutMs, label: "Zenscrape" },
+    async (signal) => {
+      const response = await context.fetcher(buildZenscrapeUrl(query, context.apiKey), {
+        method: "GET",
+        headers: {
+          accept: "*/*",
+          "user-agent": providerUserAgent,
+          ...forwardHeaders,
+        },
+        signal,
+      });
+      const bodyText = await readProviderTextBody(response, "Zenscrape response", maxResponseBytes);
+      if (!response.ok) {
+        throw createZenscrapeError(response.status, bodyText, phase);
+      }
+      return { response, bodyText };
+    },
+  );
 }
 
 function buildZenscrapeUrl(query: Record<string, string | number | boolean | undefined>, apiKey: string): URL {

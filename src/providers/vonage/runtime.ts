@@ -1,18 +1,19 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import { optionalBoolean, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
   readProviderJsonBody,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 export const vonageApiBaseUrl = "https://rest.nexmo.com";
-const vonageRequestTimeoutMs = 30_000;
+export const vonageReportsApiBaseUrl = "https://api.nexmo.com";
 const invalidInputSmsStatuses = new Set(["2", "3", "6", "7", "12", "15", "17", "22", "23", "29", "33"]);
 
 export interface VonageContext {
@@ -28,11 +29,13 @@ interface VonageRequestInput {
   phase: "validate" | "execute";
   method?: "GET" | "POST";
   body?: URLSearchParams;
+  baseUrl?: string;
+  query?: Record<string, string | number | boolean | undefined>;
 }
 
 type VonageHandler = (input: Record<string, unknown>, context: VonageContext) => Promise<unknown>;
 
-export const vonageActionHandlers: Record<string, VonageHandler> = {
+export const vonageActionHandlers: ProviderActionHandlers<"vonage", VonageHandler> = {
   async get_balance(_input, context) {
     return normalizeBalance(await requestVonage({ path: "/account/get-balance", context, phase: "execute" }));
   },
@@ -48,6 +51,54 @@ export const vonageActionHandlers: Record<string, VonageHandler> = {
     appendOptionalFormField(body, "client-ref", optionalString(input.clientRef));
     return normalizeSms(await requestVonage({ path: "/sms/json", method: "POST", body, context, phase: "execute" }));
   },
+  async list_sms_records(input, context) {
+    const direction = requiredString(input.direction, "direction", providerInputError);
+    validateShowConcatenated(direction, input.showConcatenated);
+    const payload = await requestVonage({
+      baseUrl: vonageReportsApiBaseUrl,
+      path: "/v2/reports/records",
+      context,
+      phase: "execute",
+      query: {
+        product: "SMS",
+        account_id: context.apiKey,
+        direction,
+        date_start: optionalString(input.dateStart),
+        date_end: optionalString(input.dateEnd),
+        cursor: optionalString(input.cursor),
+        iv: optionalString(input.iv),
+        status: optionalString(input.status),
+        from: optionalString(input.from),
+        to: optionalString(input.to),
+        country: optionalString(input.country),
+        network: optionalString(input.network),
+        account_ref: optionalString(input.accountRef),
+        include_message: optionalBoolean(input.includeMessage),
+        show_concatenated: optionalBoolean(input.showConcatenated),
+      },
+    });
+    return normalizeSmsReport(payload);
+  },
+  async get_sms_record(input, context) {
+    const messageId = requiredString(input.messageId, "messageId", providerInputError);
+    const direction = requiredString(input.direction, "direction", providerInputError);
+    validateShowConcatenated(direction, input.showConcatenated);
+    const payload = await requestVonage({
+      baseUrl: vonageReportsApiBaseUrl,
+      path: "/v2/reports/records",
+      context,
+      phase: "execute",
+      query: {
+        product: "SMS",
+        account_id: context.apiKey,
+        direction,
+        id: messageId,
+        include_message: optionalBoolean(input.includeMessage),
+        show_concatenated: optionalBoolean(input.showConcatenated),
+      },
+    });
+    return normalizeSmsReport(payload);
+  },
 };
 
 export function createVonageContext(
@@ -56,8 +107,8 @@ export function createVonageContext(
   signal?: AbortSignal,
 ): VonageContext {
   return {
-    apiKey: requiredString(values.apiKey, "apiKey", invalidInput),
-    apiSecret: requiredString(values.apiSecret, "apiSecret", invalidInput),
+    apiKey: requiredString(values.apiKey, "apiKey", providerInputError),
+    apiSecret: requiredString(values.apiSecret, "apiSecret", providerInputError),
     fetcher,
     signal,
   };
@@ -82,9 +133,12 @@ export async function validateVonageCredential(
 }
 
 async function requestVonage(input: VonageRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, vonageRequestTimeoutMs);
-  try {
-    const response = await input.context.fetcher(`${vonageApiBaseUrl}${input.path}`, {
+  const url = new URL(`${input.baseUrl ?? vonageApiBaseUrl}${input.path}`);
+  for (const [key, value] of Object.entries(input.query ?? {})) {
+    if (value !== undefined) url.searchParams.set(key, String(value));
+  }
+  return runProviderRequest({ signal: input.context.signal, label: "Vonage" }, async (signal) => {
+    const response = await input.context.fetcher(url.toString(), {
       method: input.method ?? "GET",
       headers: {
         accept: "application/json",
@@ -93,7 +147,7 @@ async function requestVonage(input: VonageRequestInput): Promise<unknown> {
         "user-agent": providerUserAgent,
       },
       body: input.body,
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readProviderJsonBody(response, {
       emptyBody: {},
@@ -101,18 +155,7 @@ async function requestVonage(input: VonageRequestInput): Promise<unknown> {
     });
     if (!response.ok) throw mapHttpError(response, payload, input.phase);
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) throw error;
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Vonage request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Vonage request failed: ${error.message}` : "Vonage request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function mapHttpError(response: Response, payload: unknown, phase: "validate" | "execute"): ProviderRequestError {
@@ -157,6 +200,56 @@ function normalizeSms(payload: unknown): unknown {
   };
 }
 
+function normalizeSmsReport(payload: unknown): Record<string, unknown> {
+  const record = requireResponseRecord(payload, "Vonage SMS report response");
+  if (!Array.isArray(record.records)) {
+    throw new ProviderRequestError(502, "Vonage SMS report response records must be an array", payload);
+  }
+  const records = record.records;
+
+  return {
+    records: records.map((item) => normalizeSmsRecord(item)),
+    requestId: optionalString(record.request_id) ?? null,
+    requestStatus: optionalString(record.request_status) ?? null,
+    itemsCount: optionalInteger(record.items_count) ?? null,
+    idsNotFound: optionalString(record.ids_not_found) ?? null,
+    nextCursor: optionalString(record.cursor) ?? null,
+    iv: optionalString(record.iv) ?? null,
+  };
+}
+
+function normalizeSmsRecord(value: unknown): Record<string, unknown> {
+  const record = requireResponseRecord(value, "Vonage SMS report record");
+  return {
+    recordId: optionalString(record.id) ?? null,
+    messageId: optionalString(record.message_id) ?? null,
+    accountId: optionalString(record.account_id) ?? null,
+    direction: optionalString(record.direction) ?? null,
+    from: optionalString(record.from) ?? null,
+    to: optionalString(record.to) ?? null,
+    status: optionalString(record.status) ?? null,
+    dateReceived: optionalString(record.date_received) ?? null,
+    dateFinalized: optionalString(record.date_finalized) ?? null,
+    totalPrice: optionalString(record.total_price) ?? null,
+    currency: optionalString(record.currency) ?? null,
+    clientRef: optionalString(record.client_ref) ?? null,
+    network: optionalString(record.network) ?? null,
+    networkName: optionalString(record.network_name) ?? null,
+    country: optionalString(record.country) ?? null,
+    countryName: optionalString(record.country_name) ?? null,
+    messageBody: optionalString(record.message_body) ?? null,
+    errorCode: optionalString(record.error_code) ?? null,
+    errorCodeDescription: optionalString(record.error_code_description) ?? null,
+    concatenated: optionalString(record.concatenated) ?? null,
+  };
+}
+
+function validateShowConcatenated(direction: string, value: unknown): void {
+  if (optionalBoolean(value) === true && direction === "inbound") {
+    throw new ProviderRequestError(400, "showConcatenated is only supported for outbound SMS records");
+  }
+}
+
 function mapSmsError(status: string, message?: string): ProviderRequestError {
   const text = message ?? `Vonage rejected the SMS with status ${status}`;
   if (status === "1" || status === "9" || status === "10") return new ProviderRequestError(429, text);
@@ -188,7 +281,7 @@ function readErrorMessage(payload: unknown): string | undefined {
 }
 
 function appendRequiredFormField(body: URLSearchParams, key: string, value: unknown): void {
-  body.set(key, requiredString(value, key, invalidInput));
+  body.set(key, requiredString(value, key, providerInputError));
 }
 
 function appendOptionalFormField(
@@ -197,8 +290,4 @@ function appendOptionalFormField(
   value: string | number | boolean | undefined,
 ): void {
   if (value !== undefined) body.set(key, String(value));
-}
-
-function invalidInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

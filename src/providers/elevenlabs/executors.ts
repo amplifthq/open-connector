@@ -4,12 +4,14 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ElevenlabsActionName } from "./actions.ts";
 
 import { Buffer } from "node:buffer";
 import {
+  booleanString,
   compactObject,
+  optionalBoolean,
   optionalInteger,
   optionalNumber,
   optionalRecord,
@@ -33,7 +35,7 @@ type ElevenlabsRuntimeContext = ApiKeyProviderContext;
 
 type ElevenlabsActionHandler = (input: Record<string, unknown>, context: ElevenlabsRuntimeContext) => Promise<unknown>;
 
-export const elevenlabsActionHandlers: Record<ElevenlabsActionName, ElevenlabsActionHandler> = {
+export const elevenlabsActionHandlers: ProviderActionHandlers<"elevenlabs", ElevenlabsActionHandler> = {
   get_user_info(_input, context) {
     return getElevenlabsUserInfo(context);
   },
@@ -228,7 +230,7 @@ async function searchElevenlabsVoices(input: Record<string, unknown>, context: E
         voice_ids: arrayQueryValue(input.voiceIds),
         page_size: numberQueryValue(input.pageSize),
         next_page_token: stringQueryValue(input.nextPageToken),
-        include_total_count: booleanQueryValue(input.includeTotalCount),
+        include_total_count: booleanString(input.includeTotalCount),
       }),
     },
     context.apiKey,
@@ -497,7 +499,7 @@ function buildTextToSpeechBody(input: Record<string, unknown>) {
 function buildSoundEffectBody(input: Record<string, unknown>) {
   return compactObject({
     text: String(input.text),
-    loop: booleanOrUndefined(input.loop),
+    loop: optionalBoolean(input.loop),
     duration_seconds: numberOrUndefined(input.durationSeconds),
     prompt_influence: numberOrUndefined(input.promptInfluence),
     model_id: optionalString(input.modelId),
@@ -523,7 +525,7 @@ function normalizeVoiceSettingsForRequest(value: Record<string, unknown> | undef
     stability: numberOrUndefined(value.stability),
     similarity_boost: numberOrUndefined(value.similarityBoost),
     style: numberOrUndefined(value.style),
-    use_speaker_boost: booleanOrUndefined(value.useSpeakerBoost),
+    use_speaker_boost: optionalBoolean(value.useSpeakerBoost),
   });
 }
 
@@ -764,7 +766,7 @@ function normalizeSubscriptionSummary(payload: Record<string, unknown>) {
       "elevenlabs subscription.can_use_professional_voice_cloning",
     ),
     characterRefreshPeriod: optionalString(payload.character_refresh_period),
-    canUseDelayedPaymentMethods: booleanOrUndefined(payload.can_use_delayed_payment_methods),
+    canUseDelayedPaymentMethods: optionalBoolean(payload.can_use_delayed_payment_methods),
   };
 }
 
@@ -793,18 +795,18 @@ function normalizeModel(payload: Record<string, unknown>) {
     name: optionalString(payload.name),
     description: optionalString(payload.description),
     languages: normalizeModelLanguages(payload.languages),
-    canBeFinetuned: booleanOrUndefined(payload.can_be_finetuned),
-    canDoTextToSpeech: booleanOrUndefined(payload.can_do_text_to_speech),
-    canDoVoiceConversion: booleanOrUndefined(payload.can_do_voice_conversion),
-    canUseStyle: booleanOrUndefined(payload.can_use_style),
-    canUseSpeakerBoost: booleanOrUndefined(payload.can_use_speaker_boost),
-    servesProVoices: booleanOrUndefined(payload.serves_pro_voices),
+    canBeFinetuned: optionalBoolean(payload.can_be_finetuned),
+    canDoTextToSpeech: optionalBoolean(payload.can_do_text_to_speech),
+    canDoVoiceConversion: optionalBoolean(payload.can_do_voice_conversion),
+    canUseStyle: optionalBoolean(payload.can_use_style),
+    canUseSpeakerBoost: optionalBoolean(payload.can_use_speaker_boost),
+    servesProVoices: optionalBoolean(payload.serves_pro_voices),
     tokenCostFactor: numberOrUndefined(payload.token_cost_factor),
     concurrencyGroup: optionalString(payload.concurrency_group),
     maxCharactersRequestFreeUser: optionalInteger(payload.max_characters_request_free_user),
     maxCharactersRequestSubscribedUser: optionalInteger(payload.max_characters_request_subscribed_user),
     maximumTextLengthPerRequest: optionalInteger(payload.maximum_text_length_per_request),
-    requiresAlphaAccess: booleanOrUndefined(payload.requires_alpha_access),
+    requiresAlphaAccess: optionalBoolean(payload.requires_alpha_access),
     modelRates: optionalRecord(payload.model_rates),
   });
 }
@@ -823,8 +825,8 @@ function normalizeVoice(payload: Record<string, unknown>) {
     sharing: optionalRecord(payload.sharing),
     fineTuning: optionalRecord(payload.fine_tuning),
     permissionOnResource: optionalString(payload.permission_on_resource),
-    isOwner: booleanOrUndefined(payload.is_owner),
-    isLegacy: booleanOrUndefined(payload.is_legacy),
+    isOwner: optionalBoolean(payload.is_owner),
+    isLegacy: optionalBoolean(payload.is_legacy),
   });
 }
 
@@ -855,13 +857,13 @@ function normalizeHistoryFeedback(value: Record<string, unknown> | undefined) {
   }
 
   return compactObject({
-    thumbsUp: booleanOrUndefined(value.thumbs_up),
+    thumbsUp: optionalBoolean(value.thumbs_up),
     feedback: optionalString(value.feedback),
-    emotions: booleanOrUndefined(value.emotions),
-    inaccurateClone: booleanOrUndefined(value.inaccurate_clone),
-    glitches: booleanOrUndefined(value.glitches),
-    audioQuality: booleanOrUndefined(value.audio_quality),
-    other: booleanOrUndefined(value.other),
+    emotions: optionalBoolean(value.emotions),
+    inaccurateClone: optionalBoolean(value.inaccurate_clone),
+    glitches: optionalBoolean(value.glitches),
+    audioQuality: optionalBoolean(value.audio_quality),
+    other: optionalBoolean(value.other),
     reviewStatus: optionalString(value.review_status),
   });
 }
@@ -1117,10 +1119,6 @@ function numberQueryValue(value: unknown) {
   return parsed === undefined ? undefined : String(parsed);
 }
 
-function booleanQueryValue(value: unknown) {
-  return typeof value === "boolean" ? String(value) : undefined;
-}
-
 function arrayQueryValue(value: unknown) {
   if (!Array.isArray(value)) {
     return undefined;
@@ -1137,12 +1135,8 @@ function nullableNumber(value: unknown) {
   return value === null ? null : optionalNumber(value);
 }
 
-function booleanOrUndefined(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
-}
-
 function nullableBoolean(value: unknown) {
-  return value === null ? null : booleanOrUndefined(value);
+  return value === null ? null : optionalBoolean(value);
 }
 
 function requireString(value: unknown, fieldName: string) {

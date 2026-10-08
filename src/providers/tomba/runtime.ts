@@ -1,16 +1,10 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { TombaActionName } from "./actions.ts";
 
 import { compactObject, optionalIntegerLike, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  createProviderTimeout,
-  isAbortLikeError,
-  providerUserAgent,
-  ProviderRequestError,
-} from "../provider-runtime.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
 
 export const tombaApiBaseUrl: string = "https://api.tomba.io/v1";
-const tombaDefaultRequestTimeoutMs = 30_000;
 
 type TombaMode = "validate" | "execute";
 
@@ -33,7 +27,7 @@ interface TombaRequestInput {
   mode: TombaMode;
 }
 
-export const tombaActionHandlers: Record<TombaActionName, ProviderRuntimeHandler<TombaActionContext>> = {
+export const tombaActionHandlers: ProviderActionHandlers<"tomba", ProviderRuntimeHandler<TombaActionContext>> = {
   async get_account(_input, context) {
     const payload = await requestTombaJson({ method: "GET", path: "/me", mode: "execute" }, context);
     return normalizeAccount(payload);
@@ -152,13 +146,12 @@ async function requestTombaJson(
   input: TombaRequestInput,
   context: TombaActionContext,
 ): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(context.signal, tombaDefaultRequestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: context.signal, label: "Tomba" }, async (signal) => {
     const response = await context.fetcher(buildTombaUrl(input), {
       method: input.method,
       headers: buildTombaHeaders(context.credential, Boolean(input.body)),
       body: input.body ? JSON.stringify(input.body) : undefined,
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readTombaPayload(response);
     if (!response.ok) {
@@ -169,18 +162,7 @@ async function requestTombaJson(
       throw new ProviderRequestError(502, "Tomba returned an invalid payload");
     }
     return payloadObject;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) throw error;
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Tomba request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Tomba request failed: ${error.message}` : "Tomba request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildTombaUrl(input: TombaRequestInput): URL {

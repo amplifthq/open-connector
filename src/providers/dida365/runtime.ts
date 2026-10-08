@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { OAuthProviderContext } from "../provider-runtime.ts";
-import type { Dida365ActionName } from "./actions.ts";
 
 import { createHash } from "node:crypto";
 import {
@@ -12,7 +12,12 @@ import {
   optionalRecord,
   optionalString,
 } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  providerInputError,
+  ProviderRequestError,
+  providerUserAgent,
+  requiredResponseRecord,
+} from "../provider-runtime.ts";
 
 export const dida365ApiBaseUrl = "https://api.dida365.com";
 
@@ -30,7 +35,7 @@ interface Dida365RequestOptions {
   allowNotFound?: boolean;
 }
 
-export const dida365ActionHandlers: Record<Dida365ActionName, Dida365ActionHandler> = {
+export const dida365ActionHandlers: ProviderActionHandlers<"dida365", Dida365ActionHandler> = {
   async get_user_project(_input, context) {
     return { projects: await fetchProjects(context, "execute") };
   },
@@ -170,7 +175,7 @@ export const dida365ActionHandlers: Record<Dida365ActionName, Dida365ActionHandl
   },
   async get_habit(input, context) {
     return {
-      habit: requireObjectPayload(
+      habit: requiredResponseRecord(
         await requestDida365Json(context, {
           path: `/open/v1/habit/${encodeURIComponent(resolveHabitId(input))}`,
           phase: "execute",
@@ -283,7 +288,7 @@ async function fetchProject(
   projectId: string,
   phase: Dida365Phase,
 ): Promise<Dida365Payload> {
-  return requireObjectPayload(
+  return requiredResponseRecord(
     await requestDida365Json(context, {
       path: `/open/v1/project/${encodeURIComponent(projectId)}`,
       phase,
@@ -298,7 +303,7 @@ async function fetchProjectData(
   projectId: string,
   phase: Dida365Phase,
 ): Promise<{ project: Dida365Payload; tasks: Dida365Payload[]; columns: Dida365Payload[] }> {
-  const payload = requireObjectPayload(
+  const payload = requiredResponseRecord(
     await requestDida365Json(context, {
       path: `/open/v1/project/${encodeURIComponent(projectId)}/data`,
       phase,
@@ -307,7 +312,7 @@ async function fetchProjectData(
     "dida365 project data response",
   );
   return {
-    project: requireObjectPayload(payload.project, "dida365 project data.project"),
+    project: requiredResponseRecord(payload.project, "dida365 project data.project"),
     tasks: optionalObjectArrayPayload(payload.tasks),
     columns: optionalObjectArrayPayload(payload.columns),
   };
@@ -319,7 +324,7 @@ async function fetchTask(
   taskId: string,
   phase: Dida365Phase,
 ): Promise<Dida365Payload> {
-  return requireObjectPayload(
+  return requiredResponseRecord(
     await requestDida365Json(context, {
       path: `/open/v1/project/${encodeURIComponent(projectId)}/task/${encodeURIComponent(taskId)}`,
       phase,
@@ -491,7 +496,7 @@ function buildFilterTasksBody(input: Record<string, unknown>): Record<string, un
 }
 
 function normalizeMoveOperations(value: unknown): Array<Record<string, unknown>> {
-  return objectArray(value, "moves", inputError).map((operation) =>
+  return objectArray(value, "moves", providerInputError).map((operation) =>
     compactObject({
       fromProjectId: requireNonEmptyString(operation.fromProjectId, "moves.fromProjectId"),
       toProjectId: requireNonEmptyString(operation.toProjectId, "moves.toProjectId"),
@@ -513,7 +518,7 @@ function buildHabitCheckinBody(input: Record<string, unknown>): Record<string, u
 
 function normalizeChecklistItems(value: unknown): Array<Record<string, unknown>> | undefined {
   if (value == null) return undefined;
-  return objectArray(value, "items", inputError).map((item) =>
+  return objectArray(value, "items", providerInputError).map((item) =>
     compactObject({
       id: optionalString(item.id),
       title: requireNonEmptyString(item.title, "items.title"),
@@ -603,21 +608,11 @@ function requireNonEmptyString(value: unknown, fieldName: string): string {
   return normalized;
 }
 
-function requireObjectPayload(value: unknown, fieldName: string): Dida365Payload {
-  const record = optionalRecord(value);
-  if (!record) throw new ProviderRequestError(502, `${fieldName} must be an object`);
-  return record;
-}
-
 function requireObjectArrayPayload(value: unknown, fieldName: string): Dida365Payload[] {
   if (!Array.isArray(value)) throw new ProviderRequestError(502, `${fieldName} must be an array`);
-  return value.map((item) => requireObjectPayload(item, fieldName));
+  return value.map((item) => requiredResponseRecord(item, fieldName));
 }
 
 function optionalObjectArrayPayload(value: unknown): Dida365Payload[] {
   return value == null ? [] : requireObjectArrayPayload(value, "dida365 nested array response");
-}
-
-function inputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

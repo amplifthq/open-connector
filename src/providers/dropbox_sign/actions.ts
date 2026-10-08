@@ -3,14 +3,7 @@ import type { ActionDefinition } from "../../core/types.ts";
 import { s } from "../../core/json-schema.ts";
 import { defineProviderAction } from "../../core/provider-definition.ts";
 
-const service = "dropbox_sign" as const;
-
-export type DropboxSignActionName =
-  | "get_account"
-  | "list_signature_requests"
-  | "get_signature_request"
-  | "list_templates"
-  | "get_template";
+const service = "dropbox_sign";
 
 const rawObjectSchema = s.looseObject("The raw Dropbox Sign API object.");
 
@@ -76,6 +69,7 @@ const templateSchema = s.object("A normalized Dropbox Sign template.", {
 export const dropboxSignActions: readonly ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_account",
+    operationType: "read",
     description:
       "Retrieve Dropbox Sign account properties and settings for the connected account or a specified account.",
     requiredScopes: [],
@@ -93,6 +87,7 @@ export const dropboxSignActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_signature_requests",
+    operationType: "read",
     description:
       "List Dropbox Sign signature requests accessible to the connected account with optional search and pagination.",
     requiredScopes: [],
@@ -107,6 +102,7 @@ export const dropboxSignActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_signature_request",
+    operationType: "read",
     description: "Retrieve one Dropbox Sign signature request by ID.",
     requiredScopes: [],
     inputSchema: s.object("Input for retrieving a Dropbox Sign signature request.", {
@@ -118,6 +114,7 @@ export const dropboxSignActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_templates",
+    operationType: "read",
     description: "List Dropbox Sign templates accessible to the connected account with optional search and pagination.",
     requiredScopes: [],
     inputSchema: s.object("Input for listing Dropbox Sign templates.", pageInputProperties, {
@@ -131,6 +128,7 @@ export const dropboxSignActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_template",
+    operationType: "read",
     description: "Retrieve one Dropbox Sign template by ID.",
     requiredScopes: [],
     inputSchema: s.object("Input for retrieving a Dropbox Sign template.", {

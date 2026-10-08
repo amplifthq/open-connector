@@ -109,18 +109,10 @@ const configSettingFormulaSchema = s.object("A normalized ConfigCat bulk Setting
   raw: s.looseObject("The raw bulk Setting value item returned by ConfigCat."),
 });
 
-export type ConfigcatActionName =
-  | "get_me"
-  | "list_products"
-  | "list_configs"
-  | "list_environments"
-  | "list_settings"
-  | "get_setting_value"
-  | "list_setting_values";
-
 export const configcatActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_me",
+    operationType: "read",
     description: "Get the ConfigCat user authenticated by the Public API credentials.",
     inputSchema: s.object("The input payload for getting the authenticated ConfigCat user.", {}),
     outputSchema: s.object("The response returned when getting the authenticated ConfigCat user.", {
@@ -132,6 +124,7 @@ export const configcatActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_products",
+    operationType: "read",
     description: "List ConfigCat Products available to the authenticated Public API credentials.",
     inputSchema: s.object("The input payload for listing ConfigCat Products.", {}),
     outputSchema: s.object("The response returned when listing ConfigCat Products.", {
@@ -140,6 +133,7 @@ export const configcatActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_configs",
+    operationType: "read",
     description: "List ConfigCat Configs in a Product.",
     inputSchema: s.object("The input payload for listing ConfigCat Configs.", {
       productId: productIdSchema,
@@ -150,6 +144,7 @@ export const configcatActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_environments",
+    operationType: "read",
     description: "List ConfigCat Environments in a Product.",
     inputSchema: s.object("The input payload for listing ConfigCat Environments.", {
       productId: productIdSchema,
@@ -160,6 +155,7 @@ export const configcatActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_settings",
+    operationType: "read",
     description: "List ConfigCat Feature Flags and Settings in a Config.",
     inputSchema: s.object("The input payload for listing ConfigCat Feature Flags and Settings.", {
       configId: configIdSchema,
@@ -170,6 +166,7 @@ export const configcatActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_setting_value",
+    operationType: "read",
     description: "Get a ConfigCat Feature Flag or Setting value for an Environment.",
     inputSchema: s.object("The input payload for getting a ConfigCat Setting value.", {
       environmentId: environmentIdSchema,
@@ -181,6 +178,7 @@ export const configcatActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_setting_values",
+    operationType: "read",
     description: "List ConfigCat Feature Flag and Setting values for a Config and Environment.",
     inputSchema: s.object("The input payload for listing ConfigCat Setting values.", {
       configId: configIdSchema,

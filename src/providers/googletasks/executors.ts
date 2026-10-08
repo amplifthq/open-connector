@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { OAuthProviderContext } from "../provider-runtime.ts";
-import type { GoogleTasksActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -10,8 +10,14 @@ import {
   pickOptionalInteger,
   pickOptionalString,
 } from "../../core/cast.ts";
-import { googleJsonRequest, googleRequest } from "../googledrive/runtime-shared.ts";
-import { defineOAuthProviderExecutors, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineGoogleProviderExecutors,
+  googleBearerProxyAuth,
+  googleServiceAccountValidator,
+} from "../googledrive/runtime-auth.ts";
+import { googleJsonRequest, googleRequest } from "../googledrive/runtime-request.ts";
+import { defineProviderProxy, ProviderRequestError } from "../provider-runtime.ts";
+import { googleTasksOAuthScopes } from "./scopes.ts";
 
 export const googleTasksApiBaseUrl = "https://tasks.googleapis.com/tasks/v1";
 
@@ -102,7 +108,7 @@ interface NormalizedTaskList {
   selfLink: string | null;
 }
 
-export const googleTasksActionHandlers: Record<GoogleTasksActionName, GoogleTasksActionHandler> = {
+export const googleTasksActionHandlers: ProviderActionHandlers<"googletasks", GoogleTasksActionHandler> = {
   list_task_lists: listTaskLists,
   get_task_list: getTaskList,
   create_task_list: createTaskList,
@@ -121,7 +127,16 @@ export const googleTasksActionHandlers: Record<GoogleTasksActionName, GoogleTask
   clear_tasks: clearTasks,
 };
 
-export const executors: ProviderExecutors = defineOAuthProviderExecutors(service, googleTasksActionHandlers);
+export const executors: ProviderExecutors = defineGoogleProviderExecutors(service, googleTasksActionHandlers, {
+  scopes: googleTasksOAuthScopes,
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: googleTasksApiBaseUrl,
+  auth: googleBearerProxyAuth(googleTasksOAuthScopes),
+  skipDnsValidation: true,
+});
 
 export const credentialValidators: CredentialValidators = {
   async oauth2(input, { fetcher, signal }) {
@@ -144,6 +159,7 @@ export const credentialValidators: CredentialValidators = {
       },
     };
   },
+  customCredential: googleServiceAccountValidator(service, googleTasksOAuthScopes),
 };
 
 async function listTaskLists(input: Record<string, unknown>, context: GoogleTasksRuntimeContext) {

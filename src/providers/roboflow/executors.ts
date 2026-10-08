@@ -4,8 +4,8 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { RoboflowActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -24,6 +24,7 @@ import {
   defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 const service = "roboflow";
@@ -33,7 +34,7 @@ const validationPath = "/";
 
 type RoboflowActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const roboflowActionHandlers: Record<RoboflowActionName, RoboflowActionHandler> = {
+export const roboflowActionHandlers: ProviderActionHandlers<"roboflow", RoboflowActionHandler> = {
   list_projects(_input, context) {
     return executeListProjects(context);
   },
@@ -566,10 +567,6 @@ function normalizePrediction(prediction: unknown): Record<string, unknown> {
     detectionId: optionalScalarString(record.detection_id ?? record.detectionId) ?? null,
     raw: record,
   };
-}
-
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function requireNumber(value: unknown, fieldName: string): number {

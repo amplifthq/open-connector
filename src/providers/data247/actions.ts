@@ -48,11 +48,10 @@ function data247ListOutput(resultSchema: JsonSchema, description: string, result
   );
 }
 
-export type Data247ActionName = "check_balance" | "get_carrier_type" | "verify_phone" | "check_dnc" | "append_gender";
-
 export const data247Actions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "check_balance",
+    operationType: "read",
     description: "Check the current Data247 account balance.",
     inputSchema: emptyInput,
     outputSchema: data247ListOutput(
@@ -63,6 +62,7 @@ export const data247Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_carrier_type",
+    operationType: "read",
     description: "Determine whether a USA or Canadian phone number is mobile, landline, or VOIP.",
     inputSchema: phoneInput,
     outputSchema: data247ListOutput(
@@ -73,6 +73,7 @@ export const data247Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "verify_phone",
+    operationType: "read",
     description: "Verify whether an international phone number is active.",
     inputSchema: phoneInput,
     outputSchema: data247ListOutput(
@@ -83,6 +84,7 @@ export const data247Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "check_dnc",
+    operationType: "read",
     description: "Check a phone number against Data247 Do-Not-Call data.",
     inputSchema: phoneInput,
     outputSchema: s.object(
@@ -97,6 +99,7 @@ export const data247Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "append_gender",
+    operationType: "write",
     description: "Infer a probable gender from a first name using Data247.",
     inputSchema: s.actionInput(
       {

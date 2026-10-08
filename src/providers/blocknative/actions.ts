@@ -169,15 +169,10 @@ const gasPriceDistributionOutputSchema = s.actionOutput(
   "The normalized output payload for the Blocknative gas-price distribution.",
 );
 
-export type BlocknativeActionName =
-  | "list_supported_chains"
-  | "list_gas_oracles"
-  | "get_gas_prices"
-  | "get_gas_price_distribution";
-
 export const blocknativeActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_supported_chains",
+    operationType: "read",
     description: "List the chains currently supported by the Blocknative Gas Platform.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for listing Blocknative supported chains.", {}),
@@ -190,6 +185,7 @@ export const blocknativeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_gas_oracles",
+    operationType: "read",
     description: "List the gas-oracle metadata exposed by Blocknative across supported chains.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for listing Blocknative gas oracles.", {}),
@@ -202,6 +198,7 @@ export const blocknativeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_gas_prices",
+    operationType: "read",
     description: "Get Blocknative gas-price estimates for the default chain or a selected network.",
     requiredScopes: [],
     inputSchema: gasPricesInputSchema,
@@ -209,6 +206,7 @@ export const blocknativeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_gas_price_distribution",
+    operationType: "read",
     description: "Get the current Blocknative gas-price distribution for Ethereum mainnet.",
     requiredScopes: [],
     inputSchema: gasPriceDistributionInputSchema,

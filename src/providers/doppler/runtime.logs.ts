@@ -1,4 +1,6 @@
-import { optionalRecord, optionalString, compactObject } from "../../core/cast.ts";
+import type { ProviderActionHandlerSubset } from "../provider-runtime.ts";
+
+import { optionalBoolean, optionalRecord, optionalString, compactObject } from "../../core/cast.ts";
 import { ProviderRequestError } from "../provider-runtime.ts";
 import { dopplerRequest, readObject } from "./runtime.shared.ts";
 
@@ -9,7 +11,7 @@ interface DopplerLogActionContext {
 
 type DopplerLogActionHandler = (input: Record<string, unknown>, context: DopplerLogActionContext) => Promise<unknown>;
 
-export const dopplerLogActionHandlers: Record<"list_config_logs" | "get_config_log", DopplerLogActionHandler> = {
+export const dopplerLogActionHandlers: ProviderActionHandlerSubset<"doppler", DopplerLogActionHandler> = {
   list_config_logs(input, context) {
     return dopplerListConfigLogs(input, context.accessToken, context.fetcher);
   },
@@ -80,7 +82,7 @@ function normalizeLog(payload: unknown) {
     config: optionalString(record.config),
     project: optionalString(record.project),
     environment: optionalString(record.environment),
-    rollback: asOptionalBoolean(record.rollback),
+    rollback: optionalBoolean(record.rollback),
     createdAt: optionalString(record.created_at),
     user: optionalRecord(record.user),
     diff: Array.isArray(record.diff) ? record.diff : undefined,
@@ -97,8 +99,4 @@ function asRequiredString(value: unknown, fieldName: string) {
 
 function asOptionalNumber(value: unknown) {
   return typeof value === "number" ? value : undefined;
-}
-
-function asOptionalBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
 }

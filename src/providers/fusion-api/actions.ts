@@ -18,8 +18,8 @@ const processingStateSchema = s.object("The Fusion API task is still processing.
   state: s.literal("processing", { description: "Task state." }),
   progress: s.number("Task progress reported by Fusion API."),
 });
-const missingStateSchema = s.object("The Fusion API task was not found.", {
-  state: s.literal("not_found", { description: "Task state." }),
+const missingStateSchema = s.object("The Fusion API task failed or was not found.", {
+  state: s.stringEnum(["failed", "not_found"], { description: "Task state." }),
   error: s.string("Error message returned by Fusion API."),
 });
 const taskResultSchema = s.union(
@@ -44,6 +44,7 @@ const syncActionOutputSchema = s.unknown("The normalized Fusion API action resul
 export const fusionApiActions: ProviderActionDefinition<string>[] = fusionApiOperations.map((operation) =>
   defineProviderAction(service, {
     name: operation.actionName,
+    operationType: operation.operationType,
     description: operation.description,
     inputSchema: buildInputSchema(operation),
     outputSchema: buildOutputSchema(operation),

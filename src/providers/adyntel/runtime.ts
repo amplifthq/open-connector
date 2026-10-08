@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -7,6 +8,7 @@ import {
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 export interface AdyntelContext extends ApiKeyProviderContext {
@@ -44,7 +46,7 @@ interface AdyntelRequestOptions {
   body: Record<string, unknown>;
 }
 
-export const adyntelActionHandlers: Record<string, AdyntelActionHandler> = {
+export const adyntelActionHandlers: ProviderActionHandlers<"adyntel", AdyntelActionHandler> = {
   search_meta_ads(input, context) {
     return requestAdSearch(context, input, "/facebook", [
       "company_domain",
@@ -199,48 +201,36 @@ async function requestAdSearch(
 }
 
 async function requestAdyntelJson(options: AdyntelRequestOptions): Promise<unknown> {
-  const timeout = createProviderTimeout(options.context.signal, adyntelDefaultRequestTimeoutMs);
+  return runProviderRequest(
+    { signal: options.context.signal, timeoutMs: adyntelDefaultRequestTimeoutMs, label: "Adyntel" },
+    async (signal) => {
+      const response = await options.context.fetcher(new URL(options.path, adyntelApiBaseUrl), {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "user-agent": providerUserAgent,
+        },
+        body: JSON.stringify({
+          api_key: options.context.apiKey,
+          email: options.context.email,
+          ...options.body,
+        }),
+        signal,
+      });
 
-  try {
-    const response = await options.context.fetcher(new URL(options.path, adyntelApiBaseUrl), {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-        "user-agent": providerUserAgent,
-      },
-      body: JSON.stringify({
-        api_key: options.context.apiKey,
-        email: options.context.email,
-        ...options.body,
-      }),
-      signal: timeout.signal,
-    });
+      if (response.status === 204) {
+        return null;
+      }
 
-    if (response.status === 204) {
-      return null;
-    }
+      const payload = await readAdyntelPayload(response);
+      if (!response.ok) {
+        throw createAdyntelError(response.status, payload);
+      }
 
-    const payload = await readAdyntelPayload(response);
-    if (!response.ok) {
-      throw createAdyntelError(response.status, payload);
-    }
-
-    return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Adyntel request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Adyntel request failed: ${error.message}` : "Adyntel request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+      return payload;
+    },
+  );
 }
 
 async function readAdyntelPayload(response: Response): Promise<unknown> {

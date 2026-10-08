@@ -5,15 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "dovetail";
 
-export type DovetailActionName =
-  | "get_token_info"
-  | "list_projects"
-  | "list_data"
-  | "get_data"
-  | "create_data"
-  | "update_data"
-  | "export_data";
-
 const tokenSchema = s.object("Dovetail token metadata.", {
   id: s.nonEmptyString("Unique identifier of the current Dovetail personal API key."),
   subdomain: s.nonEmptyString("Workspace subdomain associated with the current API key."),
@@ -52,6 +43,7 @@ const dataFieldSchema = s.object("One Dovetail data field value.", {
 export const dovetailActions: readonly ProviderActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_token_info",
+    operationType: "read",
     description: "Get metadata for the current Dovetail personal API key.",
     inputSchema: s.object("Input parameters for reading the current Dovetail token metadata.", {}),
     outputSchema: s.object("Dovetail token metadata response wrapper.", {
@@ -60,6 +52,7 @@ export const dovetailActions: readonly ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_projects",
+    operationType: "read",
     description: "List Dovetail projects with pagination and title filtering.",
     inputSchema: s.object("Input parameters for listing Dovetail projects.", pageInputSchema, {
       optional: ["startCursor", "limit", "sort", "titleContains"],
@@ -73,6 +66,7 @@ export const dovetailActions: readonly ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_data",
+    operationType: "read",
     description: "List Dovetail data records with pagination and common filters.",
     inputSchema: s.object(
       "Input parameters for listing Dovetail data records.",
@@ -93,6 +87,7 @@ export const dovetailActions: readonly ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_data",
+    operationType: "read",
     description: "Get one Dovetail data record by identifier.",
     inputSchema: s.object("Input parameters for reading one Dovetail data record.", {
       dataId: s.nonEmptyString("Unique identifier of the Dovetail data record."),
@@ -103,6 +98,7 @@ export const dovetailActions: readonly ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_data",
+    operationType: "write",
     description: "Create a Dovetail data record inside a specific project.",
     inputSchema: s.object(
       "Input parameters for creating a Dovetail data record.",
@@ -120,6 +116,7 @@ export const dovetailActions: readonly ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_data",
+    operationType: "write",
     description: "Update the title or fields of a Dovetail data record.",
     inputSchema: s.object(
       "Input parameters for updating a Dovetail data record.",
@@ -136,6 +133,7 @@ export const dovetailActions: readonly ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "export_data",
+    operationType: "read",
     description: "Export a Dovetail data record in HTML or Markdown format.",
     inputSchema: s.object("Input parameters for exporting a Dovetail data record.", {
       dataId: s.nonEmptyString("Unique identifier of the Dovetail data record."),

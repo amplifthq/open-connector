@@ -1,17 +1,29 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { LoyverseActionName } from "./actions.ts";
 
 import { createHash } from "node:crypto";
 import { compactObject, optionalRecord, optionalString, requiredString, stringArray } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerInputError,
+  ProviderRequestError,
+  providerUserAgent,
+  requiredResponseRecord,
+} from "../provider-runtime.ts";
 
 const service = "loyverse";
 const loyverseApiBaseUrl = "https://api.loyverse.com/v1.0";
 
 type LoyverseActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const loyverseActionHandlers: Record<LoyverseActionName, LoyverseActionHandler> = {
+export const loyverseActionHandlers: ProviderActionHandlers<"loyverse", LoyverseActionHandler> = {
   get_merchant(_input, context) {
     return requestLoyverseItem(context, "/merchant/", "merchant");
   },
@@ -93,6 +105,16 @@ export const loyverseActionHandlers: Record<LoyverseActionName, LoyverseActionHa
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, loyverseActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: loyverseApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     return validateLoyverseCredential(input.apiKey, fetcher, signal);
@@ -110,7 +132,7 @@ async function validateLoyverseCredential(
     path: "/merchant/",
     signal,
   });
-  const merchantObject = requireObject(merchant, "Loyverse merchant profile");
+  const merchantObject = requiredResponseRecord(merchant, "Loyverse merchant profile");
   const merchantId = optionalString(merchantObject.id);
   const merchantName =
     optionalString(merchantObject.name) ??
@@ -151,11 +173,11 @@ function joinList(value: unknown): string | undefined {
   if (!Array.isArray(value) || value.length === 0) {
     return undefined;
   }
-  return stringArray(value, "ids", inputError).join(",");
+  return stringArray(value, "ids", providerInputError).join(",");
 }
 
 function readRequiredString(input: Record<string, unknown>, key: string): string {
-  return requiredString(input[key], key, inputError);
+  return requiredString(input[key], key, providerInputError);
 }
 
 async function requestLoyverseList(
@@ -169,14 +191,14 @@ async function requestLoyverseList(
     path,
     query,
   });
-  const objectPayload = requireObject(payload, `Loyverse ${propertyName} response`);
+  const objectPayload = requiredResponseRecord(payload, `Loyverse ${propertyName} response`);
   const records = objectPayload[propertyName];
   if (!Array.isArray(records)) {
     throw new ProviderRequestError(502, `Loyverse response missing ${propertyName} array`);
   }
 
   return {
-    [propertyName]: records.map((record) => requireObject(record, `Loyverse ${propertyName} record`)),
+    [propertyName]: records.map((record) => requiredResponseRecord(record, `Loyverse ${propertyName} record`)),
     cursor: optionalString(objectPayload.cursor) ?? null,
     raw: objectPayload,
   };
@@ -192,7 +214,7 @@ async function requestLoyverseItem(
     path,
   });
   return {
-    [propertyName]: requireObject(payload, `Loyverse ${propertyName} response`),
+    [propertyName]: requiredResponseRecord(payload, `Loyverse ${propertyName} response`),
   };
 }
 
@@ -255,7 +277,7 @@ function readLoyverseErrors(payload: unknown): Array<Record<string, unknown>> {
   if (!record || !Array.isArray(record.errors)) {
     return [];
   }
-  return record.errors.map((error) => requireObject(error, "Loyverse error object"));
+  return record.errors.map((error) => requiredResponseRecord(error, "Loyverse error object"));
 }
 
 function mapLoyverseError(status: number, errors: Array<Record<string, unknown>>): ProviderRequestError {
@@ -275,16 +297,4 @@ function mapLoyverseError(status: number, errors: Array<Record<string, unknown>>
     return new ProviderRequestError(400, message);
   }
   return new ProviderRequestError(502, message);
-}
-
-function requireObject(value: unknown, label: string): Record<string, unknown> {
-  const record = optionalRecord(value);
-  if (!record) {
-    throw new ProviderRequestError(502, `${label} must be an object`);
-  }
-  return record;
-}
-
-function inputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

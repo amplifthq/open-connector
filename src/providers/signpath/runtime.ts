@@ -1,6 +1,6 @@
 import type { CredentialValidationResult, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
-import type { SignpathActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -21,9 +21,8 @@ type SignpathActionHandler = (input: Record<string, unknown>, context: SignpathA
 type SignpathPhase = "validate" | "execute";
 
 export const signpathApiBaseUrl = "https://app.signpath.io/api/v1";
-const signpathDefaultRequestTimeoutMs = 30_000;
 
-export const signpathActionHandlers: Record<SignpathActionName, SignpathActionHandler> = {
+export const signpathActionHandlers: ProviderActionHandlers<"signpath", SignpathActionHandler> = {
   async list_signing_policies(input, context) {
     const payload = await requestSignpathJson(
       {
@@ -145,7 +144,7 @@ async function requestSignpathJson(
   signal: AbortSignal | undefined,
   phase: SignpathPhase,
 ) {
-  const timeoutSignal = createProviderTimeout(signal, signpathDefaultRequestTimeoutMs);
+  const timeoutSignal = createProviderTimeout(signal);
 
   try {
     const response = await fetcher(buildSignpathUrl(input), {

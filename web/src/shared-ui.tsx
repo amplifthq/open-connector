@@ -6,26 +6,6 @@ import { useState } from "react";
 import providerIconUrls from "virtual:oomol-provider-icons";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge as UiBadge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-
-export function Metric(props: { label: string; value: number }): ReactNode {
-  return (
-    <Card className="metric">
-      <span>{props.label}</span>
-      <strong>{props.value}</strong>
-    </Card>
-  );
-}
-
-export function InfoBlock(props: { icon: ReactNode; label: string; value: string }): ReactNode {
-  return (
-    <div className="info-block">
-      {props.icon}
-      <span>{props.label}</span>
-      <strong>{props.value}</strong>
-    </div>
-  );
-}
 
 export function Badge(props: { children: ReactNode; tone?: "success" | "warning" | "error" }): ReactNode {
   return (
@@ -87,11 +67,6 @@ export function providerInitials(displayName: string): string {
   );
 }
 
-export function providerIconUrl(provider: ProviderDefinition): string | undefined {
-  const source = providerIconSource(provider);
-  return source?.kind == "url" ? source.value : undefined;
-}
-
 interface ProviderIconSource {
   kind: "url";
   value: string;
@@ -112,9 +87,15 @@ export function providerIconSource(
   }
 
   const hostname = providerHomepageHostname(provider.homepageUrl);
-  return hostname
-    ? { kind: "url", value: `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(hostname)}` }
-    : undefined;
+  if (!hostname) {
+    return undefined;
+  }
+
+  const searchParams = new URLSearchParams({
+    larger: "true",
+    "throw-error-on-404": "true",
+  });
+  return { kind: "url", value: `https://a.favicon.im/${hostname}?${searchParams.toString()}` };
 }
 
 function providerHomepageHostname(homepageUrl: string | undefined): string | undefined {

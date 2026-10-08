@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -9,7 +10,8 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
+import { providerInputError, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 type MailcoachRequestMode = "validate" | "execute";
 const maxMailcoachResponseBytes = 10 * 1024 * 1024;
@@ -35,7 +37,10 @@ interface MailcoachRequestOptions {
   notFoundAsInvalidInput?: boolean;
 }
 
-export const mailcoachActionHandlers: Record<string, ProviderRuntimeHandler<MailcoachActionContext>> = {
+export const mailcoachActionHandlers: ProviderActionHandlers<
+  "mailcoach",
+  ProviderRuntimeHandler<MailcoachActionContext>
+> = {
   list_email_lists(input, context) {
     return requestMailcoachJson({
       ...context,
@@ -52,7 +57,7 @@ export const mailcoachActionHandlers: Record<string, ProviderRuntimeHandler<Mail
   get_email_list(input, context) {
     return requestMailcoachJson({
       ...context,
-      path: `/email-lists/${encodeURIComponent(requiredString(input.email_list_uuid, "email_list_uuid", inputError))}`,
+      path: `/email-lists/${encodeURIComponent(requiredString(input.email_list_uuid, "email_list_uuid", providerInputError))}`,
       mode: "execute",
       notFoundAsInvalidInput: true,
     });
@@ -69,7 +74,7 @@ export const mailcoachActionHandlers: Record<string, ProviderRuntimeHandler<Mail
   update_email_list(input, context) {
     return requestMailcoachJson({
       ...context,
-      path: `/email-lists/${encodeURIComponent(requiredString(input.email_list_uuid, "email_list_uuid", inputError))}`,
+      path: `/email-lists/${encodeURIComponent(requiredString(input.email_list_uuid, "email_list_uuid", providerInputError))}`,
       method: "PUT",
       body: buildEmailListBody(input),
       mode: "execute",
@@ -79,7 +84,7 @@ export const mailcoachActionHandlers: Record<string, ProviderRuntimeHandler<Mail
   delete_email_list(input, context) {
     return requestMailcoachJson({
       ...context,
-      path: `/email-lists/${encodeURIComponent(requiredString(input.email_list_uuid, "email_list_uuid", inputError))}`,
+      path: `/email-lists/${encodeURIComponent(requiredString(input.email_list_uuid, "email_list_uuid", providerInputError))}`,
       method: "DELETE",
       mode: "execute",
       noContent: true,
@@ -87,7 +92,7 @@ export const mailcoachActionHandlers: Record<string, ProviderRuntimeHandler<Mail
     });
   },
   list_subscribers(input, context) {
-    const emailListUuid = requiredString(input.email_list_uuid, "email_list_uuid", inputError);
+    const emailListUuid = requiredString(input.email_list_uuid, "email_list_uuid", providerInputError);
     return requestMailcoachJson({
       ...context,
       path: `/email-lists/${encodeURIComponent(emailListUuid)}/subscribers`,
@@ -106,7 +111,7 @@ export const mailcoachActionHandlers: Record<string, ProviderRuntimeHandler<Mail
     return subscriberRequest(input, context);
   },
   subscribe(input, context) {
-    const emailListUuid = requiredString(input.email_list_uuid, "email_list_uuid", inputError);
+    const emailListUuid = requiredString(input.email_list_uuid, "email_list_uuid", providerInputError);
     const strict = optionalBoolean(input.strict);
     return requestMailcoachJson({
       ...context,
@@ -114,7 +119,7 @@ export const mailcoachActionHandlers: Record<string, ProviderRuntimeHandler<Mail
       method: "POST",
       query: strict === undefined ? undefined : { strict },
       body: compactObject({
-        email: requiredString(input.email, "email", inputError),
+        email: requiredString(input.email, "email", providerInputError),
         first_name: readNullableString(input.first_name),
         last_name: readNullableString(input.last_name),
         extra_attributes: readOptionalNullableObject(input.extra_attributes),
@@ -128,10 +133,10 @@ export const mailcoachActionHandlers: Record<string, ProviderRuntimeHandler<Mail
   update_subscriber(input, context) {
     return requestMailcoachJson({
       ...context,
-      path: `/subscribers/${encodeURIComponent(requiredString(input.subscriber_uuid, "subscriber_uuid", inputError))}`,
+      path: `/subscribers/${encodeURIComponent(requiredString(input.subscriber_uuid, "subscriber_uuid", providerInputError))}`,
       method: "PATCH",
       body: compactObject({
-        email: requiredString(input.email, "email", inputError),
+        email: requiredString(input.email, "email", providerInputError),
         first_name: readNullableString(input.first_name),
         last_name: readNullableString(input.last_name),
         tags: readOptionalStringArray(input.tags),
@@ -194,19 +199,21 @@ export async function validateMailcoachCredential(
   };
 }
 
-export function normalizeMailcoachBaseUrl(input?: string): string {
+export function normalizeMailcoachBaseUrl(
+  input?: string,
+  allowPrivateNetwork: boolean = isPrivateNetworkAccessAllowed(),
+): string {
   const raw = input?.trim();
   if (!raw) {
     throw new ProviderRequestError(400, "baseUrl is required");
   }
 
   const withProtocol = raw.includes("://") ? raw : `https://${raw}`;
-  let parsed: URL;
-  try {
-    parsed = new URL(withProtocol);
-  } catch {
-    throw new ProviderRequestError(400, "baseUrl must be a valid URL");
-  }
+  const parsed = assertPublicHttpUrl(withProtocol, {
+    fieldName: "baseUrl",
+    createError: (message) => new ProviderRequestError(400, message),
+    allowPrivateNetwork,
+  });
 
   if (parsed.protocol !== "https:") {
     throw new ProviderRequestError(400, "baseUrl must use https");
@@ -242,7 +249,7 @@ export function resolveMailcoachProxyBaseUrl(providerMetadata: Record<string, un
 function subscriberRequest(input: Record<string, unknown>, context: MailcoachActionContext): Promise<unknown> {
   return requestMailcoachJson({
     ...context,
-    path: `/subscribers/${encodeURIComponent(requiredString(input.subscriber_uuid, "subscriber_uuid", inputError))}`,
+    path: `/subscribers/${encodeURIComponent(requiredString(input.subscriber_uuid, "subscriber_uuid", providerInputError))}`,
     mode: "execute",
     notFoundAsInvalidInput: true,
   });
@@ -254,7 +261,9 @@ function subscriberCommand(
   command?: "confirm" | "unsubscribe" | "resend-confirmation",
   method: "POST" | "DELETE" = "POST",
 ) {
-  const subscriberUuid = encodeURIComponent(requiredString(input.subscriber_uuid, "subscriber_uuid", inputError));
+  const subscriberUuid = encodeURIComponent(
+    requiredString(input.subscriber_uuid, "subscriber_uuid", providerInputError),
+  );
   return requestMailcoachJson({
     ...context,
     path: `/subscribers/${subscriberUuid}${command ? `/${command}` : ""}`,
@@ -326,8 +335,8 @@ function buildMailcoachUrl(baseUrl: string, path: string) {
 
 function buildEmailListBody(input: Record<string, unknown>) {
   return compactObject({
-    name: requiredString(input.name, "name", inputError),
-    default_from_email: requiredString(input.default_from_email, "default_from_email", inputError),
+    name: requiredString(input.name, "name", providerInputError),
+    default_from_email: requiredString(input.default_from_email, "default_from_email", providerInputError),
     default_from_name: optionalString(input.default_from_name),
     default_reply_to_email: optionalString(input.default_reply_to_email),
     default_reply_to_name: optionalString(input.default_reply_to_name),
@@ -492,8 +501,4 @@ function trimTrailingSlash(value: string) {
     end -= 1;
   }
   return value.slice(0, end);
-}
-
-function inputError(message: string) {
-  return new ProviderRequestError(400, message);
 }

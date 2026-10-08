@@ -1,7 +1,13 @@
+import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-runtime.ts";
 import type { DialMyCallsActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { compactObject, optionalRawString, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import {
+  ProviderRequestError,
+  providerUserAgent,
+  requiredResponseRecord,
+  runProviderRequest,
+} from "../provider-runtime.ts";
 
 export interface DialmycallsCredentialCheck {
   providerAccountId?: string;
@@ -10,17 +16,7 @@ export interface DialmycallsCredentialCheck {
   providerMetadata: Record<string, unknown>;
 }
 
-interface ApiKeyProviderActionInput {
-  apiKey: string;
-  actionName: string;
-  input: Record<string, unknown>;
-  providerMetadata?: Record<string, unknown>;
-  values?: Record<string, string>;
-}
-
 export const dialMyCallsApiBaseUrl = "https://api.dialmycalls.com/2.0";
-
-const dialMyCallsDefaultRequestTimeoutMs = 30_000;
 
 type DialMyCallsPhase = "validate" | "execute";
 type DialMyCallsMethod = "GET" | "POST" | "PUT" | "DELETE";
@@ -30,7 +26,7 @@ type DialMyCallsActionHandler = (
   apiKey: string,
 ) => Promise<unknown>;
 
-export const dialMyCallsActionHandlers: Record<DialMyCallsActionName, DialMyCallsActionHandler> = {
+export const dialMyCallsActionHandlers: ProviderActionHandlers<"dialmycalls", DialMyCallsActionHandler> = {
   async get_account(_input, fetcher, apiKey) {
     return requestDialMyCallsJson({
       apiKey,
@@ -140,7 +136,7 @@ export const dialMyCallsActionHandlers: Record<DialMyCallsActionName, DialMyCall
       phase: "execute",
     });
   },
-} satisfies Record<DialMyCallsActionName, DialMyCallsActionHandler>;
+};
 
 export async function validateDialMyCallsCredential(
   input: Record<string, string>,
@@ -152,7 +148,7 @@ export async function validateDialMyCallsCredential(
     fetcher,
     phase: "validate",
   });
-  const envelope = requireObject(payload, "DialMyCalls account response");
+  const envelope = requiredResponseRecord(payload, "DialMyCalls account response");
   const account = optionalRecord(envelope.results);
   const meta = optionalRecord(envelope.meta);
 
@@ -171,7 +167,7 @@ export async function validateDialMyCallsCredential(
 }
 
 export async function executeDialMyCallsAction(
-  input: ApiKeyProviderActionInput & {
+  input: ApiKeyActionRequest & {
     actionName: DialMyCallsActionName;
     input: Record<string, unknown>;
   },
@@ -198,16 +194,14 @@ async function requestDialMyCallsJson(input: {
   body?: Record<string, unknown>;
   range?: string;
 }) {
-  const timeoutHandle = createProviderTimeout(undefined, dialMyCallsDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ label: "DialMyCalls" }, async (signal) => {
     const response = await input.fetcher(buildDialMyCallsUrl(input.path), {
       method: input.method ?? "GET",
       headers: buildDialMyCallsHeaders(input.apiKey, {
         hasBody: input.body !== undefined,
         range: input.range,
       }),
-      signal: timeoutHandle.signal,
+      signal,
       ...(input.body ? { body: JSON.stringify(input.body) } : {}),
     });
     const payload = await readDialMyCallsPayload(response);
@@ -217,22 +211,7 @@ async function requestDialMyCallsJson(input: {
     }
 
     return requireEnvelope(payload);
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-
-    if (timeoutHandle.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "DialMyCalls request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `DialMyCalls request failed: ${error.message}` : "DialMyCalls request failed",
-    );
-  } finally {
-    timeoutHandle.cleanup();
-  }
+  });
 }
 
 function buildDialMyCallsUrl(path: string) {
@@ -302,7 +281,7 @@ function isFailureEnvelope(payload: unknown) {
 }
 
 function requireEnvelope(payload: unknown) {
-  const envelope = requireObject(payload, "DialMyCalls response");
+  const envelope = requiredResponseRecord(payload, "DialMyCalls response");
   if (!("results" in envelope) || !optionalRecord(envelope.meta)) {
     throw new ProviderRequestError(502, "DialMyCalls returned an invalid response envelope");
   }
@@ -311,12 +290,12 @@ function requireEnvelope(payload: unknown) {
 
 function buildContactBody(input: Record<string, unknown>) {
   return compactObject({
-    firstname: readOptionalString(input.firstname),
-    lastname: readOptionalString(input.lastname),
+    firstname: optionalRawString(input.firstname),
+    lastname: optionalRawString(input.lastname),
     phone: readRequiredString(input.phone, "phone"),
-    extension: readOptionalString(input.extension),
-    email: readOptionalString(input.email),
-    extra1: readOptionalString(input.extra1),
+    extension: optionalRawString(input.extension),
+    email: optionalRawString(input.email),
+    extra1: optionalRawString(input.extra1),
     groups: readOptionalStringArray(input.groups, "groups"),
   });
 }
@@ -344,10 +323,6 @@ function readRequiredString(value: unknown, fieldName: string) {
   return value;
 }
 
-function readOptionalString(value: unknown) {
-  return typeof value === "string" ? value : undefined;
-}
-
 function readOptionalStringArray(value: unknown, fieldName: string) {
   if (value === undefined) {
     return undefined;
@@ -363,16 +338,4 @@ function readRequiredInteger(value: unknown, fieldName: string) {
     throw new ProviderRequestError(400, `${fieldName} must be an integer`);
   }
   return value as number;
-}
-
-function requireObject(value: unknown, context: string): Record<string, unknown> {
-  const object = optionalRecord(value);
-  if (!object) {
-    throw new ProviderRequestError(502, `${context} must be an object`);
-  }
-  return object;
-}
-
-function isAbortLikeError(error: unknown) {
-  return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
 }

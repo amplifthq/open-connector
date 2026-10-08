@@ -4,13 +4,14 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { FreshserviceActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   defineProviderProxy,
   defineProviderExecutors,
+  isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
@@ -43,7 +44,7 @@ type FreshserviceActionHandler = (
   context: FreshserviceActionContext,
 ) => Promise<unknown>;
 
-export const freshserviceActionHandlers: Record<FreshserviceActionName, FreshserviceActionHandler> = {
+export const freshserviceActionHandlers: ProviderActionHandlers<"freshservice", FreshserviceActionHandler> = {
   async list_tickets(input, context) {
     validateListTicketsInput(input);
     const perPage = optionalInteger(input.perPage) ?? freshserviceDefaultPageSize;
@@ -565,10 +566,6 @@ function readOptionalStringArray(value: unknown): string[] | undefined {
     .map((item) => optionalString(item))
     .filter((item): item is string => item !== undefined && item.length > 0);
   return result.length > 0 ? result : undefined;
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "name" in error && error.name === "AbortError";
 }
 
 function trimTrailingSlash(value: string): string {

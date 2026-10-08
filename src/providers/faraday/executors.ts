@@ -1,8 +1,13 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { FaradayActionName } from "./actions.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "faraday";
 const faradayApiBaseUrl = "https://api.faraday.ai/v1";
@@ -15,7 +20,7 @@ interface FaradayActionContext {
 
 type FaradayActionHandler = (input: Record<string, unknown>, context: FaradayActionContext) => Promise<unknown>;
 
-export const faradayActionHandlers: Record<FaradayActionName, FaradayActionHandler> = {
+export const faradayActionHandlers: ProviderActionHandlers<"faraday", FaradayActionHandler> = {
   async get_current_account(_input, context) {
     const account = await requestFaradayObject("/accounts/current", context);
     return {
@@ -103,6 +108,16 @@ export const faradayActionHandlers: Record<FaradayActionName, FaradayActionHandl
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, faradayActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: faradayApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

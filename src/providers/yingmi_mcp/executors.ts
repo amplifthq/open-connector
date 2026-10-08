@@ -1,14 +1,17 @@
-import type { CredentialValidators } from "../../core/types.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ApiKeyProviderContext, ProviderActionHandlers, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { Client } from "@modelcontextprotocol/client";
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { withMcpClient } from "../mcp-client.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  ProviderRequestError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 const endpoint = "https://stargate.yingmi.com/mcp/v2";
 const timeoutMs = 60_000;
-const validator = new CfWorkerJsonSchemaValidator();
 
 async function withClient<T>(
   context: ApiKeyProviderContext,
@@ -16,40 +19,36 @@ async function withClient<T>(
   run: (client: Client) => Promise<T>,
 ): Promise<T> {
   const headers = new Headers({ "x-api-key": context.apiKey, "user-agent": providerUserAgent });
-  const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
-    fetch: context.fetcher,
-    requestInit: { headers, signal: context.signal },
-  });
-  const client = new Client(
-    { name: "open-connector-yingmi-mcp", version: "1.0.0" },
-    { jsonSchemaValidator: validator },
+  return withMcpClient(
+    {
+      endpoint: new URL(endpoint),
+      transport: "streamable_http",
+      fetcher: context.fetcher,
+      headers,
+      signal: context.signal,
+      mapError: (error) => mapYingmiMcpError(error, phase),
+    },
+    run,
   );
-  try {
-    await client.connect(transport, { timeout: timeoutMs });
-    return await run(client);
-  } catch (error) {
-    const status = readErrorStatus(error);
-    if (status === 401 || status === 403) {
-      throw new ProviderRequestError(
-        phase === "validate" ? 400 : 401,
-        "Yingmi MCP API Key is invalid or expired",
-        error,
-      );
-    }
-    if (status === 429) {
-      throw new ProviderRequestError(429, "Yingmi MCP request was rate limited", error);
-    }
-    throw new ProviderRequestError(
-      status && status >= 400 && status < 500 ? 400 : 502,
-      error instanceof Error ? `Yingmi MCP request failed: ${error.message}` : "Yingmi MCP request failed",
-      error,
-    );
-  } finally {
-    await client.close().catch(() => undefined);
-  }
 }
 
-export const executors: import("../../core/types.ts").ProviderExecutors = defineApiKeyProviderExecutors("yingmi_mcp", {
+function mapYingmiMcpError(error: unknown, phase: "validate" | "execute"): ProviderRequestError {
+  const status = readErrorStatus(error);
+  if (status === 401 || status === 403)
+    return new ProviderRequestError(
+      phase === "validate" ? 400 : 401,
+      "Yingmi MCP API Key is invalid or expired",
+      error,
+    );
+  if (status === 429) return new ProviderRequestError(429, "Yingmi MCP request was rate limited", error);
+  return new ProviderRequestError(
+    status && status >= 400 && status < 500 ? 400 : 502,
+    error instanceof Error ? `Yingmi MCP request failed: ${error.message}` : "Yingmi MCP request failed",
+    error,
+  );
+}
+
+const handlers: ProviderActionHandlers<"yingmi_mcp", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   async list_tools(_input, context) {
     const result = await withClient(context, "execute", (client) => client.listTools({}, { timeout: timeoutMs }));
     return { tools: result.tools };
@@ -58,13 +57,26 @@ export const executors: import("../../core/types.ts").ProviderExecutors = define
     const result = await withClient(context, "execute", (client) =>
       client.callTool(
         { name: String(input.toolName), arguments: input.arguments as Record<string, unknown> },
-        undefined,
         { timeout: timeoutMs },
       ),
     );
     if (result.isError)
       throw new ProviderRequestError(502, `Yingmi MCP tool ${String(input.toolName)} returned an error`, result);
     return { result };
+  },
+};
+
+export const executors: ProviderExecutors = defineApiKeyProviderExecutors("yingmi_mcp", handlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service: "yingmi_mcp",
+  baseUrl: endpoint,
+  auth: { type: "api_key_header", name: "x-api-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) {
+      headers.set("accept", "application/json, text/event-stream");
+    }
   },
 });
 export const credentialValidators: CredentialValidators = {

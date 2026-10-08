@@ -1,7 +1,9 @@
+import type { ProviderActionHandlerSubset } from "../provider-runtime.ts";
 import type { HomeAssistantActionContext, HomeAssistantActionHandler } from "./runtime.ts";
 
 import { optionalRecord, optionalString, optionalStringOrNull, requiredRecord } from "../../core/cast.ts";
-import { badHomeAssistantRequest, requestHomeAssistantJson } from "./runtime.ts";
+import { providerInputError } from "../provider-runtime.ts";
+import { requestHomeAssistantJson } from "./runtime.ts";
 
 /**
  * One editable Home Assistant config domain served by `/api/config/<component>/config/<key>`.
@@ -39,7 +41,10 @@ const sceneDomain: HomeAssistantConfigDomain = {
 
 const slugPattern = /^[a-z0-9_]+$/;
 
-export const homeAssistantConfigActionHandlers: Record<string, HomeAssistantActionHandler> = {
+export const homeAssistantConfigActionHandlers: ProviderActionHandlerSubset<
+  "home_assistant",
+  HomeAssistantActionHandler
+> = {
   get_automation_config: (input, context) => readConfig(automationDomain, input, context),
   save_automation_config: (input, context) => writeConfig(automationDomain, input, context),
   delete_automation_config: (input, context) => removeConfig(automationDomain, input, context),
@@ -88,7 +93,7 @@ async function writeConfig(
   // The key travels in the path; Home Assistant injects it into the stored
   // entry itself, so the body is the bare config object.
   const path = buildConfigPath(domain, input);
-  const config = requiredRecord(input.config, "config", badHomeAssistantRequest);
+  const config = requiredRecord(input.config, "config", providerInputError);
   return {
     result: readConfigResult(
       await requestHomeAssistantJson({
@@ -124,10 +129,10 @@ function buildConfigPath(domain: HomeAssistantConfigDomain, input: Record<string
 function readConfigKey(domain: HomeAssistantConfigDomain, input: Record<string, unknown>): string {
   const value = optionalString(input[domain.keyField]);
   if (!value) {
-    throw badHomeAssistantRequest(`${domain.keyField} is required`);
+    throw providerInputError(`${domain.keyField} is required`);
   }
   if (domain.keyMustBeSlug && !slugPattern.test(value)) {
-    throw badHomeAssistantRequest(`${domain.keyField} must be a slug of lowercase letters, digits, and underscores`);
+    throw providerInputError(`${domain.keyField} must be a slug of lowercase letters, digits, and underscores`);
   }
   return value;
 }

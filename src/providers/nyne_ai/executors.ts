@@ -5,8 +5,8 @@ import type {
   ProviderProxyExecutor,
   ResolvedCredential,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { NyneAiActionName } from "./actions.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
@@ -22,7 +22,6 @@ import {
 
 const service = "nyne_ai";
 const nyneAiApiBaseUrl = "https://api.nyne.ai";
-const nyneAiRequestTimeoutMs = 30_000;
 
 type NyneAiMode = "validate" | "execute";
 type NyneAiActionHandler = ProviderRuntimeHandler<NyneAiActionContext>;
@@ -42,7 +41,7 @@ interface NyneAiRequestInput {
   mode: NyneAiMode;
 }
 
-export const nyneAiActionHandlers: Record<NyneAiActionName, NyneAiActionHandler> = {
+export const nyneAiActionHandlers: ProviderActionHandlers<"nyne_ai", NyneAiActionHandler> = {
   async get_usage(input, context) {
     const payload = await requestNyneAiJson(
       {
@@ -277,7 +276,7 @@ async function requestNyneAiJson(
   input: NyneAiRequestInput,
   context: NyneAiActionContext,
 ): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(context.signal, nyneAiRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(buildNyneAiUrl(input), {
       method: input.method,

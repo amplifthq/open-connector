@@ -4,11 +4,12 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { OpenstatusActionName } from "./actions.ts";
 
 import {
   compactObject,
+  looseArray,
   optionalBoolean,
   optionalIntegerLike,
   optionalRecord,
@@ -22,18 +23,18 @@ import {
   isAbortLikeError,
   ProviderRequestError,
   providerUserAgent,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 const service = "openstatus";
 export const openstatusApiBaseUrl = "https://api.openstatus.dev";
 
-const openstatusRequestTimeoutMs = 30_000;
 const monitorService = "openstatus.monitor.v1.MonitorService";
 
 type OpenstatusRequestPhase = "validate" | "execute";
 type OpenstatusActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const openstatusActionHandlers: Record<OpenstatusActionName, OpenstatusActionHandler> = {
+export const openstatusActionHandlers: ProviderActionHandlers<"openstatus", OpenstatusActionHandler> = {
   list_monitors(input, context) {
     return listMonitors(input, context);
   },
@@ -137,9 +138,9 @@ async function listMonitors(input: Record<string, unknown>, context: ApiKeyProvi
   const body = requireObjectPayload(payload, "OpenStatus list monitors response");
 
   return {
-    httpMonitors: readArray(body.httpMonitors),
-    tcpMonitors: readArray(body.tcpMonitors),
-    dnsMonitors: readArray(body.dnsMonitors),
+    httpMonitors: looseArray(body.httpMonitors),
+    tcpMonitors: looseArray(body.tcpMonitors),
+    dnsMonitors: looseArray(body.dnsMonitors),
     totalSize: optionalIntegerLike(body.totalSize, "totalSize") ?? 0,
   };
 }
@@ -149,7 +150,7 @@ async function getMonitor(input: Record<string, unknown>, context: ApiKeyProvide
     service: monitorService,
     method: "GetMonitor",
     body: {
-      id: requireInputString(input.id, "id"),
+      id: requiredInputString(input.id, "id"),
     },
     context,
   });
@@ -165,15 +166,15 @@ async function getMonitorStatus(input: Record<string, unknown>, context: ApiKeyP
     service: monitorService,
     method: "GetMonitorStatus",
     body: {
-      id: requireInputString(input.id, "id"),
+      id: requiredInputString(input.id, "id"),
     },
     context,
   });
   const body = requireObjectPayload(payload, "OpenStatus monitor status response");
 
   return {
-    id: optionalString(body.id) ?? requireInputString(input.id, "id"),
-    regions: readArray(body.regions),
+    id: optionalString(body.id) ?? requiredInputString(input.id, "id"),
+    regions: looseArray(body.regions),
   };
 }
 
@@ -182,7 +183,7 @@ async function getMonitorSummary(input: Record<string, unknown>, context: ApiKey
     service: monitorService,
     method: "GetMonitorSummary",
     body: compactObject({
-      id: requireInputString(input.id, "id"),
+      id: requiredInputString(input.id, "id"),
       timeRange: optionalString(input.timeRange),
       regions: readOptionalArray(input.regions),
     }),
@@ -200,7 +201,7 @@ async function listHttpResponseLogs(input: Record<string, unknown>, context: Api
     service: monitorService,
     method: "ListMonitorHTTPResponseLogs",
     body: compactObject({
-      id: requireInputString(input.id, "id"),
+      id: requiredInputString(input.id, "id"),
       fromTimestamp: input.fromTimestamp,
       toTimestamp: input.toTimestamp,
       limit: input.limit,
@@ -211,7 +212,7 @@ async function listHttpResponseLogs(input: Record<string, unknown>, context: Api
   const body = requireObjectPayload(payload, "OpenStatus HTTP response logs response");
 
   return {
-    logs: readArray(body.logs),
+    logs: looseArray(body.logs),
     pagination: optionalRecord(body.pagination) ?? null,
   };
 }
@@ -245,7 +246,7 @@ async function updateHttpMonitor(input: Record<string, unknown>, context: ApiKey
     service: monitorService,
     method: "UpdateHTTPMonitor",
     body: {
-      id: requireInputString(input.id, "id"),
+      id: requiredInputString(input.id, "id"),
       monitor: buildHttpMonitorPayload(input, true),
     },
     context,
@@ -266,7 +267,7 @@ async function executeSuccessMutation(
     service: monitorService,
     method,
     body: {
-      id: requireInputString(input.id, "id"),
+      id: requiredInputString(input.id, "id"),
     },
     context,
   });
@@ -321,7 +322,7 @@ async function openstatusFetch(input: {
   body?: Record<string, unknown>;
 }): Promise<Response> {
   const url = new URL(input.path, openstatusApiBaseUrl);
-  const timeout = createProviderTimeout(input.signal, openstatusRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
 
   try {
     return await input.fetcher(url, {
@@ -429,16 +430,12 @@ function buildHttpMonitorPayload(input: Record<string, unknown>, partial: boolea
   });
 
   if (!partial) {
-    monitor.name = requireInputString(input.name, "name");
-    monitor.url = requireInputString(input.url, "url");
-    monitor.periodicity = requireInputString(input.periodicity, "periodicity");
+    monitor.name = requiredInputString(input.name, "name");
+    monitor.url = requiredInputString(input.url, "url");
+    monitor.periodicity = requiredInputString(input.periodicity, "periodicity");
   }
 
   return monitor;
-}
-
-function requireInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function requireObjectPayload(value: unknown, label: string): Record<string, unknown> {
@@ -447,10 +444,6 @@ function requireObjectPayload(value: unknown, label: string): Record<string, unk
     throw new ProviderRequestError(502, `${label} is not an object`);
   }
   return parsed;
-}
-
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
 }
 
 function readOptionalArray(value: unknown): unknown[] | undefined {

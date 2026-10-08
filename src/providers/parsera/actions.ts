@@ -92,11 +92,10 @@ const parseraMarkdownOutputSchema = s.object("The normalized Markdown extraction
 
 const parseraListOutputSchema = s.looseObject("The list payload returned by Parsera.");
 
-export type ParseraActionName = "extract" | "parse" | "extract_markdown" | "list_llm_specs" | "list_proxy_countries";
-
 export const parseraActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "extract",
+    operationType: "read",
     description: "Extract structured data from a webpage URL with Parsera using a prompt, attributes, or both.",
     requiredScopes: [],
     inputSchema: parseraExtractInputSchema,
@@ -104,6 +103,7 @@ export const parseraActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "parse",
+    operationType: "read",
     description: "Parse structured attributes from raw HTML or text content already available to the caller.",
     requiredScopes: [],
     inputSchema: parseraParseInputSchema,
@@ -111,6 +111,7 @@ export const parseraActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "extract_markdown",
+    operationType: "read",
     description: "Extract clean Markdown from a webpage URL with Parsera.",
     requiredScopes: [],
     inputSchema: parseraExtractMarkdownInputSchema,
@@ -118,6 +119,7 @@ export const parseraActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_llm_specs",
+    operationType: "read",
     description: "List the LLM specifications available to Parsera requests.",
     requiredScopes: [],
     inputSchema: s.object("No input is required to list Parsera LLM specs.", {}),
@@ -125,6 +127,7 @@ export const parseraActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_proxy_countries",
+    operationType: "read",
     description: "List proxy countries available to Parsera extraction requests.",
     requiredScopes: [],
     inputSchema: s.object("No input is required to list Parsera proxy countries.", {}),

@@ -644,32 +644,10 @@ const submitStationMeasurementsInputSchema = s.object(
   { required: ["measurements"] },
 );
 
-export type OpenweatherApiActionName =
-  | "get_geocoding_direct"
-  | "get_geocoding_reverse"
-  | "get_geocoding_by_zip"
-  | "get_current_weather"
-  | "get_5_day_forecast"
-  | "get_circle_city_weather"
-  | "get_air_pollution_current"
-  | "get_air_pollution_forecast"
-  | "get_air_pollution_history"
-  | "get_uv_index"
-  | "get_uv_index_forecast"
-  | "get_uv_index_history"
-  | "get_weather_map_tile"
-  | "add_weather_station"
-  | "update_weather_station"
-  | "delete_weather_station"
-  | "list_weather_stations"
-  | "get_weather_station"
-  | "submit_station_measurements"
-  | "get_station_measurements"
-  | "get_weather_triggers";
-
 export const openweatherApiActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_geocoding_direct",
+    operationType: "read",
     description: "Resolve one place name into one or more OpenWeather geocoding matches.",
     requiredScopes: [],
     inputSchema: geocodingDirectInputSchema,
@@ -683,6 +661,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_geocoding_reverse",
+    operationType: "read",
     description: "Resolve one latitude and longitude pair into one or more named places.",
     requiredScopes: [],
     inputSchema: geocodingReverseInputSchema,
@@ -696,6 +675,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_geocoding_by_zip",
+    operationType: "read",
     description: "Resolve one ZIP or postal code into a named OpenWeather location.",
     requiredScopes: [],
     inputSchema: geocodingByZipInputSchema,
@@ -712,6 +692,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_current_weather",
+    operationType: "read",
     description: "Retrieve the current weather for exactly one OpenWeather location selector.",
     requiredScopes: [],
     inputSchema: currentWeatherInputSchema,
@@ -719,6 +700,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_5_day_forecast",
+    operationType: "read",
     description: "Retrieve the OpenWeather 5-day forecast in 3-hour steps for exactly one location selector.",
     requiredScopes: [],
     inputSchema: fiveDayForecastInputSchema,
@@ -726,6 +708,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_circle_city_weather",
+    operationType: "read",
     description:
       "Retrieve current weather for nearby cities around one latitude and longitude by using OpenWeather's compatibility city-search endpoint.",
     requiredScopes: [],
@@ -734,6 +717,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_air_pollution_current",
+    operationType: "read",
     description: "Retrieve the current air-pollution snapshot for one latitude and longitude.",
     requiredScopes: [],
     inputSchema: airPollutionCoordinatesInputSchema,
@@ -741,6 +725,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_air_pollution_forecast",
+    operationType: "read",
     description: "Retrieve the air-pollution forecast for one latitude and longitude.",
     requiredScopes: [],
     inputSchema: airPollutionCoordinatesInputSchema,
@@ -748,6 +733,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_air_pollution_history",
+    operationType: "read",
     description: "Retrieve historical air-pollution data for one latitude and longitude over a time range.",
     requiredScopes: [],
     inputSchema: airPollutionHistoryInputSchema,
@@ -755,6 +741,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_uv_index",
+    operationType: "read",
     description:
       "Return the current UV index by sampling OpenWeather One Call 3.0, because the legacy UV Index API is retired.",
     requiredScopes: [],
@@ -763,6 +750,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_uv_index_forecast",
+    operationType: "read",
     description:
       "Return daily UV forecast points by sampling OpenWeather One Call 3.0, because the legacy UV Index API is retired.",
     requiredScopes: [],
@@ -777,6 +765,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_uv_index_history",
+    operationType: "read",
     description:
       "Return sampled historical UV index points by querying OpenWeather One Call 3.0 timemachine once per day in the requested range, because the legacy UV Index API is retired.",
     requiredScopes: [],
@@ -791,6 +780,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_weather_map_tile",
+    operationType: "read",
     description: "Fetch one OpenWeather weather-map tile and return it as Base64 PNG bytes.",
     requiredScopes: [],
     inputSchema: weatherMapTileInputSchema,
@@ -798,6 +788,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "add_weather_station",
+    operationType: "write",
     description: "Create one OpenWeather weather station under the current account.",
     requiredScopes: [],
     inputSchema: stationCreateInputSchema,
@@ -805,6 +796,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_weather_station",
+    operationType: "write",
     description: "Update one existing OpenWeather weather station.",
     requiredScopes: [],
     inputSchema: stationUpdateInputSchema,
@@ -812,6 +804,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_weather_station",
+    operationType: "destructive",
     description: "Delete one OpenWeather weather station by identifier.",
     requiredScopes: [],
     inputSchema: weatherStationIdentifierInputSchema,
@@ -825,6 +818,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_weather_stations",
+    operationType: "read",
     description: "List all OpenWeather weather stations available to the current account.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for listing weather stations.", {}),
@@ -838,6 +832,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_weather_station",
+    operationType: "read",
     description: "Retrieve one OpenWeather weather station by identifier.",
     requiredScopes: [],
     inputSchema: weatherStationIdentifierInputSchema,
@@ -845,6 +840,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "submit_station_measurements",
+    operationType: "write",
     description: "Submit one or more measurements for existing OpenWeather weather stations.",
     requiredScopes: [],
     inputSchema: submitStationMeasurementsInputSchema,
@@ -859,6 +855,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_station_measurements",
+    operationType: "read",
     description: "List aggregated historical measurements for one OpenWeather weather station.",
     requiredScopes: [],
     inputSchema: stationMeasurementsInputSchema,
@@ -875,6 +872,7 @@ export const openweatherApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_weather_triggers",
+    operationType: "read",
     description:
       "Compatibility action for the retired OpenWeather Weather Triggers API. Execution always returns a deprecation error.",
     requiredScopes: [],

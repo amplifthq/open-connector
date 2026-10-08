@@ -1,9 +1,16 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { optionalBoolean, optionalInteger, optionalRecord, optionalString, compactObject } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
 import {
   defineProviderExecutors,
+  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
@@ -25,7 +32,7 @@ interface ApiflashActionContext {
 
 type ApiflashActionHandler = (input: Record<string, unknown>, context: ApiflashActionContext) => Promise<unknown>;
 
-export const apiflashActionHandlers: Record<string, ApiflashActionHandler> = {
+export const apiflashActionHandlers: ProviderActionHandlers<"apiflash", ApiflashActionHandler> = {
   capture_website_screenshot(input, context) {
     return captureApiflashWebsiteScreenshot(input, context);
   },
@@ -48,6 +55,13 @@ export const executors: ProviderExecutors = defineProviderExecutors<ApiflashActi
       signal: context.signal,
     };
   },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apiflashApiBaseUrl,
+  auth: { type: "api_key_query", name: "access_key" },
+  skipDnsValidation: true,
 });
 
 export const credentialValidators: CredentialValidators = {

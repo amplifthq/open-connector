@@ -1,19 +1,20 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { KustomerActionName } from "./actions.ts";
 
 import { optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
 const service = "kustomer";
 const kustomerApiBaseUrl = "https://api.kustomerapp.com/v1";
-const kustomerDefaultRequestTimeoutMs = 30_000;
 
 type KustomerActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type KustomerActionHandler = (input: Record<string, unknown>, context: KustomerActionContext) => Promise<unknown>;
@@ -29,7 +30,7 @@ interface KustomerRequestInput {
   body?: unknown;
 }
 
-export const kustomerActionHandlers: Record<KustomerActionName, KustomerActionHandler> = {
+export const kustomerActionHandlers: ProviderActionHandlers<"kustomer", KustomerActionHandler> = {
   async list_customers(input, context): Promise<unknown> {
     const payload = await requestKustomerJson({
       ...context,
@@ -108,6 +109,16 @@ export const kustomerActionHandlers: Record<KustomerActionName, KustomerActionHa
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, kustomerActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: kustomerApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input) {
     requiredString(input.apiKey, "apiKey", providerInputError);
@@ -126,7 +137,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestKustomerJson(input: KustomerRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, kustomerDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   const headers: Record<string, string> = {
     accept: "application/json",
     authorization: `Bearer ${input.apiKey}`,
@@ -376,8 +387,4 @@ function requireProviderObject(payload: unknown, label: string): Record<string, 
 
 function encodePath(value: string): string {
   return encodeURIComponent(value);
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

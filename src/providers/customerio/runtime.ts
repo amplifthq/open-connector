@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { CustomerioActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -13,14 +13,15 @@ import {
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
+  providerResponseError,
   providerUserAgent,
   ProviderRequestError,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 export const customerioTrackApiBaseUrl = "https://track.customer.io";
 export const customerioTrackEuApiBaseUrl = "https://track-eu.customer.io";
-
-const customerioDefaultRequestTimeoutMs = 30_000;
 
 type CustomerioPhase = "validate" | "execute";
 
@@ -37,13 +38,13 @@ type CustomerioActionHandler = (
   context: CustomerioCredentialContext,
 ) => Promise<unknown>;
 
-export const customerioActionHandlers: Record<CustomerioActionName, CustomerioActionHandler> = {
+export const customerioActionHandlers: ProviderActionHandlers<"customerio", CustomerioActionHandler> = {
   identify_customer(input, context) {
     return customerioRequest({
       context,
       method: "PUT",
-      path: `/api/v1/customers/${encodeURIComponent(requireNonEmptyString(input.identifier, "identifier"))}`,
-      body: requiredRecord(input.attributes, "attributes", invalidInputError),
+      path: `/api/v1/customers/${encodeURIComponent(requiredInputString(input.identifier, "identifier"))}`,
+      body: requiredRecord(input.attributes, "attributes", providerInputError),
       phase: "execute",
     });
   },
@@ -56,10 +57,10 @@ export const customerioActionHandlers: Record<CustomerioActionName, CustomerioAc
     return customerioRequest({
       context,
       method: "POST",
-      path: `/api/v1/customers/${encodeURIComponent(requireNonEmptyString(input.identifier, "identifier"))}/events`,
+      path: `/api/v1/customers/${encodeURIComponent(requiredInputString(input.identifier, "identifier"))}/events`,
       body: compactObject({
         anonymous_id: anonymousId,
-        name: requireNonEmptyString(input.name, "name"),
+        name: requiredInputString(input.name, "name"),
         type,
         id: optionalString(input.eventId),
         timestamp: optionalInteger(input.timestamp),
@@ -74,8 +75,8 @@ export const customerioActionHandlers: Record<CustomerioActionName, CustomerioAc
       method: "POST",
       path: "/api/v1/events",
       body: compactObject({
-        anonymous_id: requireNonEmptyString(input.anonymousId, "anonymousId"),
-        name: requireNonEmptyString(input.name, "name"),
+        anonymous_id: requiredInputString(input.anonymousId, "anonymousId"),
+        name: requiredInputString(input.name, "name"),
         type: optionalString(input.type),
         id: optionalString(input.eventId),
         timestamp: optionalInteger(input.timestamp),
@@ -88,7 +89,7 @@ export const customerioActionHandlers: Record<CustomerioActionName, CustomerioAc
     return customerioRequest({
       context,
       method: "DELETE",
-      path: `/api/v1/customers/${encodeURIComponent(requireNonEmptyString(input.identifier, "identifier"))}`,
+      path: `/api/v1/customers/${encodeURIComponent(requiredInputString(input.identifier, "identifier"))}`,
       phase: "execute",
     });
   },
@@ -96,7 +97,7 @@ export const customerioActionHandlers: Record<CustomerioActionName, CustomerioAc
     return customerioRequest({
       context,
       method: "POST",
-      path: `/api/v1/customers/${encodeURIComponent(requireNonEmptyString(input.identifier, "identifier"))}/suppress`,
+      path: `/api/v1/customers/${encodeURIComponent(requiredInputString(input.identifier, "identifier"))}/suppress`,
       phase: "execute",
     });
   },
@@ -104,7 +105,7 @@ export const customerioActionHandlers: Record<CustomerioActionName, CustomerioAc
     return customerioRequest({
       context,
       method: "POST",
-      path: `/api/v1/customers/${encodeURIComponent(requireNonEmptyString(input.identifier, "identifier"))}/unsuppress`,
+      path: `/api/v1/customers/${encodeURIComponent(requiredInputString(input.identifier, "identifier"))}/unsuppress`,
       phase: "execute",
     });
   },
@@ -165,8 +166,8 @@ export function resolveCustomerioCredentialContext(
   metadata: Record<string, unknown> = {},
 ): CustomerioCredentialContext {
   return {
-    siteId: requiredString(values.siteId, "siteId", invalidInputError),
-    apiKey: requiredString(values.apiKey, "apiKey", invalidInputError),
+    siteId: requiredString(values.siteId, "siteId", providerInputError),
+    apiKey: requiredString(values.apiKey, "apiKey", providerInputError),
     apiBaseUrl: normalizeApiBaseUrl(optionalString(metadata.apiBaseUrl), optionalString(metadata.region)),
     fetcher,
     signal,
@@ -182,7 +183,7 @@ async function customerioRequest(input: {
   phase: CustomerioPhase;
   parseResponse?: boolean;
 }): Promise<unknown> {
-  const timeoutHandle = createProviderTimeout(input.context.signal, customerioDefaultRequestTimeoutMs);
+  const timeoutHandle = createProviderTimeout(input.context.signal);
   const headers: Record<string, string> = {
     accept: "application/json",
     authorization: buildCustomerioAuthorization(input.context.siteId, input.context.apiKey),
@@ -291,23 +292,11 @@ function buildCustomerioAuthorization(siteId: string, apiKey: string): string {
   return `Basic ${Buffer.from(`${siteId}:${apiKey}`).toString("base64")}`;
 }
 
-function requireNonEmptyString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, invalidInputError);
-}
-
 function readPersonReference(value: unknown, fieldName: string): Record<string, unknown> {
-  const record = requiredRecord(value, fieldName, invalidInputError);
+  const record = requiredRecord(value, fieldName, providerInputError);
   const presentCount = ["id", "email", "cio_id"].filter((key) => optionalString(record[key]) !== undefined).length;
   if (presentCount !== 1) {
     throw new ProviderRequestError(400, "Exactly one of id, email, or cio_id is required.");
   }
   return record;
-}
-
-function invalidInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerResponseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

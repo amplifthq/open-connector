@@ -78,22 +78,17 @@ const searchIdInputSchema = {
   }),
 };
 
-export type SearchApiActionName =
-  | "get_account_info"
-  | "search"
-  | "get_locations"
-  | "get_cached_search_json"
-  | "get_cached_search_html";
-
 export const searchApiActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_account_info",
+    operationType: "read",
     description: "Retrieve account usage statistics for the connected SearchApi API key.",
     inputSchema: s.object("The input payload for retrieving SearchApi account usage.", {}),
     outputSchema: accountInfoOutputSchema,
   }),
   defineProviderAction(service, {
     name: "search",
+    operationType: "read",
     description: "Run one SearchApi search request with the first-pass common query parameters.",
     inputSchema: s.object(
       "Input parameters for executing a SearchApi search request.",
@@ -154,6 +149,7 @@ export const searchApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_locations",
+    operationType: "read",
     description: "Look up canonical SearchApi locations for geo-targeted search queries.",
     inputSchema: s.object(
       "Input parameters for retrieving SearchApi locations.",
@@ -170,12 +166,14 @@ export const searchApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_cached_search_json",
+    operationType: "read",
     description: "Retrieve one cached SearchApi search result in JSON format by search identifier.",
     inputSchema: searchIdInputSchema,
     outputSchema: searchResultOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_cached_search_html",
+    operationType: "read",
     description: "Retrieve one cached SearchApi search result in HTML format by search identifier.",
     inputSchema: searchIdInputSchema,
     outputSchema: s.object("Cached HTML payload returned by SearchApi.", {

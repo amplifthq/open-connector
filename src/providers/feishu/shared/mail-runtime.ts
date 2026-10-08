@@ -2,7 +2,9 @@ import type { FeishuJsonRequest } from "./client.ts";
 
 import { Buffer } from "node:buffer";
 import MailComposer from "nodemailer/lib/mail-composer/index.js";
-import { providerFetch, ProviderRequestError } from "../../provider-runtime.ts";
+import { optionalBoolean, optionalNumber } from "../../../core/cast.ts";
+import { providerFetch, providerInputError, ProviderRequestError } from "../../provider-runtime.ts";
+import { extractFeishuMailDraftId, readFeishuMailMessagePage } from "./mail-response.ts";
 import { downloadFeishuSource } from "./media.ts";
 
 interface MailActionHandler {
@@ -62,7 +64,7 @@ async function listMessages(input: Record<string, unknown>, request: FeishuJsonR
   const folderId = optionalString(input.folderId);
   const labelId = optionalString(input.labelId);
   if (folderId && labelId) {
-    throw invalidInput("folderId and labelId cannot be combined");
+    throw providerInputError("folderId and labelId cannot be combined");
   }
   const data = await request({
     path: mailboxPath(input, "messages"),
@@ -70,11 +72,11 @@ async function listMessages(input: Record<string, unknown>, request: FeishuJsonR
       folder_id: labelId ? undefined : (folderId ?? "INBOX"),
       label_id: labelId,
       only_unread: optionalBoolean(input.onlyUnread),
-      page_size: optionalNumber(input.pageSize) ?? 50,
+      page_size: optionalNumber(input.pageSize) ?? 20,
       page_token: optionalString(input.pageToken),
     },
   });
-  return normalizePage(data);
+  return readFeishuMailMessagePage(data);
 }
 
 async function searchMessages(input: Record<string, unknown>, request: FeishuJsonRequest) {
@@ -97,7 +99,7 @@ async function searchMessages(input: Record<string, unknown>, request: FeishuJso
         : undefined,
   });
   if (!optionalString(input.query) && Object.keys(filter).length === 0) {
-    throw invalidInput("mail search requires query or at least one filter");
+    throw providerInputError("mail search requires query or at least one filter");
   }
   const data = await request({
     method: "POST",
@@ -112,6 +114,14 @@ async function searchMessages(input: Record<string, unknown>, request: FeishuJso
     }),
   });
   return normalizePage(data);
+}
+
+function normalizePage(data: Record<string, unknown>) {
+  return {
+    items: recordArray(data.items),
+    hasMore: data.has_more === true,
+    pageToken: optionalString(data.page_token) ?? null,
+  };
 }
 
 async function getMessage(input: Record<string, unknown>, request: FeishuJsonRequest) {
@@ -148,7 +158,7 @@ async function createDraft(input: Record<string, unknown>, request: FeishuJsonRe
     path: mailboxPathFromId(mailbox, "drafts"),
     body: { raw },
   });
-  return { draftId: extractDraftId(data), raw: data };
+  return { draftId: extractFeishuMailDraftId(data), raw: data };
 }
 
 async function updateDraft(input: Record<string, unknown>, request: FeishuJsonRequest, fetcher: typeof fetch) {
@@ -160,7 +170,7 @@ async function updateDraft(input: Record<string, unknown>, request: FeishuJsonRe
     path: mailboxPathFromId(mailbox, "drafts", draftId),
     body: { raw },
   });
-  return { draftId: extractDraftId(data, draftId), raw: data };
+  return { draftId: extractFeishuMailDraftId(data, draftId), raw: data };
 }
 
 async function deleteDraft(input: Record<string, unknown>, request: FeishuJsonRequest) {
@@ -185,7 +195,7 @@ async function sendDraft(input: Record<string, unknown>, request: FeishuJsonRequ
 
 async function composeAndSend(input: Record<string, unknown>, request: FeishuJsonRequest, fetcher: typeof fetch) {
   if (!optionalStringArray(input.to) && !optionalStringArray(input.cc) && !optionalStringArray(input.bcc)) {
-    throw invalidInput("at least one recipient is required");
+    throw providerInputError("at least one recipient is required");
   }
   const draft = await createDraft(input, request, fetcher);
   return sendDraft({ mailboxId: mailboxId(input), draftId: draft.draftId }, request);
@@ -280,7 +290,7 @@ async function reply(input: Record<string, unknown>, request: FeishuJsonRequest,
     path: mailboxPathFromId(mailbox, "drafts"),
     body: { raw },
   });
-  const draftId = extractDraftId(created);
+  const draftId = extractFeishuMailDraftId(created);
   const sent = await request({
     method: "POST",
     path: mailboxPathFromId(mailbox, "drafts", draftId, "send"),
@@ -311,7 +321,7 @@ async function forward(input: Record<string, unknown>, request: FeishuJsonReques
     path: mailboxPathFromId(mailbox, "drafts"),
     body: { raw },
   });
-  const draftId = extractDraftId(created);
+  const draftId = extractFeishuMailDraftId(created);
   const sent = await request({
     method: "POST",
     path: mailboxPathFromId(mailbox, "drafts", draftId, "send"),
@@ -326,7 +336,7 @@ async function modifyMessages(input: Record<string, unknown>, request: FeishuJso
     !optionalStringArray(input.removeLabelIds) &&
     !optionalString(input.targetFolderId)
   ) {
-    throw invalidInput("at least one label or folder change is required");
+    throw providerInputError("at least one label or folder change is required");
   }
   return runMessageBatches(messageIds, async (ids) => {
     await request({
@@ -404,10 +414,10 @@ async function fetchFullMessage(input: Record<string, unknown>, request: FeishuJ
 
 async function composeRaw(input: ComposeMailInput) {
   if (!input.allowNoRecipients && input.to.length === 0 && input.cc.length === 0 && input.bcc.length === 0) {
-    throw invalidInput("at least one recipient is required");
+    throw providerInputError("at least one recipient is required");
   }
   if (!input.text && !input.html) {
-    throw invalidInput("text or html body is required");
+    throw providerInputError("text or html body is required");
   }
   const headers: Record<string, string> = {};
   if (input.replyToMessageId) {
@@ -429,7 +439,7 @@ async function composeRaw(input: ComposeMailInput) {
     .compile()
     .build();
   if (buffer.byteLength > maxMailMimeBytes) {
-    throw invalidInput("mail MIME exceeds the 25 MB limit");
+    throw providerInputError("mail MIME exceeds the 25 MB limit");
   }
   const normalized = buffer.toString("utf8").replaceAll("\r\n", "\n");
   return Buffer.from(normalized).toString("base64url");
@@ -440,7 +450,7 @@ async function downloadMailAttachments(value: unknown, fetcher: typeof fetch) {
     return [];
   }
   if (!Array.isArray(value) || value.length > 20) {
-    throw invalidInput("attachments must be an array with at most 20 items");
+    throw providerInputError("attachments must be an array with at most 20 items");
   }
   const attachments: MailAttachment[] = [];
   let totalBytes = 0;
@@ -462,7 +472,7 @@ async function downloadMailAttachments(value: unknown, fetcher: typeof fetch) {
     }
     totalBytes += bytes.byteLength;
     if (totalBytes > maxMailMimeBytes) {
-      throw invalidInput("mail attachment source bytes exceed 25 MB");
+      throw providerInputError("mail attachment source bytes exceed 25 MB");
     }
     attachments.push({
       filename: source.fileName,
@@ -515,11 +525,6 @@ function mailDeliveryStatus(value: unknown) {
   return { value: status, label };
 }
 
-function extractDraftId(data: Record<string, unknown>, fallback?: string) {
-  const draft = recordValue(data.draft);
-  return requiredString(data.draft_id ?? data.id ?? draft.draft_id ?? fallback, "draft_id");
-}
-
 function mailboxPath(input: Record<string, unknown>, ...parts: string[]) {
   return mailboxPathFromId(mailboxId(input), ...parts);
 }
@@ -530,14 +535,6 @@ function mailboxPathFromId(mailbox: string, ...parts: string[]) {
 
 function mailboxId(input: Record<string, unknown>) {
   return optionalString(input.mailboxId) ?? "me";
-}
-
-function normalizePage(data: Record<string, unknown>) {
-  return {
-    items: recordArray(data.items),
-    hasMore: data.has_more === true,
-    pageToken: optionalString(data.page_token) ?? null,
-  };
 }
 
 function address(value: unknown) {
@@ -566,7 +563,7 @@ function forwardSubject(subject: string) {
 function unixSeconds(value: string) {
   const milliseconds = Date.parse(value);
   if (!Number.isFinite(milliseconds)) {
-    throw invalidInput("sendTime must be an RFC 3339 date-time");
+    throw providerInputError("sendTime must be an RFC 3339 date-time");
   }
   return Math.trunc(milliseconds / 1000);
 }
@@ -591,7 +588,7 @@ function requiredString(value: unknown, field: string) {
   if (typeof value === "string" && value.length > 0) {
     return value;
   }
-  throw invalidInput(`${field} must be a non-empty string`);
+  throw providerInputError(`${field} must be a non-empty string`);
 }
 
 function optionalString(value: unknown) {
@@ -601,7 +598,7 @@ function optionalString(value: unknown) {
 function requiredStringArray(value: unknown, field: string) {
   const values = optionalStringArray(value);
   if (!values) {
-    throw invalidInput(`${field} must contain at least one value`);
+    throw providerInputError(`${field} must contain at least one value`);
   }
   return values;
 }
@@ -614,18 +611,6 @@ function optionalStringArray(value: unknown) {
   return values.length > 0 ? values : undefined;
 }
 
-function optionalNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function optionalBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
-}
-
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
-}
-
-function invalidInput(message: string) {
-  return new ProviderRequestError(400, message);
 }

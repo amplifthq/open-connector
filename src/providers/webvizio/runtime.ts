@@ -1,16 +1,17 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { WebvizioActionName } from "./actions.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
 } from "../provider-runtime.ts";
 
-const webvizioApiBaseUrl = "https://app.webvizio.com/api/v1";
+export const webvizioApiBaseUrl = "https://app.webvizio.com/api/v1";
 const webvizioWebhookPath = "/webhook";
 const webvizioDefaultRequestTimeoutMs = 30_000;
 
@@ -24,7 +25,7 @@ interface WebvizioRequestInput {
   body?: Record<string, unknown>;
 }
 
-export const webvizioActionHandlers: Record<WebvizioActionName, WebvizioActionHandler> = {
+export const webvizioActionHandlers: ProviderActionHandlers<"webvizio", WebvizioActionHandler> = {
   async create_rest_hook_subscription(input, context) {
     const url = requiredString(input.url, "url", providerInputError);
     const event = requiredString(input.event, "event", providerInputError);
@@ -157,8 +158,4 @@ function readRequiredWebhookId(input: Record<string, unknown>, key: string): num
   if (!Number.isInteger(parsed) || parsed <= 0)
     throw new ProviderRequestError(400, `${key} must be a positive integer`);
   return parsed;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

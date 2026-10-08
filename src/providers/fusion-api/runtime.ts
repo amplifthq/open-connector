@@ -1,29 +1,41 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ApiKeyProviderContext, ProviderActionHandlers, ProviderRuntimeHandler } from "../provider-runtime.ts";
 import type { FusionApiOperation } from "./operations.ts";
 
+import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { compactJson, encodePathSegment } from "../../core/request.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
+  mapProviderActionHandlers,
   ProviderRequestError,
   providerUserAgent,
 } from "../provider-runtime.ts";
 import { fusionApiOperations } from "./operations.ts";
 
-const fusionApiDefaultBaseUrl = "https://fusion-api.oomol.com";
+export const fusionApiDefaultBaseUrl = "https://fusion-api.oomol.com";
 const fusionApiDefaultRequestTimeoutMs = 30_000;
+const fusionApiLongRunningRequestTimeoutMs = 300_000;
+const fusionApiLongRunningPaths = new Set(["/v1/deepseek-ocr/action/recognize", "/v1/jina-reader/action/read"]);
 const fusionApiValidationPath = "/openapi/qwen-image?hideTaskStateAPI=true";
 
 type FusionApiActionContext = ApiKeyProviderContext;
 
-export const fusionApiActionHandlers = Object.fromEntries(
-  fusionApiOperations.map((operation) => [
-    operation.actionName,
-    (input: Record<string, unknown>, context: FusionApiActionContext) =>
+const fusionApiActionSources = fusionApiOperations.map((operation) => ({
+  name: operation.actionName,
+  operation,
+}));
+
+export const fusionApiActionHandlers: ProviderActionHandlers<
+  "fusion-api",
+  ProviderRuntimeHandler<FusionApiActionContext>
+> = mapProviderActionHandlers(
+  "fusion-api",
+  fusionApiActionSources,
+  ({ operation }) =>
+    (input, context) =>
       executeFusionApiOperation(operation, input, context),
-  ]),
-) as Record<string, ProviderRuntimeHandler<FusionApiActionContext>>;
+);
 
 export async function validateFusionApiCredential(
   apiKey: string,
@@ -94,7 +106,10 @@ async function fusionApiRequest(context: FusionApiRequestContext, request: Fusio
     }
   }
 
-  const timeout = createProviderTimeout(context.signal, fusionApiDefaultRequestTimeoutMs);
+  const requestTimeoutMs = fusionApiLongRunningPaths.has(request.path)
+    ? fusionApiLongRunningRequestTimeoutMs
+    : fusionApiDefaultRequestTimeoutMs;
+  const timeout = createProviderTimeout(context.signal, requestTimeoutMs);
   let response: Response;
   try {
     response = await context.fetcher(url, {
@@ -106,8 +121,8 @@ async function fusionApiRequest(context: FusionApiRequestContext, request: Fusio
   } catch (error) {
     if (timeout.didTimeout() && isAbortLikeError(error)) {
       throw new ProviderRequestError(
-        502,
-        `fusion-api ${request.path} request timed out after ${Math.ceil(fusionApiDefaultRequestTimeoutMs / 1000)} seconds`,
+        504,
+        `fusion-api ${request.path} request timed out after ${Math.ceil(requestTimeoutMs / 1000)} seconds`,
       );
     }
     const message = error instanceof Error && error.message.trim() ? error.message : "request failed";
@@ -120,7 +135,15 @@ async function fusionApiRequest(context: FusionApiRequestContext, request: Fusio
     return readFusionApiPayload(response);
   }
 
-  throw new ProviderRequestError(response.status, await readFusionApiError(response));
+  const error = await readFusionApiError(response);
+  if (
+    response.status === 400 ||
+    response.status === 422 ||
+    (response.status === 500 && error.state === "params_error")
+  ) {
+    throw new ProviderRequestError(400, error.message, undefined, "invalid_input");
+  }
+  throw new ProviderRequestError(response.status, error.message, undefined, "provider_error");
 }
 
 function buildFusionApiPath(operation: FusionApiOperation, input: Record<string, unknown>): string {
@@ -208,6 +231,12 @@ function normalizeFusionApiPayload(payload: unknown): unknown {
       progress: record.progress,
     };
   }
+  if (
+    (record.success === true && record.state === "failed") ||
+    (record.success === false && record.state === "error")
+  ) {
+    return { state: "failed", error: normalizeFusionApiError(payload, "fusion-api task failed").message };
+  }
   if (record.success === false && record.state === "not_found") {
     return {
       state: "not_found",
@@ -220,22 +249,21 @@ function normalizeFusionApiPayload(payload: unknown): unknown {
   return payload;
 }
 
-async function readFusionApiError(response: Response): Promise<string> {
+async function readFusionApiError(response: Response) {
   const text = await response.text().catch(() => "");
+  const fallback = text.trim() || `fusion-api request failed with ${response.status}`;
   try {
-    const payload = JSON.parse(text) as {
-      error?: unknown;
-      message?: unknown;
-    };
-    if (typeof payload.error === "string" && payload.error.trim()) {
-      return payload.error;
-    }
-    if (typeof payload.message === "string" && payload.message.trim()) {
-      return payload.message;
-    }
+    return normalizeFusionApiError(JSON.parse(text), fallback);
   } catch {
-    return text.trim() || `fusion-api request failed with ${response.status}`;
+    return { message: fallback, state: undefined };
   }
-
-  return text.trim() || `fusion-api request failed with ${response.status}`;
+}
+function normalizeFusionApiError(payload: unknown, fallback: string) {
+  const record = optionalRecord(payload);
+  const error = optionalRecord(record?.error);
+  return {
+    message:
+      optionalString(record?.error) ?? optionalString(error?.message) ?? optionalString(record?.message) ?? fallback,
+    state: optionalString(record?.state),
+  };
 }

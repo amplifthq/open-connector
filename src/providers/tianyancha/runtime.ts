@@ -1,3 +1,4 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -17,7 +18,6 @@ import {
 
 export const tianyanchaApiBaseUrl = "https://open.api.tianyancha.com";
 
-const tianyanchaRequestTimeoutMs = 30_000;
 const tenderSearchTypeCode: Record<string, number> = { title: 1, purchaser: 2, supplier: 3 };
 const tenderNoticeTypeCode: Record<string, number> = { forecast: 1, announcement: 2, result: 4 };
 const relationshipTypeCode: Record<string, string> = {
@@ -43,6 +43,9 @@ const actionPathByName: Record<string, string> = {
   list_company_key_personnel: "/services/open/ic/staff/2.0",
   list_company_shareholders: "/services/open/ic/holder/2.0",
   list_company_investments: "/services/open/ic/inverst/2.0",
+  list_company_equity_changes: "/services/open/ic/holderChange/2.0",
+  list_company_historical_shareholders: "/services/open/hi/holder/2.0",
+  list_company_historical_investments: "/services/open/hi/invest/2.0",
   list_company_branches: "/services/open/ic/branch/2.0",
   list_company_changes: "/services/open/ic/changeinfo/2.0",
   get_company_annual_reports: "/services/open/ic/annualreport/2.0",
@@ -58,7 +61,10 @@ const actionPathByName: Record<string, string> = {
   list_company_news: "/services/open/ps/news/2.0",
 };
 
-export const tianyanchaActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const tianyanchaActionHandlers: ProviderActionHandlers<
+  "tianyancha",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   search_companies: action("search_companies"),
   search_companies_advanced: action("search_companies_advanced"),
   get_company_basic_info: action("get_company_basic_info"),
@@ -67,6 +73,9 @@ export const tianyanchaActionHandlers: Record<string, ProviderRuntimeHandler<Api
   list_company_key_personnel: action("list_company_key_personnel"),
   list_company_shareholders: action("list_company_shareholders"),
   list_company_investments: action("list_company_investments"),
+  list_company_equity_changes: action("list_company_equity_changes"),
+  list_company_historical_shareholders: action("list_company_historical_shareholders"),
+  list_company_historical_investments: action("list_company_historical_investments"),
   list_company_branches: action("list_company_branches"),
   list_company_changes: action("list_company_changes"),
   get_company_annual_reports: action("get_company_annual_reports"),
@@ -208,7 +217,7 @@ async function requestTianyanchaResult(input: {
     if (value !== undefined) url.searchParams.set(name, String(value));
   }
 
-  const timeout = createProviderTimeout(input.context.signal, tianyanchaRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const response = await input.context.fetcher(url, {
       method: "GET",
@@ -374,6 +383,9 @@ function pagedResultKey(actionName: string): string {
   if (actionName === "list_company_key_personnel") return "personnel";
   if (actionName === "list_company_shareholders") return "shareholders";
   if (actionName === "list_company_investments") return "investments";
+  if (actionName === "list_company_equity_changes") return "equityChanges";
+  if (actionName === "list_company_historical_shareholders") return "historicalShareholders";
+  if (actionName === "list_company_historical_investments") return "historicalInvestments";
   if (actionName === "list_company_branches") return "branches";
   if (actionName === "list_company_changes") return "changes";
   if (actionName === "list_company_ultimate_beneficiaries") return "beneficiaries";

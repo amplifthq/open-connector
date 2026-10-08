@@ -1,8 +1,9 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ClickhouseActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalInteger, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
+import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
@@ -10,7 +11,6 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const clickhouseDefaultRequestTimeoutMs = 30_000;
 const clickhouseDefaultDatabase = "default";
 const clickhouseValidationQuery = "SELECT currentDatabase() AS database, version() AS version";
 
@@ -56,7 +56,7 @@ export interface ClickhouseActionContext {
   signal?: AbortSignal;
 }
 
-export const clickhouseActionHandlers: Record<ClickhouseActionName, ClickhouseActionHandler> = {
+export const clickhouseActionHandlers: ProviderActionHandlers<"clickhouse", ClickhouseActionHandler> = {
   execute_query(input, context) {
     return executeQuery(input, context);
   },
@@ -357,7 +357,7 @@ async function ensureDatabaseExists(database: string, context: ClickhouseActionC
 }
 
 async function requestClickhouseJson(input: ClickhouseRequestInput): Promise<ClickhouseJsonPayload> {
-  const timeout = createProviderTimeout(input.context.signal, clickhouseDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   const url = new URL(input.context.baseUrl);
   url.searchParams.set("default_format", "JSON");
   url.searchParams.set("database", input.database ?? input.context.defaultDatabase);
@@ -459,17 +459,16 @@ function createClickhouseError(
   return new ProviderRequestError(status || 500, message);
 }
 
-function normalizeClickhouseBaseUrl(value: unknown): string {
+export function normalizeClickhouseBaseUrl(
+  value: unknown,
+  allowPrivateNetwork: boolean = isPrivateNetworkAccessAllowed(),
+): string {
   const raw = requireCredentialString(value, "baseUrl");
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    throw new ProviderRequestError(400, "baseUrl must be a valid URL");
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new ProviderRequestError(400, "baseUrl must use http or https");
-  }
+  const url = assertPublicHttpUrl(raw, {
+    fieldName: "baseUrl",
+    createError: (message) => new ProviderRequestError(400, message),
+    allowPrivateNetwork,
+  });
   url.hash = "";
   return url.toString();
 }

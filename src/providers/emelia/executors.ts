@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -13,13 +14,12 @@ import {
 
 const service = "emelia";
 const emeliaApiBaseUrl = "https://api.emelia.io";
-const emeliaRequestTimeoutMs = 30_000;
 
 type EmeliaRequestPhase = "validate" | "execute";
 
 type EmeliaActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const emeliaActionHandlers: Record<string, EmeliaActionHandler> = {
+export const emeliaActionHandlers: ProviderActionHandlers<"emelia", EmeliaActionHandler> = {
   list_campaigns(input, context) {
     return requestEmeliaList(
       "/emails/campaigns",
@@ -135,7 +135,7 @@ async function requestEmeliaJson(
     url.searchParams.append(key, value);
   }
 
-  const timeout = createProviderTimeout(context.signal, emeliaRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       method: input.method,

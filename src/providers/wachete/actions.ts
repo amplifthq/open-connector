@@ -91,17 +91,10 @@ const monitorIdInputSchema: JsonSchema = s.actionInput(
   "A Wachete monitor identifier.",
 );
 
-export type WacheteActionName =
-  | "create_or_update_monitor"
-  | "get_monitor"
-  | "delete_monitor"
-  | "list_folder_content"
-  | "get_monitor_history"
-  | "list_notifications";
-
 export const wacheteActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "create_or_update_monitor",
+    operationType: "destructive",
     description:
       "Create a Wachete SinglePage monitor, or replace an existing monitor with a SinglePage definition when id is provided.",
     inputSchema: s.actionInput(
@@ -137,6 +130,7 @@ export const wacheteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_monitor",
+    operationType: "read",
     description: "Retrieve a Wachete monitor definition by ID.",
     inputSchema: monitorIdInputSchema,
     outputSchema: s.actionOutput(
@@ -148,6 +142,7 @@ export const wacheteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_monitor",
+    operationType: "destructive",
     description: "Delete a Wachete monitor by ID.",
     inputSchema: monitorIdInputSchema,
     outputSchema: s.actionOutput(
@@ -160,6 +155,7 @@ export const wacheteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_folder_content",
+    operationType: "read",
     description: "List monitors, subfolders, and the folder path for a Wachete folder or the root folder.",
     inputSchema: s.actionInput(
       {
@@ -181,6 +177,7 @@ export const wacheteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_monitor_history",
+    operationType: "read",
     description: "Retrieve paginated check history for a Wachete monitor.",
     inputSchema: s.actionInput(
       {
@@ -204,6 +201,7 @@ export const wacheteActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_notifications",
+    operationType: "read",
     description: "List Wachete notifications from newest to oldest.",
     inputSchema: s.actionInput(
       {

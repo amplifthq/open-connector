@@ -6,7 +6,7 @@ import type {
   ProviderProxyExecutor,
   TransitFileWriter,
 } from "../../core/types.ts";
-import type { FuxinActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { createHash } from "node:crypto";
 import { basename } from "node:path";
@@ -18,11 +18,11 @@ import {
   optionalRecord,
   optionalScalarString,
   optionalString,
-  requiredString,
 } from "../../core/cast.ts";
 import { assertPublicHttpUrl, readBoundedResponseBytes } from "../../core/request.ts";
 import {
   defineProviderExecutors,
+  isAbortLikeError,
   normalizeProviderProxyEndpoint,
   normalizeProviderProxyHeaders,
   normalizeProviderProxyQuery,
@@ -31,6 +31,7 @@ import {
   providerUserAgent,
   readProviderProxyResponse,
   requireCustomCredential,
+  requiredInputString,
   toProviderProxyError,
 } from "../provider-runtime.ts";
 
@@ -83,7 +84,7 @@ interface FuxinDocumentSourceInput {
   fallbackBaseName: string;
 }
 
-export const fuxinActionHandlers: Record<FuxinActionName, FuxinActionHandler> = {
+export const fuxinActionHandlers: ProviderActionHandlers<"fuxin", FuxinActionHandler> = {
   upload_file(input, context) {
     return fuxinUploadFile(input, context);
   },
@@ -158,8 +159,8 @@ export const executors: ProviderExecutors = defineProviderExecutors<FuxinActionC
   async createContext(context: ExecutionContext, fetcher: typeof fetch): Promise<FuxinActionContext> {
     const credential = await requireCustomCredential(context, service);
     const actionContext: FuxinActionContext = {
-      clientId: requireFuxinField(credential.values.clientId, "clientId"),
-      secret: requireFuxinField(credential.values.secret, "secret"),
+      clientId: requiredInputString(credential.values.clientId, "clientId"),
+      secret: requiredInputString(credential.values.secret, "secret"),
       fetcher,
       signal: context.signal,
     };
@@ -173,8 +174,8 @@ export const executors: ProviderExecutors = defineProviderExecutors<FuxinActionC
 export const proxy: ProviderProxyExecutor = async (input, context) => {
   try {
     const credential = await requireCustomCredential(context, service);
-    const clientId = requireFuxinField(credential.values.clientId, "clientId");
-    const secret = requireFuxinField(credential.values.secret, "secret");
+    const clientId = requiredInputString(credential.values.clientId, "clientId");
+    const secret = requiredInputString(credential.values.secret, "secret");
     const endpoint = normalizeProviderProxyEndpoint(input.endpoint);
     const query = normalizeProviderProxyQuery(input.query);
     const bodyParams = readFuxinProxyParams(input.body);
@@ -223,8 +224,8 @@ export const proxy: ProviderProxyExecutor = async (input, context) => {
 export const credentialValidators: CredentialValidators = {
   async customCredential(input, { fetcher, signal }): Promise<CredentialValidationResult> {
     const context: FuxinActionContext = {
-      clientId: requireFuxinField(input.values.clientId, "clientId"),
-      secret: requireFuxinField(input.values.secret, "secret"),
+      clientId: requiredInputString(input.values.clientId, "clientId"),
+      secret: requiredInputString(input.values.secret, "secret"),
       fetcher,
       signal,
     };
@@ -294,7 +295,7 @@ async function fuxinUploadFile(input: Record<string, unknown>, context: FuxinAct
 }
 
 async function fuxinGetTask(input: Record<string, unknown>, context: FuxinActionContext): Promise<unknown> {
-  const taskId = requireFuxinField(input.taskId, "taskId");
+  const taskId = requiredInputString(input.taskId, "taskId");
   const envelope = await fuxinRequestEnvelope({
     method: "GET",
     path: "/task",
@@ -333,7 +334,7 @@ async function fuxinDownloadFile(input: Record<string, unknown>, context: FuxinA
     throw new ProviderRequestError(503, "Transit file storage is not enabled.");
   }
 
-  const docId = requireFuxinField(input.docId, "docId");
+  const docId = requiredInputString(input.docId, "docId");
   const fileName = optionalString(input.fileName);
 
   const response = await fuxinRequestBinary({
@@ -401,7 +402,7 @@ async function fuxinCreatePdfFromDocument(
 ): Promise<unknown> {
   const formData = new FormData();
   const signParams: Record<string, FuxinQueryValue> = {
-    format: requireFuxinField(input.inputFormat, "inputFormat"),
+    format: requiredInputString(input.inputFormat, "inputFormat"),
   };
   formData.set("format", String(signParams.format));
 
@@ -420,7 +421,7 @@ async function fuxinCreatePdfFromDocument(
 }
 
 async function fuxinCreatePdfFromHtml(input: Record<string, unknown>, context: FuxinActionContext): Promise<unknown> {
-  const format = requireFuxinField(input.format, "format");
+  const format = requiredInputString(input.format, "format");
   const configString = stringifyJsonField(input.config);
   const formData = new FormData();
   const signParams: Record<string, FuxinQueryValue> = {
@@ -429,7 +430,7 @@ async function fuxinCreatePdfFromHtml(input: Record<string, unknown>, context: F
   formData.set("format", format);
 
   if (format === "url") {
-    const url = requireFuxinField(input.url, "url");
+    const url = requiredInputString(input.url, "url");
     signParams.url = url;
     formData.set("url", url);
   } else {
@@ -454,7 +455,7 @@ async function fuxinCreatePdfFromHtml(input: Record<string, unknown>, context: F
 }
 
 async function fuxinConvertDocument(input: Record<string, unknown>, context: FuxinActionContext): Promise<unknown> {
-  const outputFormat = requireFuxinField(input.outputFormat, "outputFormat");
+  const outputFormat = requiredInputString(input.outputFormat, "outputFormat");
   const imageConfigString = stringifyJsonField(input.imageConfig);
   const formData = new FormData();
   const signParams: Record<string, FuxinQueryValue> = {
@@ -523,7 +524,7 @@ async function fuxinProtectDocument(input: Record<string, unknown>, context: Fux
     throw new ProviderRequestError(400, "passwordProtection is required");
   }
   const permissionString = stringifyStringArrayField(input.permission);
-  const encryptionAlgorithm = requireFuxinField(input.encryptionAlgorithm, "encryptionAlgorithm");
+  const encryptionAlgorithm = requiredInputString(input.encryptionAlgorithm, "encryptionAlgorithm");
   const formData = new FormData();
   const signParams: Record<string, FuxinQueryValue> = compactObject({
     passwordProtection: passwordProtectionString,
@@ -581,7 +582,7 @@ async function fuxinManipulateDocumentPages(
 }
 
 async function fuxinMergeDocuments(input: Record<string, unknown>, context: FuxinActionContext): Promise<unknown> {
-  const docIds = Array.isArray(input.docIds) ? input.docIds.map((value) => requireFuxinField(value, "docIds")) : [];
+  const docIds = Array.isArray(input.docIds) ? input.docIds.map((value) => requiredInputString(value, "docIds")) : [];
   const configString = stringifyJsonField(input.config);
   const formData = new FormData();
   const signParams: Record<string, FuxinQueryValue> = {};
@@ -635,7 +636,7 @@ async function fuxinSplitDocument(input: Record<string, unknown>, context: Fuxin
 }
 
 async function fuxinCompressDocument(input: Record<string, unknown>, context: FuxinActionContext): Promise<unknown> {
-  const compressionLevel = requireFuxinField(input.compressionLevel, "compressionLevel");
+  const compressionLevel = requiredInputString(input.compressionLevel, "compressionLevel");
   const formData = new FormData();
   const signParams: Record<string, FuxinQueryValue> = {
     compressionLevel,
@@ -660,7 +661,7 @@ async function fuxinRemovePasswordFromDocument(
   input: Record<string, unknown>,
   context: FuxinActionContext,
 ): Promise<unknown> {
-  const password = requireFuxinField(input.password, "password");
+  const password = requiredInputString(input.password, "password");
   const formData = new FormData();
   const signParams: Record<string, FuxinQueryValue> = {
     password,
@@ -725,7 +726,7 @@ async function fuxinFlattenDocument(input: Record<string, unknown>, context: Fux
 }
 
 async function fuxinExtractDocument(input: Record<string, unknown>, context: FuxinActionContext): Promise<unknown> {
-  const mode = requireFuxinField(input.mode, "mode");
+  const mode = requiredInputString(input.mode, "mode");
   const pageRange = optionalString(input.pageRange);
   const formData = new FormData();
   const signParams: Record<string, FuxinQueryValue> = compactObject({
@@ -821,7 +822,7 @@ async function fuxinConvertOfficeDocumentToImages(
   input: Record<string, unknown>,
   context: FuxinActionContext,
 ): Promise<unknown> {
-  const format = requireFuxinField(input.format, "format");
+  const format = requiredInputString(input.format, "format");
   const dpi = optionalInteger(input.dpi);
   const destImgSuffix = optionalString(input.destImgSuffix);
   const formData = new FormData();
@@ -1074,7 +1075,7 @@ async function fetchFuxinSource(
     if (error instanceof ProviderRequestError) {
       throw error;
     }
-    if (timeoutSignal.aborted && isAbortError(error)) {
+    if (timeoutSignal.aborted && isAbortLikeError(error)) {
       throw new ProviderRequestError(504, "failed to fetch multipart source: request timed out", error);
     }
     const message = error instanceof Error ? error.message : "failed to fetch multipart source";
@@ -1151,7 +1152,7 @@ async function sendFuxinRequest(url: URL, input: FuxinRequestInput): Promise<Res
       signal,
     });
   } catch (error) {
-    if (timeoutSignal.aborted && isAbortError(error)) {
+    if (timeoutSignal.aborted && isAbortLikeError(error)) {
       throw new ProviderRequestError(504, `fuxin ${input.path} request timed out`, error);
     }
     const message = error instanceof Error ? error.message : "fuxin request failed";
@@ -1413,10 +1414,6 @@ function toBlobPart(bytes: Uint8Array): ArrayBuffer {
   return buffer;
 }
 
-function requireFuxinField(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function requirePositiveInteger(value: unknown, fieldName: string): number {
   const parsed = optionalInteger(value);
   if (parsed == null || parsed <= 0) {
@@ -1515,8 +1512,4 @@ function setOptionalFormDataNumber(formData: FormData, key: string, value: numbe
   if (value !== undefined) {
     formData.set(key, String(value));
   }
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError";
 }

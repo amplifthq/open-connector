@@ -50,11 +50,10 @@ const hostedDocumentOutputSchema = s.object(
   },
 );
 
-export type DocraptorActionName = "create_hosted_document";
-
 export const docraptorActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "create_hosted_document",
+    operationType: "write",
     description:
       "Create a hosted PDF or Excel document with DocRaptor from raw HTML or a public URL and return its download URL.",
     inputSchema: docraptorInputSchema,

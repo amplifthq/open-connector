@@ -153,17 +153,10 @@ const filterEntrySchema = s.object("One ZeroBounce custom filter rule entry.", {
   value: s.string("The filter value returned by ZeroBounce."),
 });
 
-export type ZerobounceActionName =
-  | "get_credit_balance"
-  | "get_api_usage"
-  | "validate_email"
-  | "get_activity_data"
-  | "create_filter_rule"
-  | "list_filter_rules";
-
 export const zerobounceActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_credit_balance",
+    operationType: "read",
     description: "Get the current ZeroBounce credit balance.",
     inputSchema: emptyInputSchema,
     outputSchema: s.actionOutput(
@@ -173,6 +166,7 @@ export const zerobounceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_api_usage",
+    operationType: "read",
     description: "Get ZeroBounce API usage metrics for a date range.",
     inputSchema: getApiUsageInputSchema,
     outputSchema: s.object("The ZeroBounce API usage metrics response.", usageProperties, {
@@ -182,6 +176,7 @@ export const zerobounceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "validate_email",
+    operationType: "read",
     description: "Validate a single email address with ZeroBounce in real time.",
     inputSchema: validateEmailInputSchema,
     outputSchema: s.object("The ZeroBounce single email validation response.", validateEmailProperties, {
@@ -200,6 +195,7 @@ export const zerobounceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_activity_data",
+    operationType: "read",
     description: "Get ZeroBounce email activity data for one email address.",
     inputSchema: getActivityDataInputSchema,
     outputSchema: s.actionOutput(
@@ -213,6 +209,7 @@ export const zerobounceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_filter_rule",
+    operationType: "write",
     description: "Create or update one ZeroBounce custom allow/block filter rule.",
     inputSchema: createFilterRuleInputSchema,
     outputSchema: s.actionOutput(
@@ -222,6 +219,7 @@ export const zerobounceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_filter_rules",
+    operationType: "read",
     description: "List the current ZeroBounce custom allow/block filter rules.",
     inputSchema: emptyInputSchema,
     outputSchema: s.actionOutput(

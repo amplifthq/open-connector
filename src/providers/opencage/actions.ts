@@ -116,11 +116,10 @@ const geojsonResponseSchema = s.object("GeoJSON geocoding response returned by O
   timestamp: timestampSchema,
 });
 
-export type OpencageActionName = "geocode_forward" | "geocode_reverse" | "geocode_geojson";
-
 export const opencageActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "geocode_forward",
+    operationType: "read",
     description: "Convert an address or place name into OpenCage geocoding results.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -132,6 +131,7 @@ export const opencageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "geocode_reverse",
+    operationType: "read",
     description: "Convert a latitude and longitude pair into OpenCage reverse geocoding results.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -164,6 +164,7 @@ export const opencageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "geocode_geojson",
+    operationType: "read",
     description: "Return OpenCage geocoding results in GeoJSON FeatureCollection format.",
     requiredScopes: [],
     inputSchema: s.object(

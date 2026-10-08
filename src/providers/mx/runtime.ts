@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
@@ -14,14 +15,19 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
-import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  createProviderTimeout,
+  providerInputError,
+  ProviderRequestError,
+  providerResponseError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 export const mxApiBaseUrl = "https://api.mx.com";
 
 const mxRequestBaseUrl = "https://api.mx.com/";
 const mxVersion = "v20250224";
 const mxValidationPath = "/users";
-const mxDefaultTimeoutMs = 30_000;
 
 type MxPhase = "validate" | "execute";
 export interface MxContext {
@@ -73,7 +79,7 @@ export async function validateMxCredential(
   };
 }
 
-export const mxActionHandlers: Record<string, ProviderRuntimeHandler<MxContext>> = {
+export const mxActionHandlers: ProviderActionHandlers<"mx", ProviderRuntimeHandler<MxContext>> = {
   list_users: listUsers,
   create_user(input, context) {
     return writeUser({
@@ -87,7 +93,7 @@ export const mxActionHandlers: Record<string, ProviderRuntimeHandler<MxContext>>
   update_user(input, context) {
     return writeUser({
       method: "PUT",
-      path: `/users/${encodeURIComponent(requiredString(input.userIdentifier, "userIdentifier", inputError))}`,
+      path: `/users/${encodeURIComponent(requiredString(input.userIdentifier, "userIdentifier", providerInputError))}`,
       user: readUserPatch(input.user),
       context,
     });
@@ -114,7 +120,7 @@ async function listUsers(input: Record<string, unknown>, context: MxContext) {
 }
 
 async function readUser(input: Record<string, unknown>, context: MxContext) {
-  const userIdentifier = requiredString(input.userIdentifier, "userIdentifier", inputError);
+  const userIdentifier = requiredString(input.userIdentifier, "userIdentifier", providerInputError);
   const payload = await requestMxJson({
     method: "GET",
     path: `/users/${encodeURIComponent(userIdentifier)}`,
@@ -145,7 +151,7 @@ async function writeUser(input: {
 }
 
 async function deleteUser(input: Record<string, unknown>, context: MxContext) {
-  const userIdentifier = requiredString(input.userIdentifier, "userIdentifier", inputError);
+  const userIdentifier = requiredString(input.userIdentifier, "userIdentifier", providerInputError);
   const payload = await requestMxJson({
     method: "DELETE",
     path: `/users/${encodeURIComponent(userIdentifier)}`,
@@ -167,7 +173,7 @@ async function requestMxJson(input: MxRequestInput) {
     }
   }
 
-  const timeout = createProviderTimeout(input.signal, mxDefaultTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   let response: Response;
   try {
     response = await input.fetcher(url, {
@@ -244,7 +250,7 @@ function extractMxErrorMessage(payload: unknown) {
 }
 
 function normalizeUsersResponse(payload: unknown) {
-  const record = requiredRecord(payload, "MX list users response", responseError);
+  const record = requiredRecord(payload, "MX list users response", providerResponseError);
   const usersValue = record.users;
   if (!Array.isArray(usersValue)) {
     throw new ProviderRequestError(502, "MX list users response missing users array");
@@ -257,14 +263,14 @@ function normalizeUsersResponse(payload: unknown) {
 }
 
 function normalizeUserResponse(payload: unknown) {
-  const record = requiredRecord(payload, "MX user response", responseError);
+  const record = requiredRecord(payload, "MX user response", providerResponseError);
   return {
     user: normalizeUser(record.user),
   };
 }
 
 function normalizeUser(value: unknown) {
-  const record = requiredRecord(value, "MX user", responseError);
+  const record = requiredRecord(value, "MX user", providerResponseError);
   return {
     guid: optionalStringOrNull(record.guid),
     id: optionalStringOrNull(record.id),
@@ -287,7 +293,7 @@ function normalizePagination(value: unknown) {
 }
 
 function readUserPatch(value: unknown) {
-  const record = requiredRecord(value, "user", inputError);
+  const record = requiredRecord(value, "user", providerInputError);
   const patch = compactObject({
     id: optionalString(record.id),
     email: optionalString(record.email),
@@ -306,12 +312,4 @@ function stringifyOptionalInteger(value: number | undefined) {
 
 function stringifyOptionalBoolean(value: boolean | undefined) {
   return value === undefined ? undefined : String(value);
-}
-
-function inputError(message: string) {
-  return new ProviderRequestError(400, message);
-}
-
-function responseError(message: string) {
-  return new ProviderRequestError(502, message);
 }

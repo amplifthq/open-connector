@@ -24,7 +24,11 @@ export function providerIconsPlugin(options: ProviderIconsPluginOptions = {}): P
       }
       cachedModule ??= options.iconUrls
         ? Promise.resolve(serializeProviderIcons(options.iconUrls))
-        : loadProviderIconsModule();
+        : loadProviderIconsModule().catch((error: unknown) => {
+            const reason = error instanceof Error ? error.message : String(error);
+            this.warn(`Provider icon catalog unavailable: ${reason}. Using default provider icons.`);
+            return serializeProviderIcons({});
+          });
       return cachedModule;
     },
   };

@@ -1,8 +1,9 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
-import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
+import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
 import {
   createProviderTimeout,
@@ -11,15 +12,14 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const bugHerdApiBaseUrl = "https://www.bugherd.com";
-const bugHerdRequestTimeoutMs = 30_000;
+export const bugHerdApiBaseUrl = "https://www.bugherd.com";
 
 type BugHerdPhase = "validate" | "execute";
 type BugHerdQuery = Record<string, string | number | boolean | undefined>;
 type BugHerdActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type BugHerdActionHandler = (input: Record<string, unknown>, context: BugHerdActionContext) => Promise<unknown>;
 
-export const bugHerdActionHandlers: Record<string, BugHerdActionHandler> = {
+export const bugHerdActionHandlers: ProviderActionHandlers<"bug_herd", BugHerdActionHandler> = {
   show_organization(_input, context) {
     return requestBugHerdJson({
       apiKey: context.apiKey,
@@ -79,9 +79,9 @@ export const bugHerdActionHandlers: Record<string, BugHerdActionHandler> = {
         project: compactObject({
           name: readRequiredString(input.name, "name"),
           devurl: readRequiredString(input.devurl, "devurl"),
-          is_active: readOptionalBoolean(input.is_active),
-          is_public: readOptionalBoolean(input.is_public),
-          guests_see_guests: readOptionalBoolean(input.guests_see_guests),
+          is_active: optionalBoolean(input.is_active),
+          is_public: optionalBoolean(input.is_public),
+          guests_see_guests: optionalBoolean(input.guests_see_guests),
         }),
       },
       phase: "execute",
@@ -99,10 +99,10 @@ export const bugHerdActionHandlers: Record<string, BugHerdActionHandler> = {
         project: compactObject({
           name: readOptionalString(input.name),
           devurl: readOptionalString(input.devurl),
-          is_active: readOptionalBoolean(input.is_active),
-          is_public: readOptionalBoolean(input.is_public),
-          has_custom_columns: readOptionalBoolean(input.has_custom_columns),
-          guests_see_guests: readOptionalBoolean(input.guests_see_guests),
+          is_active: optionalBoolean(input.is_active),
+          is_public: optionalBoolean(input.is_public),
+          has_custom_columns: optionalBoolean(input.has_custom_columns),
+          guests_see_guests: optionalBoolean(input.guests_see_guests),
         }),
       },
       phase: "execute",
@@ -198,7 +198,7 @@ export const bugHerdActionHandlers: Record<string, BugHerdActionHandler> = {
           text: readRequiredString(input.text, "text"),
           user_id: readOptionalPositiveInteger(input.user_id, "user_id"),
           email: readOptionalString(input.email),
-          is_private: readOptionalBoolean(input.is_private),
+          is_private: optionalBoolean(input.is_private),
         }),
       },
       phase: "execute",
@@ -284,7 +284,7 @@ async function requestBugHerdJson(input: {
   signal?: AbortSignal;
   notFoundAsInvalidInput?: boolean;
 }): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(input.signal, bugHerdRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const response = await input.fetcher(buildBugHerdUrl(input.path, input.query), {
       method: input.method,
@@ -471,10 +471,6 @@ function readOptionalNullablePositiveInteger(value: unknown, fieldName: string):
     return null;
   }
   return readOptionalPositiveInteger(value, fieldName);
-}
-
-function readOptionalBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
 }
 
 function readOptionalStringArray(value: unknown, fieldName: string): string[] | undefined {

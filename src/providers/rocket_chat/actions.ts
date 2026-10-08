@@ -100,19 +100,10 @@ const messageOutputSchema = s.object("Rocket.Chat message response.", {
   success: s.boolean("Whether Rocket.Chat reported success."),
 });
 
-export type RocketChatActionName =
-  | "get_me"
-  | "list_rooms"
-  | "get_room"
-  | "list_channel_messages"
-  | "get_message"
-  | "post_message"
-  | "update_message"
-  | "delete_message";
-
 export const rocketChatActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_me",
+    operationType: "read",
     description: "Get the authenticated Rocket.Chat profile.",
     inputSchema: emptyInputSchema,
     outputSchema: s.object("Rocket.Chat profile response.", {
@@ -121,6 +112,7 @@ export const rocketChatActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_rooms",
+    operationType: "read",
     description: "List Rocket.Chat rooms opened for the authenticated user.",
     inputSchema: listRoomsInputSchema,
     outputSchema: s.object("Rocket.Chat rooms response.", {
@@ -131,6 +123,7 @@ export const rocketChatActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_room",
+    operationType: "read",
     description: "Get metadata for one Rocket.Chat room by ID or name.",
     inputSchema: getRoomInputSchema,
     outputSchema: s.object(
@@ -146,6 +139,7 @@ export const rocketChatActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_channel_messages",
+    operationType: "read",
     description: "List messages in a Rocket.Chat public channel.",
     inputSchema: listChannelMessagesInputSchema,
     outputSchema: s.object("Rocket.Chat channel messages response.", {
@@ -158,12 +152,14 @@ export const rocketChatActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_message",
+    operationType: "read",
     description: "Get one Rocket.Chat message by ID.",
     inputSchema: getMessageInputSchema,
     outputSchema: messageOutputSchema,
   }),
   defineProviderAction(service, {
     name: "post_message",
+    operationType: "write",
     description: "Post a message to a Rocket.Chat room, channel, or user target.",
     inputSchema: s.object(
       "Input parameters for posting one Rocket.Chat message.",
@@ -186,6 +182,7 @@ export const rocketChatActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_message",
+    operationType: "write",
     description: "Update an existing Rocket.Chat message.",
     inputSchema: s.object(
       "Input parameters for updating one Rocket.Chat message.",
@@ -202,6 +199,7 @@ export const rocketChatActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_message",
+    operationType: "destructive",
     description: "Delete an existing Rocket.Chat message.",
     inputSchema: s.object(
       "Input parameters for deleting one Rocket.Chat message.",

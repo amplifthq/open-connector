@@ -2,17 +2,6 @@ import type { ActionDefinition } from "../../../core/types.ts";
 
 import { s } from "../../../core/json-schema.ts";
 import { defineProviderAction } from "../../../core/provider-definition.ts";
-export const feishuMinutesProviderPermissions: readonly string[] = [
-  "minutes:minutes.search:read",
-  "minutes:minutes.basic:read",
-  "minutes:minutes.artifacts:read",
-  "minutes:minutes.media:export",
-  "minutes:minutes:update",
-  "minutes:permission:apply",
-  "vc:meeting.search:read",
-  "vc:meeting.meetingevent:read",
-  "vc:record:readonly",
-];
 const minuteToken = s.string("The Feishu Minutes token.", { minLength: 1 });
 const meetingId = s.string("The Feishu video meeting ID.", { minLength: 1 });
 const pageSize = s.positiveInteger("The maximum number of results on this page.", {
@@ -53,6 +42,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
   return [
     defineProviderAction(service, {
       name: "search_minutes",
+      operationType: "read",
       description: "Search Feishu Minutes by text, owners, participants, and creation time.",
       requiredScopes: ["minutes:minutes.search:read"],
       providerPermissions: ["minutes:minutes.search:read"],
@@ -61,6 +51,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "get_minutes_detail",
+      operationType: "read",
       description: "Get the basic metadata of one Feishu Minutes record.",
       requiredScopes: ["minutes:minutes.basic:read"],
       providerPermissions: ["minutes:minutes.basic:read"],
@@ -81,6 +72,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "get_minutes_transcript",
+      operationType: "read",
       description: "Get the generated transcript text of a Feishu Minutes record.",
       requiredScopes: ["minutes:minutes.artifacts:read"],
       providerPermissions: ["minutes:minutes.artifacts:read"],
@@ -104,6 +96,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "get_minutes_summary",
+      operationType: "read",
       description: "Get the generated summary of a Feishu Minutes record.",
       requiredScopes: ["minutes:minutes.artifacts:read"],
       providerPermissions: ["minutes:minutes.artifacts:read"],
@@ -127,6 +120,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "get_minutes_todos",
+      operationType: "read",
       description: "List the generated todos of a Feishu Minutes record.",
       requiredScopes: ["minutes:minutes.artifacts:read"],
       providerPermissions: ["minutes:minutes.artifacts:read"],
@@ -150,6 +144,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "get_minutes_download_metadata",
+      operationType: "read",
       description: "Get the temporary media download URL for a Feishu Minutes record without downloading it.",
       requiredScopes: ["minutes:minutes.media:export"],
       providerPermissions: ["minutes:minutes.media:export"],
@@ -174,6 +169,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "update_minutes_title",
+      operationType: "write",
       description: "Update the title of one Feishu Minutes record.",
       requiredScopes: ["minutes:minutes:update"],
       providerPermissions: ["minutes:minutes:update"],
@@ -200,6 +196,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "apply_minutes_permission",
+      operationType: "write",
       description: "Apply for view or edit permission on one Feishu Minutes record.",
       requiredScopes: ["minutes:permission:apply"],
       providerPermissions: ["minutes:permission:apply"],
@@ -226,6 +223,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "replace_minutes_speaker",
+      operationType: "destructive",
       description: "Replace a transcript speaker with another Feishu user in one Minutes record.",
       requiredScopes: ["minutes:minutes:readonly", "minutes:minutes:update"],
       providerPermissions: ["minutes:minutes:readonly", "minutes:minutes:update"],
@@ -260,6 +258,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "replace_minutes_words",
+      operationType: "destructive",
       description: "Batch-replace words in the transcript of one Feishu Minutes record.",
       requiredScopes: ["minutes:minutes:update"],
       providerPermissions: ["minutes:minutes:update"],
@@ -311,6 +310,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "replace_minutes_summary",
+      operationType: "destructive",
       description: "Replace the AI-generated summary of one Feishu Minutes record.",
       requiredScopes: ["minutes:minutes:update"],
       providerPermissions: ["minutes:minutes:update"],
@@ -339,6 +339,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "manage_minutes_todos",
+      operationType: "destructive",
       description: "Add, update, or delete multiple todo items in one Feishu Minutes record.",
       requiredScopes: ["minutes:minutes:update"],
       providerPermissions: ["minutes:minutes:update"],
@@ -368,6 +369,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "search_vc_meetings",
+      operationType: "read",
       description: "Search Feishu video meetings by text, people, rooms, and time range.",
       requiredScopes: ["vc:meeting.search:read"],
       providerPermissions: ["vc:meeting.search:read"],
@@ -376,6 +378,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "get_vc_meeting",
+      operationType: "read",
       description: "Get Feishu video meeting metadata and participant data.",
       requiredScopes: ["vc:meeting.meetingevent:read"],
       providerPermissions: ["vc:meeting.meetingevent:read"],
@@ -399,6 +402,7 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     }),
     defineProviderAction(service, {
       name: "get_vc_recording_metadata",
+      operationType: "read",
       description: "Get recording URL and duration metadata for a Feishu video meeting.",
       requiredScopes: ["vc:record:readonly"],
       providerPermissions: ["vc:record:readonly"],

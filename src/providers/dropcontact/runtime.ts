@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { optionalBoolean, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -6,7 +7,6 @@ import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "
 
 export const dropcontactApiBaseUrl = "https://api.dropcontact.com";
 
-const requestTimeoutMs = 30_000;
 const textContactFields = [
   "email",
   "first_name",
@@ -26,7 +26,7 @@ const textContactFields = [
 type RequestMode = "validate" | "execute";
 type DropcontactActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const dropcontactActionHandlers: Record<string, DropcontactActionHandler> = {
+export const dropcontactActionHandlers: ProviderActionHandlers<"dropcontact", DropcontactActionHandler> = {
   async submit_enrichment(input, context): Promise<unknown> {
     const payload = await requestDropcontactJson(
       {
@@ -98,7 +98,7 @@ async function requestDropcontactJson(
     url.searchParams.set(name, value);
   }
 
-  const timeout = createProviderTimeout(context.signal, requestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       method: input.method,

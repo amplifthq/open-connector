@@ -1,6 +1,13 @@
-import type { ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type { ExecutionContext, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { defineProviderExecutors, providerFetch, ProviderRequestError } from "../provider-runtime.ts";
+import { optionalNumber } from "../../core/cast.ts";
+import {
+  defineProviderExecutors,
+  defineProviderProxy,
+  providerFetch,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "arxiv";
 const arxivApiBaseUrl = "https://export.arxiv.org/api";
@@ -54,7 +61,7 @@ interface ArxivActionContext {
 
 type ArxivActionHandler = (input: Record<string, unknown>, context: ArxivActionContext) => Promise<unknown>;
 
-export const arxivActionHandlers: Record<string, ArxivActionHandler> = {
+export const arxivActionHandlers: ProviderActionHandlers<"arxiv", ArxivActionHandler> = {
   search_papers(input, context) {
     return searchPapers(input, context);
   },
@@ -89,12 +96,25 @@ export const executors: ProviderExecutors = defineProviderExecutors<ArxivActionC
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: arxivApiBaseUrl,
+  auth: { type: "none" },
+  skipDnsValidation: true,
+  async customizeRequest({ headers }) {
+    if (!headers.has("accept")) {
+      headers.set("accept", "application/atom+xml, application/xml, text/xml");
+    }
+    await throttleArxivRequest();
+  },
+});
+
 function searchPapers(input: Record<string, unknown>, context: ArxivActionContext): Promise<unknown> {
   return requestArxiv(
     {
       searchQuery: readString(input.query, "query"),
-      start: readOptionalNumber(input.start) ?? 0,
-      maxResults: readOptionalNumber(input.maxResults) ?? defaultMaxResults,
+      start: optionalNumber(input.start) ?? 0,
+      maxResults: optionalNumber(input.maxResults) ?? defaultMaxResults,
       sortBy: readOptionalSortBy(input.sortBy),
       sortOrder: readOptionalSortOrder(input.sortOrder),
     },
@@ -130,8 +150,8 @@ function searchByAllFields(input: Record<string, unknown>, context: ArxivActionC
   return requestArxiv(
     {
       searchQuery: parts.join(" AND "),
-      start: readOptionalNumber(input.start) ?? 0,
-      maxResults: readOptionalNumber(input.maxResults) ?? defaultMaxResults,
+      start: optionalNumber(input.start) ?? 0,
+      maxResults: optionalNumber(input.maxResults) ?? defaultMaxResults,
       sortBy: readOptionalSortBy(input.sortBy),
       sortOrder: readOptionalSortOrder(input.sortOrder),
     },
@@ -159,7 +179,7 @@ function getPapers(input: Record<string, unknown>, context: ArxivActionContext):
   return requestArxiv(
     {
       idList: ids,
-      maxResults: readOptionalNumber(input.maxResults) ?? ids.length,
+      maxResults: optionalNumber(input.maxResults) ?? ids.length,
     },
     context.fetcher,
   );
@@ -169,8 +189,8 @@ function listRecentPapers(input: Record<string, unknown>, context: ArxivActionCo
   return requestArxiv(
     {
       searchQuery: `cat:${readString(input.category, "category")}`,
-      start: readOptionalNumber(input.start) ?? 0,
-      maxResults: readOptionalNumber(input.maxResults) ?? defaultMaxResults,
+      start: optionalNumber(input.start) ?? 0,
+      maxResults: optionalNumber(input.maxResults) ?? defaultMaxResults,
       sortBy: "submittedDate",
       sortOrder: readOptionalSortOrder(input.sortOrder) ?? "descending",
     },
@@ -187,8 +207,8 @@ function searchByField(
   return requestArxiv(
     {
       searchQuery: `${prefix}:${formatStructuredFieldValue(value)}`,
-      start: readOptionalNumber(input.start) ?? 0,
-      maxResults: readOptionalNumber(input.maxResults) ?? defaultMaxResults,
+      start: optionalNumber(input.start) ?? 0,
+      maxResults: optionalNumber(input.maxResults) ?? defaultMaxResults,
       sortBy: readOptionalSortBy(input.sortBy),
       sortOrder: readOptionalSortOrder(input.sortOrder),
     },
@@ -239,7 +259,9 @@ async function requestArxiv(options: QueryOptions, fetcher: typeof fetch): Promi
 
   let response: Response;
   try {
-    await throttleDefaultFetch(fetcher);
+    if (fetcher === providerFetch) {
+      await throttleArxivRequest();
+    }
     response = await fetcher(url, {
       method: "GET",
       headers: {
@@ -270,11 +292,7 @@ async function requestArxiv(options: QueryOptions, fetcher: typeof fetch): Promi
   return parseArxivFeed(body);
 }
 
-function throttleDefaultFetch(fetcher: typeof fetch): Promise<void> {
-  if (fetcher !== providerFetch) {
-    return Promise.resolve();
-  }
-
+function throttleArxivRequest(): Promise<void> {
   const queued = defaultFetchQueue.then(async () => {
     const now = Date.now();
     const waitMs = Math.max(0, nextDefaultFetchAt - now);
@@ -562,10 +580,6 @@ function readStringArray(value: unknown, fieldName: string): string[] {
 
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
-}
-
-function readOptionalNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function readOptionalSortBy(value: unknown): ArxivSortBy | undefined {

@@ -49,17 +49,10 @@ const enrichCompanyInputSchema: JsonSchema = {
   anyOf: [{ required: ["companyDomain"] }, { required: ["profileUrl"] }, { required: ["companyName"] }],
 };
 
-export type LeadmagicActionName =
-  | "get_credits"
-  | "validate_email"
-  | "find_work_email"
-  | "find_mobile"
-  | "enrich_profile"
-  | "enrich_company";
-
 export const leadmagicActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_credits",
+    operationType: "read",
     description: "Get the current LeadMagic credit balance for the API key.",
     requiredScopes: [],
     inputSchema: s.object("No input is required for LeadMagic credit balance lookup.", {}),
@@ -70,6 +63,7 @@ export const leadmagicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "validate_email",
+    operationType: "read",
     description: "Validate an email address for deliverability and domain intelligence.",
     requiredScopes: [],
     inputSchema: s.object("Input for LeadMagic email validation.", {
@@ -92,6 +86,7 @@ export const leadmagicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "find_work_email",
+    operationType: "read",
     description: "Find a professional email address from a person's name and company.",
     requiredScopes: [],
     inputSchema: findWorkEmailInputSchema,
@@ -110,6 +105,7 @@ export const leadmagicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "find_mobile",
+    operationType: "read",
     description: "Find a mobile phone number from a profile URL or email identifier.",
     requiredScopes: [],
     inputSchema: findMobileInputSchema,
@@ -124,6 +120,7 @@ export const leadmagicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "enrich_profile",
+    operationType: "read",
     description: "Retrieve professional profile data from a profile URL or username.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -163,6 +160,7 @@ export const leadmagicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "enrich_company",
+    operationType: "read",
     description: "Find and enrich company data by domain, profile URL, or company name.",
     requiredScopes: [],
     inputSchema: enrichCompanyInputSchema,

@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -13,13 +14,14 @@ import {
   createProviderTimeout,
   isAbortSignalError,
   parseProviderJsonBodyText,
+  providerInputError,
   ProviderRequestError,
+  providerResponseError,
   providerUserAgent,
   readProviderTextBody,
 } from "../provider-runtime.ts";
 
 const service = "upstash_redis";
-const requestTimeoutMs = 30_000;
 const upstashHostnameSuffix = ".upstash.io";
 
 type UpstashRequestPhase = "validate" | "execute";
@@ -32,7 +34,10 @@ export interface UpstashRedisContext {
   signal?: AbortSignal;
 }
 
-export const upstashRedisActionHandlers: Record<string, ProviderRuntimeHandler<UpstashRedisContext>> = {
+export const upstashRedisActionHandlers: ProviderActionHandlers<
+  "upstash_redis",
+  ProviderRuntimeHandler<UpstashRedisContext>
+> = {
   async get(input, context) {
     const result = await executeUpstashCommand(context, ["GET", readKey(input)], "execute");
     return { value: readStringOrNullResult(result, "GET") };
@@ -136,7 +141,7 @@ async function executeUpstashCommand(
   command: readonly UpstashCommandArgument[],
   phase: UpstashRequestPhase,
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, requestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(new URL(context.restUrl), {
       method: "POST",
@@ -183,7 +188,7 @@ async function executeUpstashCommand(
   }
 }
 
-function normalizeUpstashRestUrl(value: string | undefined): URL {
+export function normalizeUpstashRestUrl(value: string | undefined): URL {
   const restUrl = assertPublicHttpUrl(requiredString(value, "restUrl", providerInputError), {
     fieldName: "restUrl",
     createError: providerInputError,
@@ -324,12 +329,4 @@ function requiredRecord(value: unknown, fieldName: string): Record<string, unkno
     return record;
   }
   throw providerResponseError(`${fieldName} must be an object`);
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerResponseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

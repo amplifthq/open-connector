@@ -1,10 +1,10 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { WttrInActionName } from "./actions.ts";
 
 import { optionalObjectArray, optionalRecord, optionalString } from "../../core/cast.ts";
 import { ProviderRequestError } from "../provider-runtime.ts";
 
-const wttrInApiBaseUrl = "https://wttr.in";
+export const wttrInApiBaseUrl = "https://wttr.in";
 
 type WttrInJsonFormat = "j1" | "j2";
 type WttrInUnits = "metric" | "us";
@@ -25,7 +25,7 @@ interface WttrValue {
   value?: unknown;
 }
 
-export const wttrInActionHandlers: Record<WttrInActionName, ProviderRuntimeHandler<WttrInActionContext>> = {
+export const wttrInActionHandlers: ProviderActionHandlers<"wttr_in", ProviderRuntimeHandler<WttrInActionContext>> = {
   get_weather(input, context) {
     return getWttrInWeather(input, context);
   },

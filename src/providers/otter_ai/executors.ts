@@ -1,6 +1,11 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { OtterAiActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -10,7 +15,12 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "otter_ai";
 const otterAiApiBaseUrl = "https://api.otter.ai";
@@ -19,7 +29,7 @@ const otterAiValidationPath = "/v1/workspace";
 type OtterAiRequestPhase = "validate" | "execute";
 type OtterAiActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const otterAiActionHandlers: Record<OtterAiActionName, OtterAiActionHandler> = {
+export const otterAiActionHandlers: ProviderActionHandlers<"otter_ai", OtterAiActionHandler> = {
   async get_workspace(_input, context): Promise<unknown> {
     const payload = await requestOtterAi(context, otterAiUrl("/v1/workspace"), "execute");
     const wrapper = asOtterWrapper(payload, "Otter.ai workspace response");
@@ -88,6 +98,16 @@ export const otterAiActionHandlers: Record<OtterAiActionName, OtterAiActionHandl
     };
   },
 };
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: otterAiApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, otterAiActionHandlers);
 

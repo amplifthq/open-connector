@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -10,7 +11,6 @@ import {
 } from "../provider-runtime.ts";
 
 export const magileadsApiBaseUrl = "https://app.api-magileads.net";
-const timeoutMs = 30_000;
 
 const request =
   (
@@ -27,7 +27,10 @@ function listId(input: Record<string, unknown>): string {
   return String(input.contact_list_id);
 }
 
-export const magileadsActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const magileadsActionHandlers: ProviderActionHandlers<
+  "magileads",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   list_contact_lists: request("GET", () => "/contact-lists"),
   get_contact_list: request("GET", (input) => `/contact-lists/${listId(input)}`),
   create_contact_list: request("POST", () => "/contact-lists", true),
@@ -76,7 +79,7 @@ async function requestMagileads(
   context: ApiKeyProviderContext,
   phase: "execute" | "validate",
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, timeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(new URL(path, `${magileadsApiBaseUrl}/`), {
       method,

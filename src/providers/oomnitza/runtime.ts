@@ -1,12 +1,13 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
-import type { OomnitzaActionName } from "./actions.ts";
 
 import { optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
@@ -37,7 +38,7 @@ interface OomnitzaRequestInput extends OomnitzaActionContext {
 
 type OomnitzaActionHandler = (input: Record<string, unknown>, context: OomnitzaActionContext) => Promise<unknown>;
 
-export const oomnitzaActionHandlers: Record<OomnitzaActionName, OomnitzaActionHandler> = {
+export const oomnitzaActionHandlers: ProviderActionHandlers<"oomnitza", OomnitzaActionHandler> = {
   async identify(_input, context) {
     return {
       baseUrl: context.baseUrl,
@@ -55,7 +56,7 @@ export const oomnitzaActionHandlers: Record<OomnitzaActionName, OomnitzaActionHa
     return normalizeOomnitzaListPayload(payload, "assets");
   },
   async get_asset(input, context) {
-    const id = requiredString(input.id, "id", requestInputError);
+    const id = requiredString(input.id, "id", providerInputError);
     const payload = await requestOomnitzaJson({
       ...context,
       path: `/api/v3/assets/${encodeURIComponent(id)}`,
@@ -78,7 +79,7 @@ export const oomnitzaActionHandlers: Record<OomnitzaActionName, OomnitzaActionHa
     return normalizeOomnitzaListPayload(payload, "users");
   },
   async get_user(input, context) {
-    const username = requiredString(input.username, "username", requestInputError);
+    const username = requiredString(input.username, "username", providerInputError);
     const payload = await requestOomnitzaJson({
       ...context,
       path: `/api/v3/users/${encodeURIComponent(username)}`,
@@ -368,8 +369,4 @@ function trimTrailingSlash(value: string): string {
     normalized = normalized.slice(0, -1);
   }
   return normalized;
-}
-
-function requestInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

@@ -1,17 +1,18 @@
+import type { ProviderActionHandlerSubset } from "../provider-runtime.ts";
 import type { MondayProviderActionInput } from "./runtime-common.ts";
 import type { MondayActionHandler } from "./runtime-common.ts";
 
 import { compactObject, optionalRecord as asOptionalObject } from "../../core/cast.ts";
+import { ProviderRequestError } from "../provider-runtime.ts";
 import {
   asArray,
   mondayGraphqlRequest,
   normalizeMondayBoard,
   normalizeMondayTeam,
-  mondayProviderError,
   normalizeMondayUser,
 } from "./runtime-common.ts";
 
-export const mondayAutomationActionHandlers: Record<string, MondayActionHandler> = {
+export const mondayAutomationActionHandlers: ProviderActionHandlerSubset<"monday", MondayActionHandler> = {
   get_board_memberships(input, fetcher) {
     return mondayGetBoardMemberships(input, fetcher);
   },
@@ -495,7 +496,7 @@ async function mondayListAuditLogs(input: MondayProviderActionInput, fetcher: ty
 function getRequiredBoard(value: unknown) {
   const board = asOptionalObject(asArray(value)[0]);
   if (!board) {
-    throw mondayProviderError("provider_error", "monday board payload is missing", 502);
+    throw new ProviderRequestError(502, "monday board payload is missing");
   }
   return board;
 }
@@ -503,7 +504,7 @@ function getRequiredBoard(value: unknown) {
 function normalizeMondayDashboard(value: unknown) {
   const record = asOptionalObject(value);
   if (!record) {
-    throw mondayProviderError("provider_error", "monday dashboard payload is missing", 502);
+    throw new ProviderRequestError(502, "monday dashboard payload is missing");
   }
 
   return compactObject({
@@ -518,7 +519,7 @@ function normalizeMondayDashboard(value: unknown) {
 function normalizeMondayActivityLog(value: unknown) {
   const record = asOptionalObject(value);
   if (!record) {
-    throw mondayProviderError("provider_error", "monday activity log payload is missing", 502);
+    throw new ProviderRequestError(502, "monday activity log payload is missing");
   }
 
   return {
@@ -535,7 +536,7 @@ function normalizeMondayActivityLog(value: unknown) {
 function normalizeMondayAuditLog(value: unknown) {
   const record = asOptionalObject(value);
   if (!record) {
-    throw mondayProviderError("provider_error", "monday audit log payload is missing", 502);
+    throw new ProviderRequestError(502, "monday audit log payload is missing");
   }
 
   return compactObject({
@@ -590,7 +591,7 @@ function toOptionalId(value: unknown) {
 function normalizeString(value: unknown, fieldName: string) {
   const normalized = toOptionalString(value);
   if (!normalized) {
-    throw mondayProviderError("provider_error", `${fieldName} is missing`, 502);
+    throw new ProviderRequestError(502, `${fieldName} is missing`);
   }
   return normalized;
 }
@@ -598,21 +599,21 @@ function normalizeString(value: unknown, fieldName: string) {
 function normalizeId(value: unknown, fieldName: string) {
   const normalized = toOptionalId(value);
   if (!normalized) {
-    throw mondayProviderError("provider_error", `${fieldName} is missing`, 502);
+    throw new ProviderRequestError(502, `${fieldName} is missing`);
   }
   return normalized;
 }
 
 function normalizeInteger(value: unknown, fieldName: string) {
   if (typeof value !== "number" || !Number.isInteger(value)) {
-    throw mondayProviderError("provider_error", `${fieldName} is missing`, 502);
+    throw new ProviderRequestError(502, `${fieldName} is missing`);
   }
   return value;
 }
 
 function normalizeBoolean(value: unknown, fieldName: string) {
   if (typeof value !== "boolean") {
-    throw mondayProviderError("provider_error", `${fieldName} is missing`, 502);
+    throw new ProviderRequestError(502, `${fieldName} is missing`);
   }
   return value;
 }

@@ -53,22 +53,23 @@ const listEnumValuesInputSchema = s.oneOf(
 export const fiberAiActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_org_credits",
+    operationType: "read",
     description: "Get Fiber AI organization credit balance and per-operation pricing metadata.",
     inputSchema: emptyInputSchema,
     outputSchema: commonFiberOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_rate_limits",
+    operationType: "read",
     description: "Get Fiber AI rate limits for the current organization.",
     inputSchema: emptyInputSchema,
     outputSchema: commonFiberOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_enum_values",
+    operationType: "read",
     description: "List a free Fiber AI enum or reference dataset such as regions or industries.",
     inputSchema: listEnumValuesInputSchema,
     outputSchema: commonFiberOutputSchema,
   }),
 ];
-
-export type FiberAiActionName = "get_org_credits" | "get_rate_limits" | "list_enum_values";

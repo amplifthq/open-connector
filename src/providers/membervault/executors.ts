@@ -4,6 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { compactObject, integer, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
@@ -11,6 +12,7 @@ import {
   createProviderTimeout,
   defineProviderExecutors,
   defineProviderProxy,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
@@ -18,7 +20,6 @@ import {
 } from "../provider-runtime.ts";
 
 const service = "membervault";
-const membervaultDefaultTimeoutMs = 30_000;
 const membervaultMaxResponseBytes = 10 * 1024 * 1024;
 const defaultRootDomain = "mvsite.app";
 const legacyRootDomain = "vipmembervault.com";
@@ -37,7 +38,7 @@ interface MembervaultContext extends MembervaultCredential {
 
 type MembervaultActionHandler = (input: Record<string, unknown>, context: MembervaultContext) => Promise<unknown>;
 
-export const membervaultActionHandlers: Record<string, MembervaultActionHandler> = {
+export const membervaultActionHandlers: ProviderActionHandlers<"membervault", MembervaultActionHandler> = {
   async list_courses(_input, context) {
     const payload = await requestMembervaultJson("get_courses", {}, context, "execute");
     return { courses: normalizeCourses(payload), raw: payload };
@@ -156,7 +157,7 @@ async function requestMembervaultJson(
       url.searchParams.set(key, String(value));
     }
   }
-  const timeout = createProviderTimeout(context.signal, membervaultDefaultTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       headers: { accept: "application/json", "user-agent": providerUserAgent },
@@ -326,10 +327,6 @@ function readPayloadValue(payload: unknown, ...keys: string[]): unknown {
     if (object[key] !== undefined && object[key] !== null) return object[key];
   }
   return optionalRecord(object.data) ? readPayloadValue(object.data, ...keys) : undefined;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function stringifyOptional(value: unknown): string | undefined {

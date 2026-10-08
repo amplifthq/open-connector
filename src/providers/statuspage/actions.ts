@@ -5,21 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "statuspage";
 
-export type StatuspageActionName =
-  | "list_pages"
-  | "get_page"
-  | "list_components"
-  | "create_component"
-  | "update_component"
-  | "delete_component"
-  | "list_incidents"
-  | "get_incident"
-  | "create_incident"
-  | "update_incident"
-  | "delete_incident"
-  | "list_events"
-  | "get_automation_email";
-
 const pageIdSchema = s.nonEmptyString("The Statuspage page identifier.");
 const componentIdSchema = s.nonEmptyString("The Statuspage component identifier.");
 const incidentIdSchema = s.nonEmptyString("The Statuspage incident identifier.");
@@ -161,6 +146,7 @@ const componentUpdateInputSchema = s.actionInput(
 export const statuspageActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_pages",
+    operationType: "read",
     description: "List Statuspage pages available to the API token.",
     requiredScopes: [],
     inputSchema: s.actionInput({}, [], "Input parameters for listing Statuspage pages."),
@@ -171,6 +157,7 @@ export const statuspageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_page",
+    operationType: "read",
     description: "Get one Statuspage page by id.",
     requiredScopes: [],
     inputSchema: s.actionInput({ pageId: pageIdSchema }, ["pageId"], "Input parameters for getting a Statuspage page."),
@@ -181,6 +168,7 @@ export const statuspageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_components",
+    operationType: "read",
     description: "List components for a Statuspage page.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -195,6 +183,7 @@ export const statuspageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_component",
+    operationType: "write",
     description: "Create a component on a Statuspage page.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -212,6 +201,7 @@ export const statuspageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_component",
+    operationType: "write",
     description: "Update a Statuspage component.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -230,6 +220,7 @@ export const statuspageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_component",
+    operationType: "destructive",
     description: "Delete a Statuspage component.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -244,6 +235,7 @@ export const statuspageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_incidents",
+    operationType: "read",
     description: "List incidents for a Statuspage page.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -263,6 +255,7 @@ export const statuspageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_incident",
+    operationType: "read",
     description: "Get one Statuspage incident by id.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -277,6 +270,7 @@ export const statuspageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_incident",
+    operationType: "write",
     description: "Create an incident on a Statuspage page.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -291,6 +285,7 @@ export const statuspageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_incident",
+    operationType: "write",
     description: "Update a Statuspage incident.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -305,6 +300,7 @@ export const statuspageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_incident",
+    operationType: "destructive",
     description: "Delete a Statuspage incident.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -319,6 +315,7 @@ export const statuspageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_events",
+    operationType: "read",
     description: "List activity events for a Statuspage page.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -338,6 +335,7 @@ export const statuspageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_automation_email",
+    operationType: "read",
     description: "Get the inbound automation email address for a Statuspage page.",
     requiredScopes: [],
     inputSchema: s.actionInput(

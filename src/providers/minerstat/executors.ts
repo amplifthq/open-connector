@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -14,12 +15,11 @@ import {
 const service = "minerstat";
 const minerstatApiOrigin = "https://api.minerstat.com";
 const minerstatApiBaseUrl = `${minerstatApiOrigin}/v2`;
-const minerstatRequestTimeoutMs = 30_000;
 
 type MinerstatRequestPhase = "validate" | "execute";
 type MinerstatActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-const minerstatActionHandlers: Record<string, MinerstatActionHandler> = {
+const minerstatActionHandlers: ProviderActionHandlers<"minerstat", MinerstatActionHandler> = {
   list_coins(input, context) {
     return runMinerstatAction(input, context, "/coins", "coins", ["list", "algo"]);
   },
@@ -100,7 +100,7 @@ async function requestMinerstatArray(input: {
     }
   }
 
-  const timeout = createProviderTimeout(input.context.signal, minerstatRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const response = await input.context.fetcher(url, {
       method: "GET",

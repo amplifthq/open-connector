@@ -5,20 +5,22 @@ import type {
   ProviderProxyExecutor,
   ProxyExecutionResult,
 } from "../../core/types.ts";
-import type { FlomoActionName, FlomoMcpToolName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { FlomoMcpToolName } from "./actions.ts";
+import type { Client } from "@modelcontextprotocol/client";
 
-import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { McpError } from "@modelcontextprotocol/sdk/types.js";
-import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
+import { UnauthorizedError } from "@modelcontextprotocol/client";
+import { SdkHttpError } from "@modelcontextprotocol/client";
+import { ProtocolError } from "@modelcontextprotocol/client";
 import { createHash } from "node:crypto";
 import { optionalString, requiredString } from "../../core/cast.ts";
+import { withMcpClient } from "../mcp-client.ts";
 import {
   createProviderProxyUrl,
   defineProviderExecutors,
   normalizeProviderProxyHeaders,
   providerFetch,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
   readProviderProxyResponse,
@@ -31,7 +33,6 @@ const flomoWebhookPathPrefix = "/iwh/";
 const flomoMcpEndpoint = "https://flomoapp.com/mcp";
 const flomoMcpTokenField = "token";
 const flomoRequestTimeoutMs = 30_000;
-const flomoMcpJsonSchemaValidator = new CfWorkerJsonSchemaValidator();
 
 type FlomoActionHandler = (input: Record<string, unknown>, context: FlomoActionContext) => Promise<unknown>;
 type FlomoMcpToolResult = Awaited<ReturnType<Client["callTool"]>>;
@@ -57,7 +58,7 @@ interface FlomoMcpToolSummary {
   description?: string;
 }
 
-export const flomoActionHandlers: Record<FlomoActionName, FlomoActionHandler> = {
+export const flomoActionHandlers: ProviderActionHandlers<"flomo", FlomoActionHandler> = {
   create_memo(input, context) {
     if (context.authType === "custom_credential") {
       return callFlomoMcpTool({
@@ -244,7 +245,7 @@ async function createFlomoMemo(input: {
         "user-agent": providerUserAgent,
       },
       body: JSON.stringify({
-        content: requiredString(input.input.content, "content", flomoInputError),
+        content: requiredString(input.input.content, "content", providerInputError),
         ...(input.input.contentType === "markdown" || input.input.format === "markdown"
           ? { content_type: "markdown" }
           : {}),
@@ -415,7 +416,6 @@ async function callFlomoMcpTool(input: {
         name: input.toolName,
         arguments: input.arguments,
       },
-      undefined,
       {
         timeout: flomoRequestTimeoutMs,
       },
@@ -436,31 +436,17 @@ async function withFlomoMcpClient<T>(
   headers.set("Authorization", `Bearer ${input.token}`);
   headers.set("user-agent", providerUserAgent);
 
-  const transport = new StreamableHTTPClientTransport(new URL(flomoMcpEndpoint), {
-    fetch: input.fetcher,
-    requestInit: {
+  return withMcpClient(
+    {
+      endpoint: new URL(flomoMcpEndpoint),
+      transport: "streamable_http",
+      fetcher: input.fetcher,
       headers,
       signal: input.signal,
+      mapError: mapFlomoMcpError,
     },
-  });
-  const client = new Client(
-    {
-      name: "oomol-connect-flomo",
-      version: "1.0.0",
-    },
-    { jsonSchemaValidator: flomoMcpJsonSchemaValidator },
+    run,
   );
-
-  try {
-    await client.connect(transport, {
-      timeout: flomoRequestTimeoutMs,
-    });
-    return await run(client);
-  } catch (error) {
-    throw mapFlomoMcpError(error);
-  } finally {
-    await client.close().catch(() => undefined);
-  }
 }
 
 function normalizeMcpToolResult(toolName: string, result: FlomoMcpToolResult): unknown {
@@ -505,15 +491,15 @@ function mapFlomoMcpError(error: unknown): ProviderRequestError {
   if (error instanceof UnauthorizedError) {
     return new ProviderRequestError(401, "flomo MCP token is invalid or expired", error);
   }
-  if (error instanceof StreamableHTTPError) {
-    const status = error.code;
+  if (error instanceof SdkHttpError) {
+    const status = error.status;
     return new ProviderRequestError(
       status === 401 || status === 403 ? 401 : status && status >= 400 && status < 500 ? 400 : 502,
       `flomo MCP request failed: ${error.message}`,
       error,
     );
   }
-  if (error instanceof McpError) {
+  if (error instanceof ProtocolError) {
     return new ProviderRequestError(502, `flomo MCP request failed: ${error.message}`, error);
   }
 
@@ -543,10 +529,6 @@ function buildFlomoHttpErrorMessage(status: number, text: string): string {
   }
 
   return `flomo webhook request failed with HTTP ${status}: ${trimmed.slice(0, 200)}`;
-}
-
-function flomoInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function isAbortError(error: unknown): boolean {

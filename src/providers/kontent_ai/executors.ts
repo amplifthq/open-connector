@@ -3,14 +3,17 @@ import type {
   CredentialValidators,
   ExecutionContext,
   ProviderExecutors,
+  ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { KontentAiActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { optionalBoolean, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
@@ -36,7 +39,7 @@ interface KontentAiRequestResult {
   continuationToken: string | null;
 }
 
-export const kontentAiActionHandlers: Record<KontentAiActionName, KontentAiActionHandler> = {
+export const kontentAiActionHandlers: ProviderActionHandlers<"kontent_ai", KontentAiActionHandler> = {
   list_content_items(input, context) {
     return listKontentAiContentItems(input, context);
   },
@@ -68,6 +71,17 @@ export const executors: ProviderExecutors = defineProviderExecutors<KontentAiAct
       fetcher,
       signal: context.signal,
     };
+  },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: kontentAiApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+    if (!headers.has("content-type")) headers.set("content-type", "application/json");
   },
 });
 
@@ -440,8 +454,4 @@ function readArray(value: unknown): unknown[] {
   }
 
   return value;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

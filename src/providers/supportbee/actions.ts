@@ -5,25 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "supportbee" as const;
 
-export type SupportbeeActionName =
-  | "list_tickets"
-  | "search_tickets"
-  | "get_ticket"
-  | "create_ticket"
-  | "list_ticket_replies"
-  | "get_ticket_reply"
-  | "create_ticket_reply"
-  | "list_ticket_comments"
-  | "create_ticket_comment"
-  | "list_labels"
-  | "add_label_to_ticket"
-  | "remove_label_from_ticket"
-  | "list_users"
-  | "get_user"
-  | "create_user"
-  | "update_user"
-  | "list_teams";
-
 const positiveIdSchema = s.positiveInteger("A positive SupportBee numeric identifier.");
 const perPageSchema = s.integer("The number of records to retrieve. SupportBee requires this to be less than 100.", {
   minimum: 1,
@@ -255,6 +236,7 @@ const userInputSchema = s.object(
 export const supportbeeActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_tickets",
+    operationType: "read",
     description: "List SupportBee tickets with optional official ticket filters.",
     inputSchema: s.object("Input filters for listing SupportBee tickets.", ticketFiltersSchema, {
       optional: ticketFilterOptionalKeys,
@@ -263,6 +245,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_tickets",
+    operationType: "read",
     description: "Search SupportBee tickets by query text with optional pagination filters.",
     inputSchema: s.object(
       "Input parameters for searching SupportBee tickets.",
@@ -279,6 +262,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_ticket",
+    operationType: "read",
     description: "Retrieve a SupportBee ticket by ID.",
     inputSchema: s.object(
       "Input parameters for retrieving a SupportBee ticket.",
@@ -292,6 +276,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_ticket",
+    operationType: "write",
     description: "Create a SupportBee ticket with JSON body content and optional email recipients.",
     inputSchema: createTicketInputSchema,
     outputSchema: s.object("The response returned when creating a SupportBee ticket.", {
@@ -301,6 +286,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_ticket_replies",
+    operationType: "read",
     description: "List replies for a SupportBee ticket.",
     inputSchema: s.object(
       "Input parameters for listing SupportBee ticket replies.",
@@ -314,6 +300,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_ticket_reply",
+    operationType: "read",
     description: "Retrieve one SupportBee ticket reply by ticket ID and reply ID.",
     inputSchema: s.object(
       "Input parameters for retrieving a SupportBee ticket reply.",
@@ -330,6 +317,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_ticket_reply",
+    operationType: "write",
     description: "Create a SupportBee ticket reply with JSON body content.",
     inputSchema: replyContentInputSchema,
     outputSchema: s.object("The response returned when creating a SupportBee ticket reply.", {
@@ -339,6 +327,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_ticket_comments",
+    operationType: "read",
     description: "List comments for a SupportBee ticket.",
     inputSchema: s.object(
       "Input parameters for listing SupportBee ticket comments.",
@@ -352,6 +341,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_ticket_comment",
+    operationType: "write",
     description: "Create a SupportBee ticket comment with JSON body content.",
     inputSchema: commentContentInputSchema,
     outputSchema: s.object("The response returned when creating a SupportBee ticket comment.", {
@@ -361,6 +351,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_labels",
+    operationType: "read",
     description: "List custom SupportBee labels for the connected desk.",
     inputSchema: s.object("Input parameters for listing SupportBee labels.", {}),
     outputSchema: s.object("The response returned when listing SupportBee labels.", {
@@ -370,6 +361,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "add_label_to_ticket",
+    operationType: "write",
     description: "Add an existing SupportBee label to a ticket.",
     inputSchema: s.object(
       "Input parameters for adding a SupportBee label to a ticket.",
@@ -386,6 +378,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "remove_label_from_ticket",
+    operationType: "destructive",
     description: "Remove a SupportBee label from a ticket.",
     inputSchema: s.object(
       "Input parameters for removing a SupportBee label from a ticket.",
@@ -401,6 +394,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List SupportBee users and customer groups.",
     inputSchema: s.object(
       "Input filters for listing SupportBee users and customer groups.",
@@ -422,6 +416,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Retrieve one SupportBee user or customer group by ID.",
     inputSchema: s.object(
       "Input parameters for retrieving a SupportBee user or customer group.",
@@ -438,6 +433,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_user",
+    operationType: "write",
     description: "Create a SupportBee user or customer group.",
     inputSchema: userInputSchema,
     outputSchema: s.object("The response returned when creating a SupportBee user.", {
@@ -447,6 +443,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_user",
+    operationType: "write",
     description: "Update a SupportBee user or customer group by ID.",
     inputSchema: s.object(
       "Input parameters for updating a SupportBee user or customer group.",
@@ -475,6 +472,7 @@ export const supportbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_teams",
+    operationType: "read",
     description: "List SupportBee teams with optional user expansion filters.",
     inputSchema: s.object(
       "Input filters for listing SupportBee teams.",

@@ -2,9 +2,10 @@
 
 <img src="../assets/openconnector-readme-banner.png" alt="OpenConnector - Connect Once. Use Everywhere." width="100%" />
 
-[English](../README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Français](README.fr.md)
+[English](../README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Français](README.fr.md) | [Español](README.es.md)
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](../LICENSE.txt)
+[![npm](https://img.shields.io/npm/v/@oomol-lab/open-connector.svg)](https://www.npmjs.com/package/@oomol-lab/open-connector)
 ![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933)
 ![Cloudflare compatible](https://img.shields.io/badge/Cloudflare-compatible-F38020)
 ![MCP](https://img.shields.io/badge/MCP-ready-111827)
@@ -22,18 +23,18 @@ Agent 和应用。
 <table>
   <tr>
     <td width="33.33%" align="center"><img src="../assets/deployment-options/oomol.svg" alt="OOMOL" width="140"></td>
-    <td width="33.33%" align="center"><img src="../assets/deployment-options/cloudflare.svg" alt="Cloudflare" width="140"></td>
     <td width="33.33%" align="center"><img src="../assets/deployment-options/self-hosted.svg" alt="自托管" width="140"></td>
+    <td width="33.33%" align="center"><img src="../assets/deployment-options/more-platforms.svg" alt="更多平台" width="140"></td>
   </tr>
   <tr>
     <td width="33.33%" valign="top">托管 OAuth 和 runtime，开箱即用。无需部署或配置 OAuth 应用。</td>
-    <td width="33.33%" valign="top">在你的 Cloudflare 账号中使用 Workers、D1、R2 和 Static Assets。部署和 OAuth 应用由你负责管理。</td>
     <td width="33.33%" valign="top">使用 Docker 或 Node.js 在本地或自己的基础设施中运行。存储和 OAuth 应用由你负责管理。</td>
+    <td width="33.33%" valign="top"><strong>Cloudflare</strong>、<strong>Fly.io</strong>、<strong>RepoCloud</strong>、<strong>nibrun</strong>、<strong>NEXUS AI</strong> 等。</td>
   </tr>
   <tr>
     <td width="33.33%" align="center">🚀 <a href="https://oomol.com/docs/connector-saas/"><strong>OOMOL 托管</strong></a></td>
-    <td width="33.33%" align="center"><a href="cloudflare.md"><strong>部署到 Cloudflare</strong></a></td>
     <td width="33.33%" align="center"><a href="https://oomol.com/docs/openconnector-self-hosting/"><strong>自托管</strong></a></td>
+    <td width="33.33%" align="center"><a href="deployment-options/README.zh-CN.md"><strong>更多平台</strong></a></td>
   </tr>
 </table>
 
@@ -42,7 +43,7 @@ Agent 和应用。
 HTTP/OpenAPI；管理和调试使用本地 Web 控制台。
 
 - 把 credential、scope、schema、policy 和运行日志保留在可检查的 runtime 里。
-- 支持本地运行、Fly.io 部署、Cloudflare 兼容基础设施部署，也可以使用 OOMOL 托管 runtime。
+- 支持本地运行、自有基础设施部署，也可以使用 OOMOL 托管 runtime。
 - 开源版和商业 SaaS 版共享同一套 provider id、Action id、schema 和契约。
 
 ## 提供什么
@@ -52,8 +53,8 @@ HTTP/OpenAPI；管理和调试使用本地 Web 控制台。
 - 支持 API key、OAuth2、自定义凭据，以及无需鉴权的 provider。
 - 可以审查和扩展的 Action 契约：请求/响应 schema、required scope 和按需加载的 executor 源码。
 - 面向生产的 runtime 控制：connection identity、scope、runtime token、action allow/block policy、临时文件中转和脱敏运行日志。
-- 部署方式覆盖本地 Docker 或 Node.js、Fly.io 持久化 SQLite、Cloudflare Workers/D1/R2/Static
-  Assets，以及 OOMOL 托管 runtime。
+- 部署方式覆盖本地 Docker 或 Node.js，以及 OOMOL 托管 runtime。其他托管平台见
+  [部署方案](deployment-options/README.zh-CN.md)。
 
 ## 适合什么场景
 
@@ -116,19 +117,7 @@ secret 保留在运行时边界内；Agent 拿到本次运行所需的 metadata�
 | 路径                            | 适合谁                             | 提供什么                                                                                                                                                 |
 | ------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 开源自托管                      | 希望完全掌控基础设施的开发者和团队 | 本地 Docker 或 Node runtime、SQLite 存储、MCP、HTTP、OpenAPI 和 Web 控制台                                                                               |
-| Fly.io 自托管                   | 希望使用托管 Docker runtime 的团队 | Node Docker runtime、Fly volume 上的 SQLite 存储、TLS、健康检查、MCP、HTTP、OpenAPI 和 Web 控制台                                                        |
-| Cloudflare 兼容部署             | 希望快速获得轻量托管运行时的团队   | Workers runtime、D1 状态存储、R2 文件中转和控制台 Static Assets                                                                                          |
 | [OOMOL](https://oomol.com/apps) | 希望用户立即授权账号的团队         | OOMOL 为支持的 provider 提供 OAuth 应用、每月赠送的 Connect 点数和托管 runtime；继续使用同一套 provider 和 Action 契约，后续仍可迁移到私有化或自托管部署 |
-
-## Cloudflare 快速启动视频
-
-[![一键部署 OpenConnector 到 Cloudflare Workers](../assets/cloudflare-quickstart-video.png)](https://www.youtube.com/watch?v=R0V1ZdCuTgc)
-
-[Cloudflare Workers 部署演示](https://www.youtube.com/watch?v=R0V1ZdCuTgc) 展示如何把
-OpenConnector 跑到 Cloudflare 的 Workers、D1、R2 和 Web 控制台上。视频流程与
-[cloudflare.md](cloudflare.md) 保持一致：创建 Cloudflare 资源、把
-`wrangler.example.jsonc` 复制成 `wrangler.local.jsonc`、执行 D1 migration、设置必需
-secret，然后运行 `npm run deploy:cloudflare`。
 
 ## 快速开始
 
@@ -189,45 +178,27 @@ OAuth2 应用、命名连接、凭据加密、token 刷新和 action policy 见
 配置、创建 runtime token、查看 Action schema、调试 Action、查看最近运行记录，并打开生成的 OpenAPI 和
 MCP metadata。
 
-## Cloudflare 部署
-
-OpenConnector 可以部署到 Cloudflare：Workers 运行 runtime，D1 保存状态，R2 处理中转文件，Static
-Assets 承载 Web 控制台。
-
-Cloudflare 资源创建、migration、secret、本地 Worker preview 和远程部署步骤见
-[cloudflare.md](cloudflare.md)。
-
-## Fly.io 部署
-
-OpenConnector 也可以部署到 Fly.io：使用 Node Docker runtime，并把 SQLite 数据持久化到 Fly volume。
-
-Fly app 创建、volume、secret、部署、自定义域名和扩缩容步骤见 [fly-io.md](fly-io.md)。
-
 ## Docker 镜像（GHCR）
 
 可以直接用 GitHub Packages（GHCR）上的预构建镜像运行 OpenConnector：`ghcr.io/oomol-lab/open-connector`。最新
-release 用 `latest`，生产环境固定版本号（如 `v1.0.0`），想用最新 `main` 构建则用 `tip`。
+release 用 `latest`，生产环境固定具体的 release 版本号，想用最新 `main` 构建则用 `tip`。
 
 镜像标签、拉取和运行的说明见 [docker-ghcr.zh-CN.md](docker-ghcr.zh-CN.md)。
 
-## 用 Wanta 构建你的桌面 Agent
+## 开箱即用的 AI Bot：Leina
 
-OpenConnector 与 [Wanta](https://github.com/oomol-lab/wanta) 是 OOMOL 开源生态中面向 AI Agent
-的两个项目。OpenConnector 负责把 Gmail、Slack、Notion 等外部服务接入 Agent；Wanta 则提供一套基于 OpenCode
-运行的完整桌面 Agent 应用，并通过 OpenConnector 使用已连接的 SaaS 服务。
+如果想使用开箱即用的 AI Bot，可以试试 [Leina](https://leina.ai/)。Leina 可连接 1500 多款 SaaS 应用，让你自由组合应用连接、技能和知识库，定制适合团队工作流程的 AI Agent。
 
-- **本地运行：** 使用自己的 OpenAI 兼容模型，无需注册 Wanta 账号。
-- **二次开发：** Fork Wanta，自定义提示词、工具、界面、模型和品牌，构建自己的桌面 Agent。
-- **托管服务：** 可选的[托管服务](https://wanta.ai/)提供托管模型、OAuth 连接和团队工作区。
-
-欢迎通过 Issue 和 Pull Request 参与贡献。
+它支持 Slack、Microsoft Teams、Discord、Telegram，以及钉钉、企业微信、飞书和个人微信。你可以直接在聊天中，让它通过你授权的应用查找信息、汇总周报、整理客户反馈或准备销售跟进内容。
 
 ## 文档
 
 - [快速开始](quickstart.md)
 - [开发者工具](sdk-cli.md)
+- [客户端接入：MCP、CLI 和 SDK](client-onboarding.zh-CN.md)
 - [Gmail OAuth 和 SDK 接入教程](gmail-oauth-sdk.zh-CN.md)
 - [Runtime API 和 MCP](runtime-api.md)
+- [部署方案](deployment-options/README.zh-CN.md)
 - [Fly.io 部署](fly-io.md)
 - [Cloudflare 部署](cloudflare.md)
 - [Docker 镜像（GHCR）](docker-ghcr.zh-CN.md)

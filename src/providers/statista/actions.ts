@@ -140,15 +140,10 @@ const simpleSearchInputSchema = s.object(
   { optional: ["size"] },
 );
 
-export type StatistaActionName =
-  | "search_statistics"
-  | "get_statistic"
-  | "search_market_insights_indicators"
-  | "search_consumer_insights";
-
 export const statistaActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "search_statistics",
+    operationType: "read",
     description: "Search Statista statistics using natural language or keywords.",
     requiredScopes: [],
     inputSchema: searchStatisticsInputSchema,
@@ -156,6 +151,7 @@ export const statistaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_statistic",
+    operationType: "read",
     description: "Retrieve chart data and metadata for a Statista statistic identifier.",
     requiredScopes: [],
     inputSchema: getStatisticInputSchema,
@@ -163,6 +159,7 @@ export const statistaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_market_insights_indicators",
+    operationType: "read",
     description: "Search Statista Market Insights indicators using natural language or keywords.",
     requiredScopes: [],
     inputSchema: simpleSearchInputSchema,
@@ -170,6 +167,7 @@ export const statistaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_consumer_insights",
+    operationType: "read",
     description: "Search Statista Consumer Insights survey questions and answer options.",
     requiredScopes: [],
     inputSchema: simpleSearchInputSchema,

@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
@@ -14,7 +15,6 @@ import {
 const service = "token_metrics";
 const tokenMetricsApiBaseUrl = "https://api.tokenmetrics.com/v2";
 const tokenMetricsValidationPath = "/tokens";
-const tokenMetricsRequestTimeoutMs = 30_000;
 
 type TokenMetricsPhase = "validate" | "execute";
 type TokenMetricsQueryValue = string | number | undefined;
@@ -31,7 +31,7 @@ const extendedFilterKeys = ["category", "exchange", "marketcap", "volume", "fdv"
 const paginationKeys = ["page", "limit"];
 const dateRangeKeys = ["startDate", "endDate"];
 
-export const tokenMetricsActionHandlers: Record<string, TokenMetricsActionHandler> = {
+export const tokenMetricsActionHandlers: ProviderActionHandlers<"token_metrics", TokenMetricsActionHandler> = {
   list_tokens(input, context) {
     return tokenMetricsGet(
       "/tokens",
@@ -118,7 +118,7 @@ async function tokenMetricsGet(
     }
   }
 
-  const timeout = createProviderTimeout(context.signal, tokenMetricsRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       method: "GET",

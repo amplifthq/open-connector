@@ -324,23 +324,10 @@ const getAgentScheduleInputSchema = s.object("Path parameters for retrieving one
   agentId: agentIdSchema,
 });
 
-export type CallinglyActionName =
-  | "get_call"
-  | "list_calls"
-  | "create_call"
-  | "list_leads"
-  | "get_lead"
-  | "update_lead"
-  | "delete_lead"
-  | "list_teams"
-  | "get_team"
-  | "list_team_agents"
-  | "list_agents"
-  | "get_agent_schedule";
-
 export const callinglyActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_call",
+    operationType: "read",
     description: "Retrieve one Callingly call by ID.",
     requiredScopes: [],
     inputSchema: getCallInputSchema,
@@ -350,6 +337,7 @@ export const callinglyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_calls",
+    operationType: "read",
     description: "List Callingly calls with optional date, team, and pagination filters.",
     requiredScopes: [],
     inputSchema: listCallsInputSchema,
@@ -359,6 +347,7 @@ export const callinglyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_call",
+    operationType: "write",
     description: "Create a Callingly call from lead details and routing information.",
     requiredScopes: [],
     inputSchema: createCallInputSchema,
@@ -368,6 +357,7 @@ export const callinglyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_leads",
+    operationType: "read",
     description: "List Callingly leads with optional date or phone number filters.",
     requiredScopes: [],
     inputSchema: listLeadsInputSchema,
@@ -377,6 +367,7 @@ export const callinglyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_lead",
+    operationType: "read",
     description: "Retrieve one Callingly lead by ID.",
     requiredScopes: [],
     inputSchema: getLeadInputSchema,
@@ -386,6 +377,7 @@ export const callinglyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_lead",
+    operationType: "write",
     description: "Update a Callingly lead by ID.",
     requiredScopes: [],
     inputSchema: updateLeadInputSchema,
@@ -395,6 +387,7 @@ export const callinglyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_lead",
+    operationType: "destructive",
     description: "Delete a Callingly lead by ID.",
     requiredScopes: [],
     inputSchema: deleteLeadInputSchema,
@@ -402,6 +395,7 @@ export const callinglyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_teams",
+    operationType: "read",
     description: "List Callingly teams for the current account or a specified client account.",
     requiredScopes: [],
     inputSchema: listTeamsInputSchema,
@@ -411,6 +405,7 @@ export const callinglyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_team",
+    operationType: "read",
     description: "Retrieve one Callingly team by ID.",
     requiredScopes: [],
     inputSchema: getTeamInputSchema,
@@ -420,6 +415,7 @@ export const callinglyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_team_agents",
+    operationType: "read",
     description: "List agents assigned to one Callingly team.",
     requiredScopes: [],
     inputSchema: listTeamAgentsInputSchema,
@@ -429,6 +425,7 @@ export const callinglyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_agents",
+    operationType: "read",
     description: "List Callingly agents for the current account or a specified client account.",
     requiredScopes: [],
     inputSchema: listAgentsInputSchema,
@@ -438,6 +435,7 @@ export const callinglyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_agent_schedule",
+    operationType: "read",
     description: "Retrieve the weekly schedule for one Callingly agent.",
     requiredScopes: [],
     inputSchema: getAgentScheduleInputSchema,

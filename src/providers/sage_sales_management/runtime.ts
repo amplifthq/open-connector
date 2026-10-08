@@ -1,14 +1,9 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { SageSalesManagementActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  createProviderTimeout,
-  isAbortLikeError,
-  ProviderRequestError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
 
 type SageSalesManagementPhase = "validate" | "execute";
 interface SageSalesManagementCredentials {
@@ -32,8 +27,6 @@ type ResourceConfig = {
 
 export const sageSalesManagementApiBaseUrl = "https://api.forcemanager.com/api/v4";
 
-const requestTimeoutMs = 30_000;
-
 const accountsConfig = {
   resourcePath: "accounts",
   listOutputKey: "accounts",
@@ -52,8 +45,8 @@ const opportunitiesConfig = {
   recordOutputKey: "opportunity",
 } as const satisfies ResourceConfig;
 
-export const sageSalesManagementActionHandlers: Record<
-  SageSalesManagementActionName,
+export const sageSalesManagementActionHandlers: ProviderActionHandlers<
+  "sage_sales_management",
   SageSalesManagementActionHandler
 > = {
   get_accounts_schema(input, context) {
@@ -110,7 +103,7 @@ export const sageSalesManagementActionHandlers: Record<
   delete_opportunity(input, context) {
     return executeDeleteResource(opportunitiesConfig, input, context);
   },
-} satisfies Record<SageSalesManagementActionName, SageSalesManagementActionHandler>;
+};
 
 export async function validateSageSalesManagementCredential(
   input: Record<string, string>,
@@ -355,9 +348,7 @@ async function requestSageSalesManagementJsonWithStatus(input: {
   extraHeaders?: Record<string, string>;
   body?: Record<string, unknown>;
 }) {
-  const timeout = createProviderTimeout(input.signal, requestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.signal, label: "Sage Sales Management" }, async (signal) => {
     const response = await input.fetcher(buildSageSalesManagementUrl(input.path, input.query), {
       method: input.method,
       headers: compactObject({
@@ -368,7 +359,7 @@ async function requestSageSalesManagementJsonWithStatus(input: {
         "user-agent": providerUserAgent,
       }),
       ...(input.body ? { body: JSON.stringify(input.body) } : {}),
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readPayload(response);
 
@@ -380,24 +371,7 @@ async function requestSageSalesManagementJsonWithStatus(input: {
       status: response.status,
       payload,
     };
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Sage Sales Management request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error
-        ? `Sage Sales Management request failed: ${error.message}`
-        : "Sage Sales Management request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildSageSalesManagementUrl(path: string, query: Record<string, string | number> = {}) {

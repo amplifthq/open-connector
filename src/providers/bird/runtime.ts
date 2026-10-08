@@ -1,12 +1,11 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { BirdActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 export const birdApiBaseUrl: string = "https://api.bird.com";
-const birdRequestTimeoutMs = 30_000;
 
 type BirdRequestPhase = "validate" | "execute";
 type BirdRequestMethod = "GET" | "POST" | "PATCH" | "DELETE";
@@ -19,7 +18,7 @@ interface BirdRequestInput {
   body?: unknown;
 }
 
-export const birdActionHandlers: Record<BirdActionName, BirdActionHandler> = {
+export const birdActionHandlers: ProviderActionHandlers<"bird", BirdActionHandler> = {
   list_channels(input, context) {
     return listChannels(input, context);
   },
@@ -374,7 +373,7 @@ async function birdRequest(
     url.searchParams.append(key, value);
   }
 
-  const timeout = createProviderTimeout(context.signal, birdRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   let response: Response;
   try {
     response = await context.fetcher(url, {

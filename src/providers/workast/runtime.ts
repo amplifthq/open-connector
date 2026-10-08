@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -11,7 +12,6 @@ import {
 
 export const workastApiBaseUrl = "https://api.todobot.io";
 
-const workastRequestTimeoutMs = 30_000;
 const taskWriteKeys = ["text", "description", "startDate", "dueDate", "dueDateTimezone", "dueDateTime"] as const;
 
 type WorkastRequestPhase = "validate" | "execute";
@@ -28,7 +28,7 @@ interface WorkastRequestOptions {
   readonly body?: Readonly<Record<string, unknown>>;
 }
 
-export const workastActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const workastActionHandlers: ProviderActionHandlers<"workast", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   async get_my_details(_input, context) {
     const user = await requestWorkastJson({
       apiKey: context.apiKey,
@@ -179,7 +179,7 @@ async function getTask(
 }
 
 async function requestWorkastJson(options: WorkastRequestOptions) {
-  const timeout = createProviderTimeout(options.signal, workastRequestTimeoutMs);
+  const timeout = createProviderTimeout(options.signal);
   const url = new URL(`${workastApiBaseUrl}${options.path}`);
   appendQuery(url, options.query);
   const headers: Record<string, string> = {
@@ -241,7 +241,7 @@ function mapWorkastError(status: number, payload: unknown, phase: WorkastRequest
   if (status == 401 || status == 403) {
     return phase == "validate"
       ? providerError("invalid_input", message, 400)
-      : providerError("credential_expired", message, 409);
+      : providerError("credential_expired", message, 401);
   }
   if (status == 429) return providerError("rate_limited", message, 429);
   if (status == 400 || status == 404 || status == 409 || status == 422) {

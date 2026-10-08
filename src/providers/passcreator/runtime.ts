@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
@@ -12,10 +13,10 @@ import {
   requiredStringArray,
 } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 export const passcreatorApiBaseUrl = "https://app.passcreator.com";
@@ -29,7 +30,10 @@ export interface PasscreatorActionContext {
   signal?: AbortSignal;
 }
 
-export const passcreatorActionHandlers: Record<string, ProviderRuntimeHandler<PasscreatorActionContext>> = {
+export const passcreatorActionHandlers: ProviderActionHandlers<
+  "passcreator",
+  ProviderRuntimeHandler<PasscreatorActionContext>
+> = {
   async list_pass_templates(_input, context) {
     const payload = await requestPasscreatorJson({
       url: new URL(passcreatorValidationPath, passcreatorApiBaseUrl),
@@ -41,7 +45,7 @@ export const passcreatorActionHandlers: Record<string, ProviderRuntimeHandler<Pa
     return readResponseArray(payload, "Passcreator pass template response");
   },
   async get_pass_template_fields(input, context) {
-    const templateId = requiredString(input.templateId, "templateId", inputError);
+    const templateId = requiredString(input.templateId, "templateId", providerInputError);
     const url = new URL(`/api/pass-template/${encodeURIComponent(templateId)}`, passcreatorApiBaseUrl);
     url.searchParams.set("zapierStyle", "true");
     const payload = await requestPasscreatorJson({
@@ -60,7 +64,7 @@ export const passcreatorActionHandlers: Record<string, ProviderRuntimeHandler<Pa
       url,
       method: "POST",
       body: {
-        data: requiredRecord(input.data, "data", inputError),
+        data: requiredRecord(input.data, "data", providerInputError),
       },
       apiKey: context.apiKey,
       fetcher: context.fetcher,
@@ -119,43 +123,29 @@ async function requestPasscreatorJson(input: {
   fetcher: typeof fetch;
   signal?: AbortSignal;
 }): Promise<unknown> {
-  const timeoutHandle = createProviderTimeout(input.signal, passcreatorDefaultRequestTimeoutMs);
+  return runProviderRequest(
+    { signal: input.signal, timeoutMs: passcreatorDefaultRequestTimeoutMs, label: "Passcreator" },
+    async (signal) => {
+      const response = await input.fetcher(input.url, {
+        method: input.method,
+        headers: {
+          accept: "application/json",
+          authorization: input.apiKey,
+          ...(input.body ? { "content-type": "application/json" } : {}),
+          "user-agent": providerUserAgent,
+        },
+        body: input.body ? JSON.stringify(input.body) : undefined,
+        signal,
+      });
+      const payload = await readPasscreatorPayload(response);
 
-  try {
-    const response = await input.fetcher(input.url, {
-      method: input.method,
-      headers: {
-        accept: "application/json",
-        authorization: input.apiKey,
-        ...(input.body ? { "content-type": "application/json" } : {}),
-        "user-agent": providerUserAgent,
-      },
-      body: input.body ? JSON.stringify(input.body) : undefined,
-      signal: timeoutHandle.signal,
-    });
-    const payload = await readPasscreatorPayload(response);
-
-    if (!response.ok) {
-      throw createPasscreatorError(response.status, payload);
-    }
-    assertSuccessfulPasscreatorPayload(payload);
-    return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-
-    if (timeoutHandle.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Passcreator request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Passcreator request failed: ${error.message}` : "Passcreator request failed",
-    );
-  } finally {
-    timeoutHandle.cleanup();
-  }
+      if (!response.ok) {
+        throw createPasscreatorError(response.status, payload);
+      }
+      assertSuccessfulPasscreatorPayload(payload);
+      return payload;
+    },
+  );
 }
 
 function buildListPassesUrl(input: Record<string, unknown>) {
@@ -309,9 +299,5 @@ function readOptionalStringArray(value: unknown) {
   if (value === undefined) {
     return undefined;
   }
-  return requiredStringArray(value, "fields", inputError);
-}
-
-function inputError(message: string) {
-  return new ProviderRequestError(400, message);
+  return requiredStringArray(value, "fields", providerInputError);
 }

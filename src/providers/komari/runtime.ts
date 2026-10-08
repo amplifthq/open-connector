@@ -1,13 +1,15 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { KomariOperation } from "./operations.ts";
 
 import { optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl, readBoundedResponseBytes } from "../../core/request.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
+  mapProviderActionHandlers,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 import { komariOperations } from "./operations.ts";
 
@@ -26,7 +28,6 @@ export interface KomariActionContext {
   signal?: AbortSignal;
 }
 
-const defaultRequestTimeoutMs = 30_000;
 const maxResponseBytes = 10 * 1024 * 1024;
 const rpcPath = "api/rpc2";
 const rpcErrorStatusByCode = new Map<number, number>([
@@ -80,11 +81,12 @@ const safeAdminNodeFields = [
   "expired_at",
 ];
 
-export const komariActionHandlers: Record<string, KomariActionHandler> = Object.fromEntries(
-  komariOperations.map((operation) => [
-    operation.name,
-    (input: Record<string, unknown>, context: KomariActionContext) => executeKomariOperation(operation, input, context),
-  ]),
+export const komariActionHandlers: ProviderActionHandlers<"komari", KomariActionHandler> = mapProviderActionHandlers(
+  "komari",
+  komariOperations,
+  (operation): KomariActionHandler =>
+    (input, context) =>
+      executeKomariOperation(operation, input, context),
 );
 
 export function createKomariContext(
@@ -129,14 +131,14 @@ export async function validateKomariCredential(
 
 /** Normalize a Komari instance URL while preserving a reverse-proxy base path. */
 export function normalizeKomariBaseUrl(value: unknown, allowPrivateNetwork: boolean): string {
-  const instanceUrl = requiredString(value, "baseUrl", credentialError);
+  const instanceUrl = requiredString(value, "baseUrl", providerInputError);
   const url = assertPublicHttpUrl(instanceUrl, {
     fieldName: "baseUrl",
-    createError: credentialError,
+    createError: providerInputError,
     allowPrivateNetwork,
   });
   if (url.username || url.password) {
-    throw credentialError("baseUrl must not include credentials");
+    throw providerInputError("baseUrl must not include credentials");
   }
   url.hash = "";
   url.search = "";
@@ -317,8 +319,7 @@ async function requestKomariRpc(
   phase: KomariRequestPhase,
 ): Promise<unknown> {
   const url = new URL(rpcPath, `${context.baseUrl}/`);
-  const timeout = createProviderTimeout(context.signal, defaultRequestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: context.signal, label: "Komari" }, async (signal) => {
     const response = await context.fetcher(url, {
       method: "POST",
       headers: {
@@ -328,7 +329,7 @@ async function requestKomariRpc(
         "user-agent": providerUserAgent,
       },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readJsonResponse(response);
     if (!response.ok) {
@@ -348,20 +349,7 @@ async function requestKomariRpc(
       throw new ProviderRequestError(502, "Komari returned a JSON-RPC response without a result");
     }
     return envelope.result;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Komari request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Komari request failed: ${error.message}` : "Komari request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 async function readJsonResponse(response: Response): Promise<unknown> {
@@ -442,8 +430,4 @@ function rpcErrorMessage(value: unknown): string | undefined {
 
 function numberOrZero(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-function credentialError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

@@ -1,16 +1,9 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { NasaActionName } from "./actions.ts";
 
-import {
-  compactObject,
-  optionalBoolean,
-  optionalInteger,
-  optionalRecord,
-  optionalString,
-  requiredString,
-} from "../../core/cast.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 export const nasaApiBaseUrl = "https://api.nasa.gov";
 
@@ -20,7 +13,7 @@ type NasaActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "sig
 type NasaActionHandler = (input: Record<string, unknown>, context: NasaActionContext) => Promise<unknown>;
 type EpicImageKind = "natural" | "enhanced" | "aerosol" | "cloud";
 
-export const nasaActionHandlers: Record<NasaActionName, NasaActionHandler> = {
+export const nasaActionHandlers: ProviderActionHandlers<"nasa", NasaActionHandler> = {
   get_apod(input, context) {
     return executeGetApod(input, context);
   },
@@ -70,7 +63,7 @@ export const nasaActionHandlers: Record<NasaActionName, NasaActionHandler> = {
     return executeEpicImages("natural", undefined, context);
   },
   get_epic_natural_date(input, context) {
-    return executeEpicImages("natural", readInputString(input.date, "date"), context);
+    return executeEpicImages("natural", requiredInputString(input.date, "date"), context);
   },
   list_epic_natural_dates(_input, context) {
     return executeEpicDateList("natural", context);
@@ -79,7 +72,7 @@ export const nasaActionHandlers: Record<NasaActionName, NasaActionHandler> = {
     return executeEpicImages("enhanced", undefined, context);
   },
   get_epic_enhanced_date(input, context) {
-    return executeEpicImages("enhanced", readInputString(input.date, "date"), context);
+    return executeEpicImages("enhanced", requiredInputString(input.date, "date"), context);
   },
   list_epic_enhanced_dates(_input, context) {
     return executeEpicDateList("enhanced", context);
@@ -88,7 +81,7 @@ export const nasaActionHandlers: Record<NasaActionName, NasaActionHandler> = {
     return executeEpicImages("aerosol", undefined, context);
   },
   get_epic_aerosol_date(input, context) {
-    return executeEpicImages("aerosol", readInputString(input.date, "date"), context);
+    return executeEpicImages("aerosol", requiredInputString(input.date, "date"), context);
   },
   list_epic_aerosol_dates(_input, context) {
     return executeEpicDateList("aerosol", context);
@@ -97,7 +90,7 @@ export const nasaActionHandlers: Record<NasaActionName, NasaActionHandler> = {
     return executeEpicImages("cloud", undefined, context);
   },
   get_epic_cloud_date(input, context) {
-    return executeEpicImages("cloud", readInputString(input.date, "date"), context);
+    return executeEpicImages("cloud", requiredInputString(input.date, "date"), context);
   },
   list_epic_cloud_dates(_input, context) {
     return executeEpicDateList("cloud", context);
@@ -189,7 +182,7 @@ async function executeBrowseNeo(input: Record<string, unknown>, context: NasaAct
 }
 
 async function executeGetNeoLookup(input: Record<string, unknown>, context: NasaActionContext): Promise<unknown> {
-  const asteroidId = encodeURIComponent(readInputString(input.asteroidId, "asteroidId"));
+  const asteroidId = encodeURIComponent(requiredInputString(input.asteroidId, "asteroidId"));
   const payload = readResponseObject(
     await nasaGetJson(`/neo/rest/v1/neo/${asteroidId}`, {}, context, "execute"),
     "get_neo_lookup response",
@@ -204,7 +197,7 @@ async function executeSearchNearEarthObjects(
   input: Record<string, unknown>,
   context: NasaActionContext,
 ): Promise<unknown> {
-  const startDate = readInputString(input.startDate, "startDate");
+  const startDate = requiredInputString(input.startDate, "startDate");
   const endDate = optionalString(input.endDate);
   validateNeoSearchWindow(startDate, endDate);
   const payload = readResponseObject(
@@ -439,7 +432,7 @@ function normalizeNearEarthObject(payload: Record<string, unknown>) {
     ),
     orbitalData: readOptionalObject(payload.orbital_data),
     links: payload.links ? normalizeLinks(payload.links) : undefined,
-    isSentryObject: readOptionalBoolean(payload.is_sentry_object),
+    isSentryObject: optionalBoolean(payload.is_sentry_object),
     sentryDataUrl: readOptionalString(payload.sentry_data),
   };
 }
@@ -699,16 +692,8 @@ function readRequiredBoolean(value: unknown, fieldName: string): boolean {
   return value;
 }
 
-function readOptionalBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
-}
-
 function readOptionalObject(value: unknown): Record<string, unknown> | undefined {
   return optionalRecord(value);
-}
-
-function readInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function firstNonEmptyString(...values: unknown[]): string | undefined {

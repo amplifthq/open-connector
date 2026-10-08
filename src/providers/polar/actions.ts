@@ -5,21 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "polar";
 
-export type PolarActionName =
-  | "list_organizations"
-  | "get_organization"
-  | "list_products"
-  | "get_product"
-  | "list_customers"
-  | "get_customer"
-  | "get_customer_by_external_id"
-  | "get_customer_state"
-  | "get_customer_state_by_external_id"
-  | "list_orders"
-  | "get_order"
-  | "list_subscriptions"
-  | "get_subscription";
-
 const metadataValueSchema = s.anyOf("A Polar metadata filter value.", [
   s.string("A string metadata value."),
   s.integer("An integer metadata value."),
@@ -356,6 +341,7 @@ const externalIdInputSchema = (description: string) =>
 export const polarActions: ProviderActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_organizations",
+    operationType: "read",
     description: "List Polar organizations accessible to the Organization Access Token.",
     requiredScopes: [],
     inputSchema: listOrganizationsInputSchema,
@@ -363,6 +349,7 @@ export const polarActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_organization",
+    operationType: "read",
     description: "Get a Polar organization by ID.",
     requiredScopes: [],
     inputSchema: idInputSchema("Input parameters for retrieving a Polar organization."),
@@ -370,6 +357,7 @@ export const polarActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_products",
+    operationType: "read",
     description: "List Polar products with optional organization, name, visibility, and metadata filters.",
     requiredScopes: [],
     inputSchema: listProductsInputSchema,
@@ -377,6 +365,7 @@ export const polarActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_product",
+    operationType: "read",
     description: "Get a Polar product by ID.",
     requiredScopes: [],
     inputSchema: idInputSchema("Input parameters for retrieving a Polar product."),
@@ -384,6 +373,7 @@ export const polarActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_customers",
+    operationType: "read",
     description: "List Polar customers with optional organization, email, search, activity, and metadata filters.",
     requiredScopes: [],
     inputSchema: listCustomersInputSchema,
@@ -391,6 +381,7 @@ export const polarActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_customer",
+    operationType: "read",
     description: "Get a Polar customer by ID.",
     requiredScopes: [],
     inputSchema: idInputSchema("Input parameters for retrieving a Polar customer."),
@@ -398,6 +389,7 @@ export const polarActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_customer_by_external_id",
+    operationType: "read",
     description: "Get a Polar customer by external ID.",
     requiredScopes: [],
     inputSchema: externalIdInputSchema("Input parameters for retrieving a Polar customer by external ID."),
@@ -405,6 +397,7 @@ export const polarActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_customer_state",
+    operationType: "read",
     description: "Get a Polar customer state by customer ID, including subscriptions and benefits.",
     requiredScopes: [],
     inputSchema: idInputSchema("Input parameters for retrieving a Polar customer state."),
@@ -412,6 +405,7 @@ export const polarActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_customer_state_by_external_id",
+    operationType: "read",
     description: "Get a Polar customer state by external customer ID, including subscriptions and benefits.",
     requiredScopes: [],
     inputSchema: externalIdInputSchema("Input parameters for retrieving a Polar customer state by external ID."),
@@ -419,6 +413,7 @@ export const polarActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_orders",
+    operationType: "read",
     description:
       "List Polar orders with optional organization, product, customer, checkout, subscription, and metadata filters.",
     requiredScopes: [],
@@ -427,6 +422,7 @@ export const polarActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_order",
+    operationType: "read",
     description: "Get a Polar order by ID.",
     requiredScopes: [],
     inputSchema: idInputSchema("Input parameters for retrieving a Polar order."),
@@ -434,6 +430,7 @@ export const polarActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_subscriptions",
+    operationType: "read",
     description:
       "List Polar subscriptions with optional organization, product, customer, status, cancellation, and metadata filters.",
     requiredScopes: [],
@@ -442,6 +439,7 @@ export const polarActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_subscription",
+    operationType: "read",
     description: "Get a Polar subscription by ID.",
     requiredScopes: [],
     inputSchema: idInputSchema("Input parameters for retrieving a Polar subscription."),

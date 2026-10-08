@@ -1,19 +1,25 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { WaboxappActionName } from "./actions.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineProviderExecutors,
+  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 const service = "waboxapp";
 const waboxappApiBaseUrl = "https://www.waboxapp.com";
 const waboxappValidationPath = "/api/status/{uid}";
-const waboxappRequestTimeoutMs = 30_000;
 
 type WaboxappPhase = "validate" | "execute";
 
@@ -42,7 +48,7 @@ interface WaboxappAccountStatus {
 
 type WaboxappActionHandler = (input: Record<string, unknown>, context: WaboxappActionContext) => Promise<unknown>;
 
-export const waboxappActionHandlers: Record<WaboxappActionName, WaboxappActionHandler> = {
+export const waboxappActionHandlers: ProviderActionHandlers<"waboxapp", WaboxappActionHandler> = {
   get_account_status(_input, context) {
     return getAccountStatus(context);
   },
@@ -73,6 +79,18 @@ export const executors: ProviderExecutors = defineProviderExecutors<WaboxappActi
       fetcher,
       signal: context.signal,
     };
+  },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: waboxappApiBaseUrl,
+  auth: { type: "api_key_query_or_form_body", name: "token" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) {
+      headers.set("accept", "application/json");
+    }
   },
 });
 
@@ -125,9 +143,9 @@ async function sendChat(input: Record<string, unknown>, context: WaboxappActionC
     actionPath: "/api/send/chat",
     context,
     body: {
-      to: requireInputString(input.to, "to"),
-      custom_uid: requireInputString(input.customUid, "customUid"),
-      text: requireInputString(input.text, "text"),
+      to: requiredInputString(input.to, "to"),
+      custom_uid: requiredInputString(input.customUid, "customUid"),
+      text: requiredInputString(input.text, "text"),
     },
   });
   return normalizeWaboxappSendResult(payload);
@@ -138,11 +156,11 @@ async function sendImage(input: Record<string, unknown>, context: WaboxappAction
     actionPath: "/api/send/image",
     context,
     body: compactObject({
-      to: requireInputString(input.to, "to"),
-      custom_uid: requireInputString(input.customUid, "customUid"),
-      url: requireInputString(input.imageUrl, "imageUrl"),
-      caption: readOptionalNonEmptyString(input.caption),
-      description: readOptionalNonEmptyString(input.description),
+      to: requiredInputString(input.to, "to"),
+      custom_uid: requiredInputString(input.customUid, "customUid"),
+      url: requiredInputString(input.imageUrl, "imageUrl"),
+      caption: optionalString(input.caption),
+      description: optionalString(input.description),
     }) as Record<string, string>,
   });
   return normalizeWaboxappSendResult(payload);
@@ -153,12 +171,12 @@ async function sendLink(input: Record<string, unknown>, context: WaboxappActionC
     actionPath: "/api/send/link",
     context,
     body: compactObject({
-      to: requireInputString(input.to, "to"),
-      custom_uid: requireInputString(input.customUid, "customUid"),
-      url: requireInputString(input.linkUrl, "linkUrl"),
-      caption: readOptionalNonEmptyString(input.caption),
-      description: readOptionalNonEmptyString(input.description),
-      url_thumb: readOptionalNonEmptyString(input.urlThumb),
+      to: requiredInputString(input.to, "to"),
+      custom_uid: requiredInputString(input.customUid, "customUid"),
+      url: requiredInputString(input.linkUrl, "linkUrl"),
+      caption: optionalString(input.caption),
+      description: optionalString(input.description),
+      url_thumb: optionalString(input.urlThumb),
     }) as Record<string, string>,
   });
   return normalizeWaboxappSendResult(payload);
@@ -169,12 +187,12 @@ async function sendMedia(input: Record<string, unknown>, context: WaboxappAction
     actionPath: "/api/send/media",
     context,
     body: compactObject({
-      to: requireInputString(input.to, "to"),
-      custom_uid: requireInputString(input.customUid, "customUid"),
-      url: requireInputString(input.mediaUrl, "mediaUrl"),
-      caption: readOptionalNonEmptyString(input.caption),
-      description: readOptionalNonEmptyString(input.description),
-      url_thumb: readOptionalNonEmptyString(input.urlThumb),
+      to: requiredInputString(input.to, "to"),
+      custom_uid: requiredInputString(input.customUid, "customUid"),
+      url: requiredInputString(input.mediaUrl, "mediaUrl"),
+      caption: optionalString(input.caption),
+      description: optionalString(input.description),
+      url_thumb: optionalString(input.urlThumb),
     }) as Record<string, string>,
   });
   return normalizeWaboxappSendResult(payload);
@@ -247,7 +265,7 @@ async function requestWaboxapp(
   fetcher: typeof fetch,
   phase: WaboxappPhase,
 ): Promise<WaboxappRequestPayload> {
-  const timeout = createProviderTimeout(input.signal, waboxappRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   let response: Response;
   try {
     response = await fetcher(input.url, {
@@ -354,20 +372,12 @@ function extractWaboxappError(payload: unknown): string | undefined {
   return record ? optionalString(record.error)?.trim() || undefined : undefined;
 }
 
-function requireInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function requireResponseString(value: unknown, fieldName: string): string {
   return requiredString(
     value,
     fieldName,
     () => new ProviderRequestError(502, `${fieldName} is required in Waboxapp response`),
   );
-}
-
-function readOptionalNonEmptyString(value: unknown): string | undefined {
-  return optionalString(value);
 }
 
 function readNullableString(value: unknown): string | null {

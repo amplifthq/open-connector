@@ -1,6 +1,6 @@
-import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidationResult, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { RebrandlyActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -10,7 +10,13 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  ProviderRequestError,
+  providerUserAgent,
+  requiredInputString,
+} from "../provider-runtime.ts";
 
 const service = "rebrandly";
 const rebrandlyApiBaseUrl = "https://api.rebrandly.com/v1";
@@ -19,7 +25,7 @@ const validationPath = "/account";
 type RebrandlyQueryValue = string | number | boolean | undefined;
 type RebrandlyActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const rebrandlyActionHandlers: Record<RebrandlyActionName, RebrandlyActionHandler> = {
+export const rebrandlyActionHandlers: ProviderActionHandlers<"rebrandly", RebrandlyActionHandler> = {
   async get_account(_input, context) {
     return {
       account: optionalRecord(await requestRebrandlyJson({ path: "/account", context, mode: "execute" })) ?? {},
@@ -138,6 +144,16 @@ export const rebrandlyActionHandlers: Record<RebrandlyActionName, RebrandlyActio
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, rebrandlyActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: rebrandlyApiBaseUrl,
+  auth: { type: "api_key_header", name: "apikey" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export async function validateRebrandlyCredential(
   input: Record<string, string>,
@@ -276,8 +292,4 @@ function extractArrayPayload(payload: unknown): unknown[] {
     if (Array.isArray(value)) return value;
   }
   return [];
-}
-
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }

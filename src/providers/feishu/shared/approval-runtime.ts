@@ -1,5 +1,6 @@
 import type { FeishuJsonRequest, FeishuQueryValue } from "./client.ts";
 
+import { compactObject, optionalRawString } from "../../../core/cast.ts";
 import { ProviderRequestError } from "../../provider-runtime.ts";
 
 interface FeishuApprovalActionHandler {
@@ -64,7 +65,7 @@ export function createFeishuApprovalActionHandlers(
       });
       return {
         instanceCode: requireString(instance.instance_code, "instance_code"),
-        instanceLink: optionalString(instance.instance_link) ?? "",
+        instanceLink: optionalRawString(instance.instance_link) ?? "",
         instance,
       };
     },
@@ -199,7 +200,7 @@ function normalizePage(data: Record<string, unknown>, itemKey: string) {
     : [];
   return {
     items,
-    pageToken: optionalString(data.page_token) ?? "",
+    pageToken: optionalRawString(data.page_token) ?? "",
     hasMore: data.has_more === true,
     total: optionalNonNegativeInteger(data.count) ?? items.length,
   };
@@ -236,16 +237,6 @@ function mapEnum<T>(value: unknown, values: Readonly<Record<string, T>>, fieldNa
   return mapped;
 }
 
-function compactObject(value: Record<string, unknown>) {
-  const result: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (item !== undefined) {
-      result[key] = item;
-    }
-  }
-  return result;
-}
-
 function compactQuery(value: Record<string, unknown>) {
   const result: Record<string, FeishuQueryValue> = {};
   for (const [key, item] of Object.entries(value)) {
@@ -274,10 +265,6 @@ function requireString(value: unknown, fieldName: string) {
     return value;
   }
   throw new ProviderRequestError(400, `${fieldName} must be a non-empty string`);
-}
-
-function optionalString(value: unknown) {
-  return typeof value === "string" ? value : undefined;
 }
 
 function optionalNonNegativeInteger(value: unknown) {

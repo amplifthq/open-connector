@@ -108,17 +108,10 @@ const projectIdSchema = s.nonEmptyString("The project ID.");
 const projectInputSchema = (description: string): JsonSchema =>
   s.actionInput({ ...paginationProperties, projectId: projectIdSchema }, ["projectId"], description);
 
-export type ZeplinActionName =
-  | "get_current_user"
-  | "list_personal_projects"
-  | "get_project"
-  | "list_project_colors"
-  | "list_project_text_styles"
-  | "list_screen_versions";
-
 export const zeplinActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Get the current authenticated Zeplin user profile.",
     requiredScopes: [zeplinReadScope],
     inputSchema: emptyInputSchema,
@@ -126,6 +119,7 @@ export const zeplinActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_personal_projects",
+    operationType: "read",
     description: "List projects in the current user's Zeplin personal workspace.",
     requiredScopes: [zeplinReadScope],
     inputSchema: paginationInputSchema,
@@ -136,6 +130,7 @@ export const zeplinActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_project",
+    operationType: "read",
     description: "Get a Zeplin project by project ID.",
     requiredScopes: [zeplinReadScope],
     inputSchema: s.actionInput(
@@ -156,6 +151,7 @@ export const zeplinActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_project_colors",
+    operationType: "read",
     description: "List color tokens defined for a Zeplin project.",
     requiredScopes: [zeplinReadScope],
     inputSchema: projectInputSchema("The input payload for this action."),
@@ -166,6 +162,7 @@ export const zeplinActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_project_text_styles",
+    operationType: "read",
     description: "List text styles defined for a Zeplin project.",
     requiredScopes: [zeplinReadScope],
     inputSchema: projectInputSchema("The input payload for this action."),
@@ -176,6 +173,7 @@ export const zeplinActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_screen_versions",
+    operationType: "read",
     description:
       "List versions of a Zeplin screen. This action requires both projectId and screenId to match the official endpoint.",
     requiredScopes: [zeplinReadScope],

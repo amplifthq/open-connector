@@ -1,18 +1,17 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { LexofficeActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
-const lexofficeApiBaseUrl = "https://api.lexware.io";
+export const lexofficeApiBaseUrl = "https://api.lexware.io";
 const lexofficeValidationPath = "/v1/profile";
-const lexofficeDefaultRequestTimeoutMs = 30_000;
 
 type LexofficeRequestPhase = "validate" | "execute";
 type LexofficeActionContext = ApiKeyProviderContext;
@@ -29,7 +28,7 @@ interface LexofficeRequestOptions {
   body?: Record<string, unknown>;
 }
 
-export const lexofficeActionHandlers: Record<LexofficeActionName, LexofficeActionHandler> = {
+export const lexofficeActionHandlers: ProviderActionHandlers<"lexoffice", LexofficeActionHandler> = {
   get_profile(_input, context) {
     return requestLexofficeJson({
       path: lexofficeValidationPath,
@@ -180,9 +179,9 @@ export async function validateLexofficeCredential(
     signal,
   });
 
-  const profileRecord = requiredRecord(profile, "Lexoffice profile", providerResponseError);
-  const organizationId = requiredString(profileRecord.organizationId, "organizationId", providerResponseError);
-  const companyName = requiredString(profileRecord.companyName, "companyName", providerResponseError);
+  const profileRecord = requiredRecord(profile, "Lexoffice profile", lexofficeResponseError);
+  const organizationId = requiredString(profileRecord.organizationId, "organizationId", lexofficeResponseError);
+  const companyName = requiredString(profileRecord.companyName, "companyName", lexofficeResponseError);
   const connectionId = optionalString(profileRecord.connectionId);
   const created = optionalRecord(profileRecord.created);
   const userId = optionalString(created?.userId);
@@ -207,13 +206,12 @@ export async function validateLexofficeCredential(
 }
 
 async function requestLexofficeJson(input: LexofficeRequestOptions): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, lexofficeDefaultRequestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: input.signal, label: "Lexoffice" }, async (signal) => {
     const response = await input.fetcher(buildLexofficeUrl(input.path, input.query), {
       method: input.method,
       headers: buildLexofficeHeaders(input.apiKey, input.body !== undefined),
       body: input.body === undefined ? undefined : JSON.stringify(input.body),
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readLexofficePayload(response);
     if (!response.ok) {
@@ -223,20 +221,7 @@ async function requestLexofficeJson(input: LexofficeRequestOptions): Promise<unk
       throw new ProviderRequestError(502, "Lexoffice returned an empty response");
     }
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Lexoffice request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Lexoffice request failed: ${error.message}` : "Lexoffice request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildLexofficeUrl(path: string, query?: Record<string, string | undefined>): string {
@@ -317,10 +302,6 @@ function pickQuery(input: Record<string, unknown>, keys: readonly string[]): Rec
   );
 }
 
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerResponseError(message: string): ProviderRequestError {
+function lexofficeResponseError(message: string): ProviderRequestError {
   return new ProviderRequestError(502, `Lexoffice ${message}`);
 }

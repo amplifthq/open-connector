@@ -1,10 +1,21 @@
 import type { QueryValue } from "../../core/request.ts";
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { compactJson, queryParams } from "../../core/request.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "chattermill";
 const apiBaseUrl = "https://api.chattermill.com/v1";
@@ -20,7 +31,7 @@ const families = {
   tag: ["tags", "tags", "tag"],
 } as const;
 
-export const chattermillActionHandlers: Record<string, Handler> = {
+export const chattermillActionHandlers: ProviderActionHandlers<"chattermill", Handler> = {
   async list_projects(_input, context) {
     const raw = await getJson("/projects", context);
     return { projects: extractArray(raw, "projects"), raw };
@@ -118,6 +129,16 @@ export const chattermillActionHandlers: Record<string, Handler> = {
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, chattermillActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {

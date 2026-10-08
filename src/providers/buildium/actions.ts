@@ -5,15 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "buildium";
 
-export type BuildiumActionName =
-  | "list_properties"
-  | "get_property"
-  | "list_units"
-  | "get_unit"
-  | "list_owners"
-  | "get_owner"
-  | "list_property_notes";
-
 const positiveInteger = (description: string) => s.positiveInteger(description);
 
 const optionalListFields = {
@@ -46,6 +37,7 @@ const listOutputSchema = (description: string, itemDescription: string) =>
 export const buildiumActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_properties",
+    operationType: "read",
     description: "List Buildium rental properties.",
     requiredScopes: [],
     providerPermissions: ["Rentals > Rental properties and units: View"],
@@ -63,6 +55,7 @@ export const buildiumActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_property",
+    operationType: "read",
     description: "Retrieve one Buildium rental property by identifier.",
     requiredScopes: [],
     providerPermissions: ["Rentals > Rental properties and units: View"],
@@ -87,6 +80,7 @@ export const buildiumActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_units",
+    operationType: "read",
     description: "List Buildium rental units.",
     requiredScopes: [],
     providerPermissions: ["Rentals > Rental properties and units: View"],
@@ -105,6 +99,7 @@ export const buildiumActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_unit",
+    operationType: "read",
     description: "Retrieve one Buildium rental unit by identifier.",
     requiredScopes: [],
     providerPermissions: ["Rentals > Rental properties and units: View"],
@@ -129,6 +124,7 @@ export const buildiumActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_owners",
+    operationType: "read",
     description: "List Buildium rental owners.",
     requiredScopes: [],
     providerPermissions: ["Rentals > Rental owners: View"],
@@ -146,6 +142,7 @@ export const buildiumActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_owner",
+    operationType: "read",
     description: "Retrieve one Buildium rental owner by identifier.",
     requiredScopes: [],
     providerPermissions: ["Rentals > Rental owners: View"],
@@ -170,6 +167,7 @@ export const buildiumActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_property_notes",
+    operationType: "read",
     description: "List notes attached to one Buildium rental property.",
     requiredScopes: [],
     providerPermissions: ["Rentals > Rental properties and units: View"],

@@ -1,4 +1,5 @@
 import type { CredentialValidationResult, TransitFileWriter } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { DokployOperation } from "./operations.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -6,6 +7,8 @@ import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed, readBoundedResponse
 import {
   createProviderTimeout,
   isAbortLikeError,
+  mapProviderActionHandlers,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readTransitFileInput,
@@ -28,11 +31,13 @@ const maxResponseBytes = 10 * 1024 * 1024;
 const maxErrorMessageCharacters = 16 * 1024;
 const validationEndpoint = "/project.search";
 
-export const dokployActionHandlers: Record<string, DokployActionHandler> = {};
-for (const operation of dokployOperations) {
-  dokployActionHandlers[operation.name] = (input: Record<string, unknown>, context: DokployActionContext) =>
-    executeDokployOperation(operation, input, context);
-}
+export const dokployActionHandlers: ProviderActionHandlers<"dokploy", DokployActionHandler> = mapProviderActionHandlers(
+  "dokploy",
+  dokployOperations,
+  (operation): DokployActionHandler =>
+    (input, context) =>
+      executeDokployOperation(operation, input, context),
+);
 
 export function createDokployContext(
   values: Record<string, string>,
@@ -73,13 +78,13 @@ export function normalizeDokployApiBaseUrl(
   value: unknown,
   allowPrivateNetwork: boolean = isPrivateNetworkAccessAllowed(),
 ): string {
-  const instanceUrl = requiredString(value, "baseUrl", credentialError);
+  const instanceUrl = requiredString(value, "baseUrl", providerInputError);
   const url = assertPublicHttpUrl(instanceUrl, {
     fieldName: "baseUrl",
-    createError: credentialError,
+    createError: providerInputError,
     allowPrivateNetwork,
   });
-  if (url.username || url.password) throw credentialError("baseUrl must not include credentials");
+  if (url.username || url.password) throw providerInputError("baseUrl must not include credentials");
   url.hash = "";
   url.search = "";
   const path = url.pathname.replace(/\/+$/u, "");
@@ -263,8 +268,4 @@ function isSensitiveKey(name: string): boolean {
     normalized === "cookie" ||
     normalized === "setcookie"
   );
-}
-
-function credentialError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

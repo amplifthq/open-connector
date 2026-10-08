@@ -66,11 +66,10 @@ const ipLookupOutputSchema = s.looseObject("Output payload for a BigPicture IP-t
   asn: asnSchema,
 });
 
-export type BigpictureIoActionName = "find_company_by_domain" | "find_company_by_ip";
-
 export const bigpictureIoActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "find_company_by_domain",
+    operationType: "read",
     description: "Look up a BigPicture company profile by domain name.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -84,6 +83,7 @@ export const bigpictureIoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "find_company_by_ip",
+    operationType: "read",
     description: "Look up the company associated with an IPv4 or IPv6 address using BigPicture.",
     requiredScopes: [],
     inputSchema: s.actionInput(

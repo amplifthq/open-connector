@@ -8,6 +8,20 @@ Worker runtime uses:
 - R2 or Workers KV for temporary transit files.
 - Static Assets for the Web Console.
 
+## SaaS OAuth deployment
+
+Set OOMOL_CONNECT_ORIGIN explicitly to the public Console origin and configure encrypted storage
+before saving a project key. The SaaS callback returns to that origin's completion page; the
+browser synchronization POST must carry the same origin. Reverse proxies must preserve it.
+Workers do not infer trusted SaaS origin from the incoming request.
+
+Apply D1 migrations through 0015_saas_cleanup_runtime.sql, deploy the scheduled handler and
+copy the once-per-minute triggers.crons from the example configuration. Verify actual scheduled
+invocations and cleanup progress after deployment; HTTP traffic does not replace cron.
+See [SaaS OAuth](saas-oauth.md) and [D1 maintenance](saas-maintenance.md#offline-d1-maintenance).
+The temporary reset Worker has automatic batch/retry coverage; real D1 reset remains a dedicated
+test-database acceptance step, not a claim established by local test adapters.
+
 ## Prerequisites
 
 - A Cloudflare account with Workers, D1, and either R2 or Workers KV access.
@@ -129,8 +143,12 @@ npm run deploy:cloudflare
 ```
 
 `npm run deploy:cloudflare` generates the catalog, builds the Web Console, copies catalog assets,
-and runs `wrangler deploy --config wrangler.local.jsonc`. The copied `wrangler.local.jsonc` already
-maps the built Web Console assets to the `ASSETS` binding used by the Worker.
+and runs `wrangler deploy --config wrangler.local.jsonc --minify`. The copied
+`wrangler.local.jsonc` already maps the built Web Console assets to the `ASSETS` binding used by
+the Worker. `--minify` matters on Workers beyond the upload size limit: a heap snapshot of the
+running isolate (taken through the `wrangler dev` inspector) shows the script source retained as one
+string for as long as the isolate lives, so the 13.8 MiB minified script costs about half the
+isolate memory of the 28.7 MiB unminified one, out of the 128 MB each Worker isolate gets.
 
 Use the Worker URL printed by Wrangler to check the deployed runtime, then open the same URL in a
 browser and enter the admin token to access the Web Console:
@@ -175,7 +193,8 @@ Compression Rule matching `text/markdown` if your deployment serves agent guides
 ## Configuration
 
 Cloudflare uses the same environment variable names for origin, auth tokens, action policy, transit
-file limits, and credential encryption. `PORT`, `HOST`, and `OOMOL_CONNECT_DATA_DIR` are local
+file limits, and credential encryption. `PORT`, `HOST`, `OOMOL_CONNECT_DATA_DIR`,
+`OOMOL_CONNECT_CATALOG_LAZY_SCHEMAS`, and `OOMOL_CONNECT_CATALOG_SCHEMA_CACHE_FILES` are local
 Node-only settings on Workers.
 
 See [configuration.md](configuration.md) for all runtime environment variables.

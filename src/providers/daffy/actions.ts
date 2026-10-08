@@ -22,39 +22,31 @@ function output(properties: Record<string, JsonSchema>, description: string): Js
   return s.actionOutput(properties, description);
 }
 
-export type DaffyActionName =
-  | "get_current_user"
-  | "get_user"
-  | "get_balance"
-  | "list_user_causes"
-  | "search_nonprofits"
-  | "get_nonprofit"
-  | "list_contributions"
-  | "list_donations"
-  | "list_user_donations"
-  | "get_user_donation";
-
 export const daffyActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Get the Daffy user associated with the API key.",
     inputSchema: emptyInput,
     outputSchema: output({ user: rawDaffyObject }, "The Daffy current user response."),
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Get a Daffy user by username.",
     inputSchema: s.actionInput({ username: s.nonEmptyString("The Daffy username.") }, ["username"]),
     outputSchema: output({ user: rawDaffyObject }, "The Daffy user response."),
   }),
   defineProviderAction(service, {
     name: "get_balance",
+    operationType: "read",
     description: "Get the balance for the Daffy account associated with the API key.",
     inputSchema: emptyInput,
     outputSchema: output({ balance: rawDaffyObject }, "The Daffy balance response."),
   }),
   defineProviderAction(service, {
     name: "list_user_causes",
+    operationType: "read",
     description: "List causes associated with a Daffy user.",
     inputSchema: s.actionInput({ userId: pathIdentifier("The Daffy user identifier.") }, ["userId"]),
     outputSchema: output(
@@ -64,6 +56,7 @@ export const daffyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_nonprofits",
+    operationType: "read",
     description: "Search Daffy nonprofits with optional cause and pagination filters.",
     inputSchema: s.object(
       {
@@ -86,12 +79,14 @@ export const daffyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_nonprofit",
+    operationType: "read",
     description: "Get a Daffy nonprofit by EIN.",
     inputSchema: s.actionInput({ ein: s.nonEmptyString("The nonprofit EIN used by Daffy.") }, ["ein"]),
     outputSchema: output({ nonprofit: rawDaffyObject }, "The Daffy nonprofit response."),
   }),
   defineProviderAction(service, {
     name: "list_contributions",
+    operationType: "read",
     description: "List contributions for the Daffy account associated with the API key.",
     inputSchema: s.object(
       { page },
@@ -107,6 +102,7 @@ export const daffyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_donations",
+    operationType: "read",
     description: "List donations for the Daffy account associated with the API key.",
     inputSchema: s.object(
       { page },
@@ -122,6 +118,7 @@ export const daffyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_user_donations",
+    operationType: "read",
     description: "List Daffy donations for a specific user.",
     inputSchema: s.object(
       {
@@ -144,6 +141,7 @@ export const daffyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user_donation",
+    operationType: "read",
     description: "Get a specific Daffy donation for a specific user.",
     inputSchema: s.actionInput(
       {

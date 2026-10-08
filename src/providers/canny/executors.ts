@@ -4,9 +4,10 @@ import type {
   ProviderProxyExecutor,
   ProxyExecutionResult,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   createProviderFetch,
   createProviderProxyUrl,
@@ -17,6 +18,7 @@ import {
   readProviderProxyErrorMessage,
   readProviderProxyResponse,
   requireApiKeyCredential,
+  requiredInputString,
   toProviderProxyError,
 } from "../provider-runtime.ts";
 
@@ -26,7 +28,7 @@ const cannyFetch = createProviderFetch({ skipDnsValidation: true });
 
 type CannyActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const cannyActionHandlers: Record<string, CannyActionHandler> = {
+export const cannyActionHandlers: ProviderActionHandlers<"canny", CannyActionHandler> = {
   list_boards(_input, context) {
     return listBoards(context);
   },
@@ -351,16 +353,8 @@ function requireArrayField(value: unknown, fieldName: string) {
   return value;
 }
 
-function requiredInputString(value: unknown, fieldName: string) {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function optionalInteger(value: unknown) {
   return typeof value === "number" && Number.isInteger(value) ? value : undefined;
-}
-
-function optionalBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
 }
 
 function optionalStringArray(value: unknown) {

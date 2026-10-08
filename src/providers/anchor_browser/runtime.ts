@@ -1,7 +1,8 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
+import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
 export const anchorBrowserApiBaseUrl = "https://api.anchorbrowser.io";
 export const anchorBrowserValidationEndpoint = "/v1/billing";
@@ -21,7 +22,7 @@ interface AnchorBrowserContext {
 
 type AnchorBrowserActionHandler = (input: Record<string, unknown>, context: AnchorBrowserContext) => Promise<unknown>;
 
-export const anchorBrowserActionHandlers: Record<string, AnchorBrowserActionHandler> = {
+export const anchorBrowserActionHandlers: ProviderActionHandlers<"anchor_browser", AnchorBrowserActionHandler> = {
   async get_billing_info(_input, context) {
     const raw = await requestAnchorBrowserJson<Record<string, unknown>>(
       {
@@ -85,7 +86,7 @@ export async function validateAnchorBrowserCredential(
   signal?: AbortSignal,
 ): Promise<CredentialValidationResult> {
   const context = {
-    apiKey: requireInputString(input.apiKey, "apiKey"),
+    apiKey: requiredInputString(input.apiKey, "apiKey"),
     fetcher,
     signal,
   };
@@ -241,14 +242,6 @@ function normalizeProjectMetadata(value: unknown) {
 
 function buildAccountLabel(billing: ReturnType<typeof normalizeBillingPayload>) {
   return billing.tier ? `Anchor Browser ${billing.tier}` : "Anchor Browser API Key";
-}
-
-function requireInputString(value: unknown, fieldName: string) {
-  return requiredString(value, fieldName, providerInputError);
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function requireString(value: unknown, fieldName: string) {

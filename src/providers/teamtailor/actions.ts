@@ -51,11 +51,10 @@ const resourceOutputSchema = s.actionOutput(
   "A Teamtailor JSON:API single-resource response.",
 );
 
-export type TeamtailorActionName = "list_jobs" | "retrieve_job" | "list_departments" | "list_locations";
-
 export const teamtailorActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_jobs",
+    operationType: "read",
     description:
       "List Teamtailor jobs with optional department, location, status, include, and cursor pagination parameters.",
     inputSchema: s.actionInput({
@@ -69,6 +68,7 @@ export const teamtailorActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "retrieve_job",
+    operationType: "read",
     description: "Retrieve one Teamtailor job by ID with optional included relationships.",
     inputSchema: s.actionInput(
       {
@@ -82,6 +82,7 @@ export const teamtailorActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_departments",
+    operationType: "read",
     description: "List Teamtailor departments with optional include and cursor pagination.",
     inputSchema: s.actionInput({
       ...paginationInputProperties,
@@ -91,6 +92,7 @@ export const teamtailorActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_locations",
+    operationType: "read",
     description: "List Teamtailor locations with optional include and cursor pagination.",
     inputSchema: s.actionInput({
       ...paginationInputProperties,

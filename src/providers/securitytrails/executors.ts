@@ -1,9 +1,19 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { SecuritytrailsActionName } from "./actions.ts";
 
 import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "securitytrails";
 const securitytrailsApiBaseUrl = "https://api.securitytrails.com";
@@ -17,7 +27,7 @@ interface SecuritytrailsRequestInput {
   query?: Record<string, QueryValue>;
 }
 
-export const securitytrailsActionHandlers: Record<SecuritytrailsActionName, SecuritytrailsActionHandler> = {
+export const securitytrailsActionHandlers: ProviderActionHandlers<"securitytrails", SecuritytrailsActionHandler> = {
   async get_domain(input, context): Promise<unknown> {
     const hostname = readRequiredHostname(input);
     const payload = await securitytrailsRequest(
@@ -89,6 +99,13 @@ export const securitytrailsActionHandlers: Record<SecuritytrailsActionName, Secu
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, securitytrailsActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: securitytrailsApiBaseUrl,
+  auth: { type: "api_key_header", name: "APIKEY" },
+  skipDnsValidation: true,
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {

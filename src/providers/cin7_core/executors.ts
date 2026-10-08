@@ -4,22 +4,21 @@ import type {
   ProviderProxyExecutor,
   ProxyExecutionResult,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
-import type { Cin7CoreActionName } from "./actions.ts";
 
 import { compactObject, objectArray, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
   createProviderFetch,
   createProviderProxyUrl,
-  createProviderTimeout,
   defineProviderExecutors,
-  isAbortLikeError,
   normalizeProviderProxyHeaders,
   ProviderRequestError,
   providerUserAgent,
   readProviderProxyErrorMessage,
   readProviderProxyResponse,
   requireApiKeyCredential,
+  runProviderRequest,
   toProviderProxyError,
 } from "../provider-runtime.ts";
 
@@ -27,7 +26,6 @@ const service = "cin7_core";
 const cin7CoreApiBaseUrl = "https://inventory.dearsystems.com/ExternalApi/v2/";
 const cin7CoreFetch = createProviderFetch({ skipDnsValidation: true });
 const cin7CoreValidationPath = "/me";
-const cin7CoreDefaultRequestTimeoutMs = 30_000;
 
 type Cin7CorePhase = "validate" | "execute";
 
@@ -40,7 +38,7 @@ interface Cin7CoreContext {
 
 type Cin7CoreActionHandler = (input: Record<string, unknown>, context: Cin7CoreContext) => Promise<unknown>;
 
-const cin7CoreActionHandlers: Record<Cin7CoreActionName, Cin7CoreActionHandler> = {
+const cin7CoreActionHandlers: ProviderActionHandlers<"cin7_core", Cin7CoreActionHandler> = {
   async get_current_account(_input, context) {
     const payload = await requestCin7CoreJson({
       context,
@@ -257,9 +255,7 @@ async function requestCin7CoreJson(input: {
   phase: Cin7CorePhase;
   query?: URLSearchParams;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, cin7CoreDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "Cin7 Core" }, async (signal) => {
     const response = await input.context.fetcher(buildCin7CoreUrl(input), {
       method: input.method,
       headers: {
@@ -269,7 +265,7 @@ async function requestCin7CoreJson(input: {
         "api-auth-accountid": input.context.accountId,
         "api-auth-applicationkey": input.context.applicationKey,
       },
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readCin7CorePayload(response);
 
@@ -278,20 +274,7 @@ async function requestCin7CoreJson(input: {
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Cin7 Core request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Cin7 Core request failed: ${error.message}` : "Cin7 Core request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildCin7CoreUrl(input: { path: string; query?: URLSearchParams }): URL {

@@ -149,23 +149,24 @@ const topHeadlinesInputSchema = {
   anyOf: [{ required: ["q"] }, { required: ["country"] }, { required: ["category"] }, { required: ["sources"] }],
 } satisfies JsonSchema;
 
-export type NewsApiActionName = "get_everything" | "get_top_headlines" | "get_sources" | "get_v1_articles";
-
 export const newsApiActions: readonly ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_everything",
+    operationType: "read",
     description: "Search every article published by News API using the official everything endpoint.",
     inputSchema: everythingInputSchema,
     outputSchema: articlesOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_top_headlines",
+    operationType: "read",
     description: "Retrieve current top and breaking headlines using the official top headlines endpoint.",
     inputSchema: topHeadlinesInputSchema,
     outputSchema: articlesOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_sources",
+    operationType: "read",
     description: "List available news sources using the official sources endpoint.",
     inputSchema: s.object(
       "Input parameters for the News API sources endpoint.",
@@ -180,6 +181,7 @@ export const newsApiActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_v1_articles",
+    operationType: "read",
     description:
       "Provide a compatibility wrapper for the legacy v1 articles action using top headlines with one source.",
     inputSchema: s.object(

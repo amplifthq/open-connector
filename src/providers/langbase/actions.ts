@@ -44,11 +44,10 @@ const retrieveMatchSchema = s.object("A single retrieved Langbase memory chunk."
   meta: s.record("Additional metadata returned for the retrieved chunk.", s.string("A metadata value.")),
 });
 
-export type LangbaseActionName = "list_memories" | "create_memory" | "delete_memory" | "retrieve_memory";
-
 export const langbaseActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_memories",
+    operationType: "read",
     description:
       "List Langbase memories available to the connected User or Org API key and return stable memory summaries.",
     requiredScopes: [],
@@ -59,6 +58,7 @@ export const langbaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_memory",
+    operationType: "write",
     description:
       "Create a Langbase memory with the official Memory Create API and return the normalized created memory summary.",
     requiredScopes: [],
@@ -83,6 +83,7 @@ export const langbaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_memory",
+    operationType: "destructive",
     description: "Delete an existing Langbase memory by name and return whether the delete request succeeded.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for deleting a Langbase memory.", {
@@ -94,6 +95,7 @@ export const langbaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "retrieve_memory",
+    operationType: "read",
     description: "Retrieve similar chunks from one or more Langbase memories with the official Memory Retrieve API.",
     requiredScopes: [],
     inputSchema: s.object(

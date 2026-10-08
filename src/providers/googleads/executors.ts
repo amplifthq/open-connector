@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
-import type { GoogleAdsActionName } from "./actions.ts";
 
 import { createHash } from "node:crypto";
 import {
@@ -11,11 +11,17 @@ import {
   optionalScalarString,
   optionalString,
 } from "../../core/cast.ts";
-import { googleJsonRequest, googleRequest } from "../googledrive/runtime-shared.ts";
-import { defineProviderExecutors, ProviderRequestError, requireOAuthCredential } from "../provider-runtime.ts";
+import { googleJsonRequest, googleRequest } from "../googledrive/runtime-request.ts";
+import {
+  defineProviderExecutors,
+  defineProviderProxy,
+  ProviderRequestError,
+  requireOAuthCredential,
+  requiredInputString,
+} from "../provider-runtime.ts";
 import { googleAdsScope } from "./scopes.ts";
 
-export const googleAdsApiBaseUrl = "https://googleads.googleapis.com/v22";
+export const googleAdsApiBaseUrl = "https://googleads.googleapis.com/v25";
 
 const service = "googleads";
 const customerMatchUserListType = "CUSTOMER_MATCH_USER_LIST";
@@ -68,7 +74,7 @@ interface GoogleAdsRuntimeContext {
 type SearchRow = Record<string, unknown>;
 type GoogleAdsActionHandler = (input: Record<string, unknown>, context: GoogleAdsRuntimeContext) => Promise<unknown>;
 
-export const googleAdsActionHandlers: Record<GoogleAdsActionName, GoogleAdsActionHandler> = {
+export const googleAdsActionHandlers: ProviderActionHandlers<"googleads", GoogleAdsActionHandler> = {
   get_campaign_by_id: getCampaignById,
   get_campaign_by_name: getCampaignByName,
   list_accessible_customers: listAccessibleCustomers,
@@ -94,6 +100,19 @@ export const executors: ProviderExecutors = defineProviderExecutors<GoogleAdsRun
       fetcher,
       signal: context.signal,
     };
+  },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: googleAdsApiBaseUrl,
+  auth: { type: "oauth_bearer" },
+  sensitiveHeaders: ["developer-token"],
+  skipDnsValidation: true,
+  async customizeRequest({ context, headers }) {
+    const credential = await requireOAuthCredential(context, service);
+    const secretExtra = optionalRecord(credential.metadata.oauthClientSecretExtra);
+    headers.set("developer-token", requiredInputString(secretExtra?.developerToken, "developerToken"));
   },
 });
 
@@ -139,8 +158,8 @@ async function getCampaignById(input: Record<string, unknown>, context: GoogleAd
         "campaign.status,",
         "campaign.advertising_channel_type,",
         "campaign.advertising_channel_sub_type,",
-        "campaign.start_date,",
-        "campaign.end_date",
+        "campaign.start_date_time,",
+        "campaign.end_date_time",
         "FROM campaign",
         `WHERE campaign.id = ${campaignId}`,
         "LIMIT 1",
@@ -167,8 +186,8 @@ async function getCampaignByName(input: Record<string, unknown>, context: Google
         "campaign.status,",
         "campaign.advertising_channel_type,",
         "campaign.advertising_channel_sub_type,",
-        "campaign.start_date,",
-        "campaign.end_date",
+        "campaign.start_date_time,",
+        "campaign.end_date_time",
         "FROM campaign",
         `WHERE campaign.name = ${JSON.stringify(requireNonEmptyString(input.name, "name"))}`,
         "ORDER BY campaign.id",
@@ -513,8 +532,8 @@ function normalizeCampaign(row: SearchRow): Record<string, unknown> {
     status: optionalString(campaign.status),
     advertisingChannelType: optionalString(campaign.advertisingChannelType),
     advertisingChannelSubType: optionalString(campaign.advertisingChannelSubType),
-    startDate: optionalString(campaign.startDate),
-    endDate: optionalString(campaign.endDate),
+    startDateTime: optionalString(campaign.startDateTime),
+    endDateTime: optionalString(campaign.endDateTime),
   });
 }
 
@@ -611,8 +630,8 @@ function normalizeCampaignMutationData(
       : {}),
     name: mode === "create" ? requireNonEmptyString(value.name, "create.name") : optionalString(value.name),
     status: normalizeOptionalEnumValue(value.status, "status", campaignStatusAliases),
-    startDate: optionalString(value.startDate),
-    endDate: optionalString(value.endDate),
+    startDateTime: optionalString(value.startDateTime),
+    endDateTime: optionalString(value.endDateTime),
     manualCpc: optionalRecord(value.manualCpc),
     campaignBudget:
       mode === "create"

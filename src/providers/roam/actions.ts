@@ -95,11 +95,10 @@ const getMagicastInputSchema = s.actionInput(
   "Input parameters for retrieving a Roam HQ magicast.",
 );
 
-export type RoamActionName = "list_groups" | "send_message" | "list_recordings" | "list_magicasts" | "get_magicast";
-
 export const roamActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_groups",
+    operationType: "read",
     description: "List public, non-archived groups in the authenticated Roam HQ organization.",
     requiredScopes: ["groups:read"],
     inputSchema: emptyInputSchema,
@@ -113,6 +112,7 @@ export const roamActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "send_message",
+    operationType: "write",
     description: "Send a message to a single Roam HQ group as a bot.",
     requiredScopes: ["chat:send_message"],
     inputSchema: sendMessageInputSchema,
@@ -120,6 +120,7 @@ export const roamActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_recordings",
+    operationType: "read",
     description: "List Roam HQ meeting recordings with optional date filtering and pagination.",
     requiredScopes: ["recordings:read"],
     inputSchema: listRecordingsInputSchema,
@@ -134,6 +135,7 @@ export const roamActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_magicasts",
+    operationType: "read",
     description: "List Roam HQ magicasts in reverse chronological order.",
     requiredScopes: ["magicast:read"],
     inputSchema: paginationInputSchema,
@@ -148,6 +150,7 @@ export const roamActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_magicast",
+    operationType: "read",
     description: "Retrieve a Roam HQ magicast by ID.",
     requiredScopes: ["magicast:read"],
     inputSchema: getMagicastInputSchema,

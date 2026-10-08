@@ -69,17 +69,10 @@ const requestOutputSchema = s.object("Normalized RenderForm async render respons
   request: s.looseObject("Echoed request payload returned by RenderForm when available."),
 });
 
-export type RenderformActionName =
-  | "get_usage"
-  | "list_templates"
-  | "get_template"
-  | "render_image"
-  | "list_results"
-  | "take_screenshot";
-
 export const renderformActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_usage",
+    operationType: "read",
     description: "Get current RenderForm credit usage for the API key and return a normalized usage summary.",
     inputSchema: s.object("This action does not require any input parameters.", {}),
     outputSchema: s.object("Normalized RenderForm usage response.", {
@@ -108,6 +101,7 @@ export const renderformActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_templates",
+    operationType: "read",
     description:
       "List RenderForm templates with optional pagination and filters for name, tags, and source template ID.",
     inputSchema: s.object(
@@ -128,6 +122,7 @@ export const renderformActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_template",
+    operationType: "read",
     description: "Get one RenderForm template by identifier and return its normalized template details.",
     inputSchema: s.object("Input parameters for getting one RenderForm template.", {
       templateId: s.nonEmptyString("Template identifier to retrieve."),
@@ -136,6 +131,7 @@ export const renderformActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "render_image",
+    operationType: "read",
     description:
       "Render one RenderForm image or PDF from a template and return the request identifier, file URL, and echoed request.",
     inputSchema: s.object(
@@ -159,6 +155,7 @@ export const renderformActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_results",
+    operationType: "read",
     description: "List RenderForm generated results with pagination and optional template or batch filters.",
     inputSchema: s.object(
       "Input parameters for listing RenderForm results.",
@@ -177,6 +174,7 @@ export const renderformActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "take_screenshot",
+    operationType: "read",
     description:
       "Capture one website screenshot with RenderForm and return the request identifier, file URL, and echoed request.",
     inputSchema: s.object(

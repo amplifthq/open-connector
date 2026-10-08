@@ -1,4 +1,5 @@
 import type { CredentialValidationResult, TransitFileWriter } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { createHash } from "node:crypto";
@@ -9,9 +10,11 @@ import {
   createProviderTimeout,
   isAbortLikeError,
   providerFetch,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderJsonBody,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 type FastNoteSyncRequestPhase = "execute" | "validate";
@@ -49,7 +52,10 @@ export interface FastNoteSyncContext {
 const requestTimeoutMs = 60_000;
 const attachmentMaxBytes = 20 * 1024 * 1024;
 
-export const fastNoteSyncActionHandlers: Record<string, ProviderRuntimeHandler<FastNoteSyncContext>> = {
+export const fastNoteSyncActionHandlers: ProviderActionHandlers<
+  "fast_note_sync",
+  ProviderRuntimeHandler<FastNoteSyncContext>
+> = {
   async get_current_user(_input, context) {
     const response = await requestFastNoteSyncJson(context, "/user/info");
     return { user: sanitizeUser(readResponseDataObject(response, "get current user")) };
@@ -218,7 +224,7 @@ export function createFastNoteSyncContext(
   transitFiles?: TransitFileWriter,
 ): FastNoteSyncContext {
   return {
-    apiKey: requiredString(apiKey, "apiKey", inputError),
+    apiKey: requiredString(apiKey, "apiKey", providerInputError),
     baseUrl: normalizeFastNoteSyncBaseUrl(baseUrl),
     fetcher,
     signal,
@@ -230,13 +236,13 @@ export function normalizeFastNoteSyncBaseUrl(
   value: unknown,
   allowPrivateNetwork: boolean = isPrivateNetworkAccessAllowed(),
 ): string {
-  const raw = requiredString(value, "baseUrl", inputError);
+  const raw = requiredString(value, "baseUrl", providerInputError);
   const url = assertPublicHttpUrl(raw, {
     fieldName: "baseUrl",
-    createError: inputError,
+    createError: providerInputError,
     allowPrivateNetwork,
   });
-  if (url.username || url.password) throw inputError("baseUrl must not include credentials");
+  if (url.username || url.password) throw providerInputError("baseUrl must not include credentials");
   url.search = "";
   url.hash = "";
   const pathname = trimTrailingSlash(url.pathname);
@@ -348,7 +354,7 @@ async function downloadAttachmentSource(
   mimeTypeInput: string | undefined,
   signal?: AbortSignal,
 ): Promise<AttachmentSource> {
-  const url = assertPublicHttpUrl(fileUrl, { fieldName: "fileUrl", createError: inputError });
+  const url = assertPublicHttpUrl(fileUrl, { fieldName: "fileUrl", createError: providerInputError });
   const timeout = createProviderTimeout(signal, requestTimeoutMs);
   try {
     const response = await providerFetch(url, { signal: timeout.signal });
@@ -440,8 +446,8 @@ function mapFastNoteSyncHttpError(
   message: string,
   phase: FastNoteSyncRequestPhase,
 ): ProviderRequestError {
-  if (phase === "validate" && (status === 401 || status === 403)) return inputError(message);
-  if (status === 400 || status === 404 || status === 422) return inputError(message);
+  if (phase === "validate" && (status === 401 || status === 403)) return providerInputError(message);
+  if (status === 400 || status === 404 || status === 422) return providerInputError(message);
   if (status === 429) return new ProviderRequestError(429, message);
   return new ProviderRequestError(status >= 500 ? 502 : status, message);
 }
@@ -452,9 +458,9 @@ function mapFastNoteSyncBusinessError(
   phase: FastNoteSyncRequestPhase,
 ): ProviderRequestError {
   if (isFastNoteSyncCredentialErrorCode(code))
-    return phase === "validate" ? inputError(message) : new ProviderRequestError(401, message);
+    return phase === "validate" ? providerInputError(message) : new ProviderRequestError(401, message);
   if (code === 303) return new ProviderRequestError(429, message);
-  if (code === 305 || (code != null && code >= 400 && code < 500)) return inputError(message);
+  if (code === 305 || (code != null && code >= 400 && code < 500)) return providerInputError(message);
   return new ProviderRequestError(502, message);
 }
 
@@ -487,14 +493,6 @@ function pickFields(input: Record<string, unknown>, fields: readonly string[]): 
     if (input[field] !== undefined) output[field] = input[field];
   }
   return output;
-}
-
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, inputError);
-}
-
-function inputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function trimLeadingSlash(value: string): string {

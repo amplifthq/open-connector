@@ -1,9 +1,14 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ScrapingbeeActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, requiredString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError } from "../provider-runtime.ts";
+import { booleanString, compactObject, optionalRecord, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors, defineProviderProxy, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "scrapingbee";
 const scrapingbeeApiOrigin = "https://app.scrapingbee.com";
@@ -22,7 +27,7 @@ interface ScrapingbeeUsage {
   renewal_subscription_date: string;
 }
 
-export const scrapingbeeActionHandlers: Record<ScrapingbeeActionName, ScrapingbeeActionHandler> = {
+export const scrapingbeeActionHandlers: ProviderActionHandlers<"scrapingbee", ScrapingbeeActionHandler> = {
   async fetch_html(input, context) {
     const response = await context.fetcher(scrapingbeeRequestUrl("", context.apiKey, buildFetchParams(input)), {
       method: "GET",
@@ -70,6 +75,13 @@ export const scrapingbeeActionHandlers: Record<ScrapingbeeActionName, Scrapingbe
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, scrapingbeeActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: scrapingbeeApiBaseUrl,
+  auth: { type: "api_key_query", name: "api_key" },
+  skipDnsValidation: true,
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {
@@ -126,16 +138,16 @@ async function requestScrapingbeeUsage(
 function buildFetchParams(input: Record<string, unknown>): Record<string, string | undefined> {
   return compactObject({
     url: readRequiredUrl(input.url),
-    render_js: readOptionalBoolean(input.renderJs),
+    render_js: booleanString(input.renderJs),
     wait: readOptionalInteger(input.waitMs),
     wait_for: readOptionalString(input.waitFor),
     device: readOptionalString(input.device),
-    block_ads: readOptionalBoolean(input.blockAds),
-    block_resources: readOptionalBoolean(input.blockResources),
+    block_ads: booleanString(input.blockAds),
+    block_resources: booleanString(input.blockResources),
     country_code: readOptionalString(input.countryCode),
-    premium_proxy: readOptionalBoolean(input.premiumProxy),
-    stealth_proxy: readOptionalBoolean(input.stealthProxy),
-    transparent_status_code: readOptionalBoolean(input.transparentStatusCode),
+    premium_proxy: booleanString(input.premiumProxy),
+    stealth_proxy: booleanString(input.stealthProxy),
+    transparent_status_code: booleanString(input.transparentStatusCode),
     retry: readOptionalInteger(input.retry),
   });
 }
@@ -220,10 +232,6 @@ function readRequiredString(value: unknown, fieldName: string): string {
 
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-function readOptionalBoolean(value: unknown): string | undefined {
-  return typeof value === "boolean" ? String(value) : undefined;
 }
 
 function readOptionalInteger(value: unknown): string | undefined {

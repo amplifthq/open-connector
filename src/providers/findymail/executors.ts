@@ -1,13 +1,14 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { FindymailActionName } from "./actions.ts";
 
-import { optionalInteger, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { optionalInteger, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 const service = "findymail";
@@ -16,7 +17,7 @@ const findymailApiBaseUrl = "https://app.findymail.com";
 type FindymailActionContext = ApiKeyProviderContext;
 type FindymailActionHandler = (input: Record<string, unknown>, context: FindymailActionContext) => Promise<unknown>;
 
-export const findymailActionHandlers: Record<FindymailActionName, FindymailActionHandler> = {
+export const findymailActionHandlers: ProviderActionHandlers<"findymail", FindymailActionHandler> = {
   get_credits(_input, context) {
     return getCredits(context);
   },
@@ -84,7 +85,7 @@ async function verifyEmail(input: Record<string, unknown>, context: FindymailAct
     init: {
       method: "POST",
       body: JSON.stringify({
-        email: readInputString(input.email, "email"),
+        email: requiredInputString(input.email, "email"),
       }),
     },
   });
@@ -120,7 +121,7 @@ async function searchDomain(input: Record<string, unknown>, context: FindymailAc
     init: {
       method: "POST",
       body: JSON.stringify({
-        domain: readInputString(input.domain, "domain"),
+        domain: requiredInputString(input.domain, "domain"),
       }),
     },
   });
@@ -241,7 +242,7 @@ function buildNameSearchBody(input: Record<string, unknown>): Record<string, unk
 
   return {
     name: name ?? `${firstName} ${lastName}`,
-    domain: readInputString(input.domain, "domain"),
+    domain: requiredInputString(input.domain, "domain"),
   };
 }
 
@@ -257,10 +258,6 @@ function buildEmployeeSearchBody(input: Record<string, unknown>): Record<string,
     ...(companyName ? { company_name: companyName } : {}),
     ...(optionalInteger(input.limit) !== undefined ? { limit: optionalInteger(input.limit) } : {}),
   };
-}
-
-function readInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function pickOptionalNumber(object: Record<string, unknown>, ...keys: string[]): number | undefined {

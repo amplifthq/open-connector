@@ -127,6 +127,77 @@ const meetingAttendeeSchema = s.looseRequiredObject(
   { optional: ["display_name", "email", "phone_number"] },
 );
 
+const analyticsSentimentsSchema = s.looseRequiredObject(
+  "Sentiment percentages for a Fireflies transcript.",
+  {
+    negative_pct: s.number("The negative sentiment percentage."),
+    neutral_pct: s.number("The neutral sentiment percentage."),
+    positive_pct: s.number("The positive sentiment percentage."),
+  },
+  { optional: ["negative_pct", "neutral_pct", "positive_pct"] },
+);
+
+const analyticsCategoriesSchema = s.looseRequiredObject(
+  "Conversation category counts for a Fireflies transcript.",
+  {
+    questions: s.integer("The number of questions detected in the meeting."),
+    date_times: s.integer("The number of date and time mentions detected in the meeting."),
+    metrics: s.integer("The number of metric mentions detected in the meeting."),
+    tasks: s.integer("The number of tasks detected in the meeting."),
+  },
+  { optional: ["questions", "date_times", "metrics", "tasks"] },
+);
+
+const analyticsSpeakerSchema = s.looseRequiredObject(
+  "Speaker analytics for a Fireflies transcript.",
+  {
+    speaker_id: s.integer("The analytics speaker identifier."),
+    name: s.string("The analytics speaker name."),
+    duration: s.number("The speaker talk duration in seconds."),
+    word_count: s.integer("The number of words spoken by the speaker."),
+    longest_monologue: s.number("The longest monologue duration for the speaker."),
+    monologues_count: s.integer("The number of monologues for the speaker."),
+    filler_words: s.integer("The number of filler words used by the speaker."),
+    questions: s.integer("The number of questions asked by the speaker."),
+    duration_pct: s.number("The share of meeting time used by the speaker."),
+    words_per_minute: s.number("The words per minute spoken by the speaker."),
+  },
+  {
+    optional: [
+      "speaker_id",
+      "name",
+      "duration",
+      "word_count",
+      "longest_monologue",
+      "monologues_count",
+      "filler_words",
+      "questions",
+      "duration_pct",
+      "words_per_minute",
+    ],
+  },
+);
+
+const transcriptAnalyticsSchema = s.looseRequiredObject(
+  "Analytics for a Fireflies transcript.",
+  {
+    sentiments: analyticsSentimentsSchema,
+    categories: analyticsCategoriesSchema,
+    speakers: s.array("Speaker analytics for the transcript.", analyticsSpeakerSchema),
+  },
+  { optional: ["sentiments", "categories", "speakers"] },
+);
+
+const meetingAttendanceSchema = s.looseRequiredObject(
+  "Attendance details for a Fireflies meeting attendee.",
+  {
+    name: s.string("The attendee name."),
+    join_time: s.string("The attendee join time."),
+    leave_time: s.string("The attendee leave time."),
+  },
+  { optional: ["name", "join_time", "leave_time"] },
+);
+
 const sentenceSchema = s.looseRequiredObject(
   "A Fireflies transcript sentence.",
   {
@@ -172,6 +243,28 @@ const summarySchema = s.looseRequiredObject(
   },
 );
 
+const aiAppOutputSchema = s.looseRequiredObject(
+  "A Fireflies AI app output.",
+  {
+    title: s.string("The meeting title for the AI app output."),
+    app_id: s.string("The Fireflies AI app identifier."),
+    prompt: s.string("The prompt sent to the AI app."),
+    user_id: s.string("The Fireflies user identifier for the AI app output."),
+    response: s.string("The AI app response text."),
+    created_at: s.number("The AI app output creation timestamp in milliseconds since Unix epoch."),
+    transcript_id: s.string("The Fireflies transcript identifier."),
+  },
+  { optional: ["title", "app_id", "prompt", "user_id", "response", "created_at", "transcript_id"] },
+);
+
+const appsPreviewSchema = s.looseRequiredObject(
+  "AI app outputs attached to a Fireflies transcript.",
+  {
+    outputs: s.array("AI app outputs for the transcript.", aiAppOutputSchema),
+  },
+  { optional: ["outputs"] },
+);
+
 const transcriptSchema = s.looseRequiredObject(
   "A Fireflies transcript.",
   {
@@ -182,9 +275,29 @@ const transcriptSchema = s.looseRequiredObject(
     summary: summarySchema,
     sentences: s.array("Transcript sentence details.", sentenceSchema),
     meeting_attendees: s.array("Meeting attendee details for the transcript.", meetingAttendeeSchema),
+    audio_url: s.string("The transcript audio URL."),
+    video_url: s.string("The transcript video URL."),
+    analytics: transcriptAnalyticsSchema,
+    apps_preview: appsPreviewSchema,
+    meeting_attendance: s.array("Attendance details for the meeting.", meetingAttendanceSchema),
     channels: s.array("Channels linked to the transcript.", channelSchema),
   },
-  { optional: ["title", "date", "user", "summary", "sentences", "meeting_attendees", "channels"] },
+  {
+    optional: [
+      "title",
+      "date",
+      "user",
+      "summary",
+      "sentences",
+      "meeting_attendees",
+      "audio_url",
+      "video_url",
+      "analytics",
+      "apps_preview",
+      "meeting_attendance",
+      "channels",
+    ],
+  },
 );
 
 const biteUserSchema = s.looseRequiredObject(
@@ -291,20 +404,6 @@ const createBiteResultSchema = s.looseRequiredObject(
     status: s.string("The created Fireflies bite status."),
   },
   { optional: ["name", "status"] },
-);
-
-const aiAppOutputSchema = s.looseRequiredObject(
-  "A Fireflies AI app output.",
-  {
-    title: s.string("The meeting title for the AI app output."),
-    app_id: s.string("The Fireflies AI app identifier."),
-    prompt: s.string("The prompt sent to the AI app."),
-    user_id: s.string("The Fireflies user identifier for the AI app output."),
-    response: s.string("The AI app response text."),
-    created_at: s.string("The AI app output creation timestamp."),
-    transcript_id: s.string("The Fireflies transcript identifier."),
-  },
-  { optional: ["title", "app_id", "prompt", "user_id", "response", "created_at", "transcript_id"] },
 );
 
 const askFredMessageSchema = s.looseRequiredObject(
@@ -518,6 +617,20 @@ const listUserGroupsInputSchema = s.object(
   { optional: ["mine"] },
 );
 
+const transcriptIncludeInputs = {
+  include_summary: s.boolean("Whether to include transcript summary data. Defaults to true."),
+  include_analytics: s.boolean("Whether to include transcript analytics data. Defaults to false."),
+  include_audio_url: s.boolean("Whether to include the transcript audio URL. Defaults to false."),
+  include_video_url: s.boolean("Whether to include the transcript video URL. Defaults to false."),
+  include_sentences: s.boolean("Whether to include transcript sentences. Defaults to true."),
+  include_apps_preview: s.boolean("Whether to include transcript app preview data. Defaults to false."),
+  include_user_details: s.boolean("Whether to include detailed user information. Defaults to true."),
+  include_meeting_attendees: s.boolean("Whether to include meeting attendees. Defaults to true."),
+  include_meeting_attendance: s.boolean("Whether to include meeting attendance details. Defaults to false."),
+};
+
+const transcriptIncludeInputKeys = Object.keys(transcriptIncludeInputs);
+
 const listTranscriptsInputSchema = s.looseRequiredObject(
   "Input parameters for listing Fireflies transcripts.",
   {
@@ -531,15 +644,7 @@ const listTranscriptsInputSchema = s.looseRequiredObject(
     organizers: optionalEmailArray("Organizer email addresses used to filter transcripts."),
     participants: optionalEmailArray("Participant email addresses used to filter transcripts."),
     channel_id: nonEmptyString("The Fireflies channel identifier used to filter transcripts."),
-    include_summary: s.boolean("Whether to include transcript summary data."),
-    include_analytics: s.boolean("Whether to include transcript analytics data."),
-    include_audio_url: s.boolean("Whether to include the transcript audio URL."),
-    include_video_url: s.boolean("Whether to include the transcript video URL."),
-    include_sentences: s.boolean("Whether to include transcript sentences."),
-    include_apps_preview: s.boolean("Whether to include transcript app preview data."),
-    include_user_details: s.boolean("Whether to include detailed user information."),
-    include_meeting_attendees: s.boolean("Whether to include meeting attendees."),
-    include_meeting_attendance: s.boolean("Whether to include meeting attendance details."),
+    ...transcriptIncludeInputs,
   },
   {
     optional: [
@@ -553,22 +658,19 @@ const listTranscriptsInputSchema = s.looseRequiredObject(
       "organizers",
       "participants",
       "channel_id",
-      "include_summary",
-      "include_analytics",
-      "include_audio_url",
-      "include_video_url",
-      "include_sentences",
-      "include_apps_preview",
-      "include_user_details",
-      "include_meeting_attendees",
-      "include_meeting_attendance",
+      ...transcriptIncludeInputKeys,
     ],
   },
 );
 
-const getTranscriptInputSchema = s.requiredObject("Input parameters for reading a Fireflies transcript by ID.", {
-  id: nonEmptyString("The Fireflies transcript identifier."),
-});
+const getTranscriptInputSchema = s.object(
+  "Input parameters for reading a Fireflies transcript by ID.",
+  {
+    id: nonEmptyString("The Fireflies transcript identifier."),
+    ...transcriptIncludeInputs,
+  },
+  { optional: transcriptIncludeInputKeys },
+);
 
 const getBiteInputSchema = s.requiredObject("Input parameters for reading a Fireflies bite by ID.", {
   id: nonEmptyString("The Fireflies bite identifier."),
@@ -723,96 +825,112 @@ const executeGraphqlQueryInputSchema = s.object(
 export const firefliesActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Get the authenticated Fireflies user for the current API key.",
     inputSchema: noInputSchema,
     outputSchema: userOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Get a Fireflies user by user ID.",
     inputSchema: getUserInputSchema,
     outputSchema: userOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List Fireflies users visible to the current API key.",
     inputSchema: noInputSchema,
     outputSchema: usersOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_channels",
+    operationType: "read",
     description: "List Fireflies channels visible to the current API key.",
     inputSchema: noInputSchema,
     outputSchema: channelsOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_user_groups",
+    operationType: "read",
     description: "List Fireflies user groups visible to the current API key.",
     inputSchema: listUserGroupsInputSchema,
     outputSchema: userGroupsOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_transcripts",
+    operationType: "read",
     description: "List Fireflies transcripts with official filters and include flags.",
     inputSchema: listTranscriptsInputSchema,
     outputSchema: transcriptsOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_transcript",
+    operationType: "read",
     description: "Get a Fireflies transcript by transcript ID.",
     inputSchema: getTranscriptInputSchema,
     outputSchema: transcriptOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_bites",
+    operationType: "read",
     description: "List Fireflies bites using the available bite filters.",
     inputSchema: listBitesInputSchema,
     outputSchema: bitesOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_bite",
+    operationType: "read",
     description: "Get a Fireflies bite by bite ID.",
     inputSchema: getBiteInputSchema,
     outputSchema: biteOutputSchema,
   }),
   defineProviderAction(service, {
     name: "create_bite",
+    operationType: "write",
     description: "Create a Fireflies bite from a transcript time range.",
     inputSchema: createBiteInputSchema,
     outputSchema: createBiteOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_ai_app_outputs",
+    operationType: "read",
     description: "List Fireflies AI app outputs for transcripts or app IDs.",
     inputSchema: listAiAppOutputsInputSchema,
     outputSchema: aiAppOutputsOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_askfred_threads",
+    operationType: "read",
     description: "List Fireflies AskFred conversation threads.",
     inputSchema: listAskFredThreadsInputSchema,
     outputSchema: askFredThreadsOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_askfred_thread",
+    operationType: "read",
     description: "Get a Fireflies AskFred thread by thread ID.",
     inputSchema: getAskFredThreadInputSchema,
     outputSchema: askFredThreadOutputSchema,
   }),
   defineProviderAction(service, {
     name: "create_askfred_thread",
+    operationType: "write",
     description: "Create a Fireflies AskFred thread from a meeting question.",
     inputSchema: createAskFredThreadInputSchema,
     outputSchema: askFredMessageOutputSchema,
   }),
   defineProviderAction(service, {
     name: "continue_askfred_thread",
+    operationType: "write",
     description: "Continue a Fireflies AskFred thread with a follow-up question.",
     inputSchema: continueAskFredThreadInputSchema,
     outputSchema: askFredMessageOutputSchema,
   }),
   defineProviderAction(service, {
     name: "delete_askfred_thread",
+    operationType: "destructive",
     description: "Delete a Fireflies AskFred thread by thread ID.",
     inputSchema: deleteAskFredThreadInputSchema,
     outputSchema: s.requiredObject("The Fireflies delete AskFred thread response.", {
@@ -821,62 +939,44 @@ export const firefliesActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "set_user_role",
+    operationType: "write",
     description: "Set a Fireflies user's role to admin or user.",
     inputSchema: setUserRoleInputSchema,
     outputSchema: setUserRoleOutputSchema,
   }),
   defineProviderAction(service, {
     name: "update_meeting_channel",
+    operationType: "write",
     description: "Update the Fireflies channel assignments for one or more meetings.",
     inputSchema: updateMeetingChannelInputSchema,
     outputSchema: updateMeetingChannelOutputSchema,
   }),
   defineProviderAction(service, {
     name: "update_meeting_privacy",
+    operationType: "write",
     description: "Update the privacy value for a Fireflies meeting.",
     inputSchema: updateMeetingPrivacyInputSchema,
     outputSchema: meetingOutputSchema,
   }),
   defineProviderAction(service, {
     name: "update_meeting_title",
+    operationType: "write",
     description: "Update the title for a Fireflies meeting.",
     inputSchema: updateMeetingTitleInputSchema,
     outputSchema: meetingOutputSchema,
   }),
   defineProviderAction(service, {
     name: "delete_transcript",
+    operationType: "destructive",
     description: "Delete a Fireflies transcript by transcript ID.",
     inputSchema: deleteTranscriptInputSchema,
     outputSchema: deleteTranscriptOutputSchema,
   }),
   defineProviderAction(service, {
     name: "execute_graphql_query",
+    operationType: "read",
     description: "Execute a raw read-only Fireflies GraphQL query and return the raw response.",
     inputSchema: executeGraphqlQueryInputSchema,
     outputSchema: executeGraphqlQueryOutputSchema,
   }),
 ];
-
-export type FirefliesActionName =
-  | "get_current_user"
-  | "get_user"
-  | "list_users"
-  | "list_channels"
-  | "list_user_groups"
-  | "list_transcripts"
-  | "get_transcript"
-  | "list_bites"
-  | "get_bite"
-  | "create_bite"
-  | "list_ai_app_outputs"
-  | "list_askfred_threads"
-  | "get_askfred_thread"
-  | "create_askfred_thread"
-  | "continue_askfred_thread"
-  | "delete_askfred_thread"
-  | "set_user_role"
-  | "update_meeting_channel"
-  | "update_meeting_privacy"
-  | "update_meeting_title"
-  | "delete_transcript"
-  | "execute_graphql_query";

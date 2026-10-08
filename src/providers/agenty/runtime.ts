@@ -1,8 +1,8 @@
 import type { CredentialValidationResult, TransitFileWriter } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
-import type { AgentyActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
+import { compactObject, optionalRecord, optionalString, recordOrEmpty, requiredRecord } from "../../core/cast.ts";
 import { readBoundedResponseBytes } from "../../core/request.ts";
 import { providerFetch, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
@@ -20,7 +20,7 @@ export type AgentyRuntimeContext = {
 
 type AgentyActionHandler = (input: Record<string, unknown>, context: AgentyRuntimeContext) => Promise<unknown>;
 
-export const agentyActionHandlers: Record<AgentyActionName, AgentyActionHandler> = {
+export const agentyActionHandlers: ProviderActionHandlers<"agenty", AgentyActionHandler> = {
   get_page_content(input, context) {
     return getPageContent(input, context);
   },
@@ -336,7 +336,7 @@ async function getList(input: Record<string, unknown>, context: AgentyRuntimeCon
     path: `/lists/${listId}`,
     context,
   });
-  const record = asRecord(payload);
+  const record = recordOrEmpty(payload);
   return {
     list: "list_id" in record ? record : unwrapAgentyPayload(payload),
   };
@@ -867,10 +867,6 @@ function createAgentyError(input: { status: number; payload: unknown; mode: "val
     return new ProviderRequestError(429, message, input.payload);
   }
   return new ProviderRequestError(input.status >= 500 ? 502 : input.status, message, input.payload);
-}
-
-function asRecord(value: unknown) {
-  return optionalRecord(value) ?? {};
 }
 
 function readStructuredDataValue(value: unknown) {

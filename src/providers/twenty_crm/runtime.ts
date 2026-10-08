@@ -1,9 +1,9 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { TwentyCrmActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, requiredRecord } from "../../core/cast.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 export const twentyCrmApiBaseUrl = "https://api.twenty.com";
 
@@ -18,7 +18,10 @@ interface TwentyCrmRequestOptions {
   body?: Record<string, unknown>;
 }
 
-export const twentyCrmActionHandlers: Record<TwentyCrmActionName, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const twentyCrmActionHandlers: ProviderActionHandlers<
+  "twenty_crm",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   list_metadata_objects(_input, context) {
     return listMetadataObjects(context);
   },
@@ -93,10 +96,11 @@ async function listRecords(
   input: Record<string, unknown>,
   context: ApiKeyProviderContext,
 ): Promise<Record<string, unknown>> {
+  const objectNamePlural = readRequiredString(input.objectNamePlural, "objectNamePlural");
   const payload = await requestTwentyCrmJson(
     {
       method: "GET",
-      path: `/rest/${encodeObjectName(readRequiredString(input.objectNamePlural, "objectNamePlural"))}`,
+      path: `/rest/${encodeObjectName(objectNamePlural)}`,
       query: compactObject({
         limit: optionalInteger(input.limit),
         starting_after: readOptionalString(input.startingAfter),
@@ -110,8 +114,9 @@ async function listRecords(
   );
   const record = requireProviderObject(payload, "Twenty CRM list records response");
 
+  const data = requireProviderObject(record.data, "Twenty CRM data");
   return {
-    records: readArray(record, "data").map((item) => requireProviderObject(item, "Twenty CRM record")),
+    records: readArray(data, objectNamePlural).map((item) => requireProviderObject(item, "Twenty CRM record")),
     pageInfo: optionalRecord(record.pageInfo) ?? {},
     raw: record,
   };
@@ -144,7 +149,7 @@ async function createRecord(
     {
       method: "POST",
       path: `/rest/${encodeObjectName(readRequiredString(input.objectNamePlural, "objectNamePlural"))}`,
-      body: requiredRecord(input.data, "data", providerInvalidInput),
+      body: requiredRecord(input.data, "data", providerInputError),
     },
     context,
   );
@@ -164,7 +169,7 @@ async function updateRecord(
     {
       method: "PATCH",
       path: buildRecordPath(input),
-      body: requiredRecord(input.data, "data", providerInvalidInput),
+      body: requiredRecord(input.data, "data", providerInputError),
     },
     context,
   );
@@ -311,8 +316,4 @@ function requireProviderObject(payload: unknown, label: string): Record<string, 
   }
 
   return payload as Record<string, unknown>;
-}
-
-function providerInvalidInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

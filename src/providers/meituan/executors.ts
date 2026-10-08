@@ -1,4 +1,10 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { createHash } from "node:crypto";
@@ -6,7 +12,9 @@ import { optionalRecord, optionalString, requiredString } from "../../core/cast.
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderJsonBody,
@@ -35,11 +43,9 @@ interface MeituanTravelRequest {
 
 type MeituanContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 
-const invalidInput = (message: string): ProviderRequestError => new ProviderRequestError(400, message);
-
-const meituanActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+const meituanActionHandlers: ProviderActionHandlers<"meituan", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   query_travel(input, context) {
-    const query = requiredString(input.query, "query", invalidInput);
+    const query = requiredString(input.query, "query", providerInputError);
     const city = optionalString(input.city) ?? meituanDefaultCity;
     const originQuery = optionalString(input.originQuery) ?? query;
     return requestMeituanTravel(
@@ -57,9 +63,19 @@ export const executors: ProviderExecutors = defineApiKeyProviderExecutors(servic
   skipDnsValidation: true,
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: meituanTravelEndpoint,
+  auth: { type: "api_key_header", name: "Authorization" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input): Promise<CredentialValidationResult> {
-    const apiKey = requiredString(input.apiKey, "apiKey", invalidInput);
+    const apiKey = requiredString(input.apiKey, "apiKey", providerInputError);
     const tokenHash = hashMeituanToken(apiKey);
     return {
       profile: {

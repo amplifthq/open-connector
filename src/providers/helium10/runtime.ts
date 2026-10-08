@@ -1,15 +1,17 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { OAuthProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { JsonSchemaType } from "@modelcontextprotocol/sdk/validation";
+import type { Client } from "@modelcontextprotocol/client";
+import type { JsonSchemaType } from "@modelcontextprotocol/client";
 
-import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { McpError } from "@modelcontextprotocol/sdk/types.js";
-import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
+import { UnauthorizedError } from "@modelcontextprotocol/client";
+import { SdkHttpError } from "@modelcontextprotocol/client";
+import { ProtocolError } from "@modelcontextprotocol/client";
+import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/client/validators/cf-worker";
 import { createHash } from "node:crypto";
 import { optionalRecord, requiredString } from "../../core/cast.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { withMcpClient } from "../mcp-client.ts";
+import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 export const helium10McpEndpoint = "https://mcp.helium10.com/mcp";
 const requestTimeoutMs = 30_000;
@@ -54,7 +56,10 @@ const readOnlyTools = new Set([
 type Tool = Awaited<ReturnType<Client["listTools"]>>["tools"][number];
 type ToolResult = Awaited<ReturnType<Client["callTool"]>>;
 
-export const helium10ActionHandlers: Record<string, ProviderRuntimeHandler<OAuthProviderContext>> = {
+export const helium10ActionHandlers: ProviderActionHandlers<
+  "helium10",
+  ProviderRuntimeHandler<OAuthProviderContext>
+> = {
   async list_tools(_input, context) {
     const tools = await listTools(context);
     return {
@@ -62,7 +67,7 @@ export const helium10ActionHandlers: Record<string, ProviderRuntimeHandler<OAuth
     };
   },
   async call_tool(input, context) {
-    const toolName = requiredString(input.toolName, "toolName", badRequest);
+    const toolName = requiredString(input.toolName, "toolName", providerInputError);
     const args = input.arguments === undefined ? {} : optionalRecord(input.arguments);
     if (!args) throw new ProviderRequestError(400, "arguments must be a JSON object");
     if (!readOnlyTools.has(toolName)) {
@@ -72,10 +77,13 @@ export const helium10ActionHandlers: Record<string, ProviderRuntimeHandler<OAuth
     if (!tool) throw new ProviderRequestError(400, `Helium 10 MCP tool is not available for this account: ${toolName}`);
     validateArguments(tool, args);
     const result = await withClient(context, (client) =>
-      client.callTool({ name: toolName, arguments: args }, undefined, {
-        timeout: requestTimeoutMs,
-        signal: context.signal,
-      }),
+      client.callTool(
+        { name: toolName, arguments: args },
+        {
+          timeout: requestTimeoutMs,
+          signal: context.signal,
+        },
+      ),
     );
     return { result: normalizeResult(result) };
   },
@@ -86,13 +94,17 @@ export async function validateHelium10Credential(
   fetcher: typeof fetch,
   signal?: AbortSignal,
 ): Promise<CredentialValidationResult> {
-  const tools = await listTools({ accessToken, fetcher, signal });
-  if (tools.length === 0) throw new ProviderRequestError(502, "Helium 10 MCP did not expose any approved tools");
+  const result = await withClient({ accessToken, fetcher, signal }, (client) =>
+    client.listTools({}, { timeout: requestTimeoutMs, signal }),
+  );
+  if (!result.tools.some((tool) => readOnlyTools.has(tool.name))) {
+    throw new ProviderRequestError(502, "Helium 10 MCP did not expose any approved read-only tools");
+  }
   const tokenHash = createHash("sha256").update(accessToken).digest("hex").slice(0, 16);
   return {
     profile: { accountId: `helium10:mcp:${tokenHash}`, displayName: `Helium 10 MCP · ${tokenHash.slice(-6)}` },
     grantedScopes: ["mcp:tools"],
-    metadata: { mcpEndpoint: helium10McpEndpoint, availableTools: tools.map((tool) => tool.name) },
+    metadata: { mcpEndpoint: helium10McpEndpoint },
   };
 }
 
@@ -107,28 +119,30 @@ async function withClient<T>(
   context: Pick<OAuthProviderContext, "accessToken" | "fetcher" | "signal">,
   run: (client: Client) => Promise<T>,
 ): Promise<T> {
-  const transport = new StreamableHTTPClientTransport(new URL(helium10McpEndpoint), {
-    fetch: context.fetcher,
-    requestInit: { headers: { authorization: `Bearer ${context.accessToken}`, "user-agent": providerUserAgent } },
-  });
-  const client = new Client({ name: "oomol-connect-helium10", version: "1.0.0" }, { jsonSchemaValidator: validator });
-  try {
-    await client.connect(transport, { timeout: requestTimeoutMs, signal: context.signal });
-    return await run(client);
-  } catch (error) {
-    if (error instanceof UnauthorizedError)
-      throw new ProviderRequestError(401, "Helium 10 authorization is invalid or expired");
-    if (error instanceof StreamableHTTPError)
-      throw new ProviderRequestError(
-        error.code === 429 ? 429 : error.code === 401 || error.code === 403 ? 401 : 502,
-        `Helium 10 MCP request failed: ${error.message}`,
-      );
-    if (error instanceof McpError)
-      throw new ProviderRequestError(502, `Helium 10 MCP request failed: ${error.message}`);
-    throw error;
-  } finally {
-    await client.close().catch(() => undefined);
-  }
+  return withMcpClient(
+    {
+      endpoint: new URL(helium10McpEndpoint),
+      transport: "streamable_http",
+      fetcher: context.fetcher,
+      headers: { authorization: `Bearer ${context.accessToken}`, "user-agent": providerUserAgent },
+      signal: context.signal,
+      mapError: mapHelium10McpError,
+    },
+    run,
+  );
+}
+
+function mapHelium10McpError(error: unknown): unknown {
+  if (error instanceof UnauthorizedError)
+    return new ProviderRequestError(401, "Helium 10 authorization is invalid or expired");
+  if (error instanceof SdkHttpError)
+    return new ProviderRequestError(
+      error.status === 429 ? 429 : error.status === 401 || error.status === 403 ? 401 : 502,
+      `Helium 10 MCP request failed: ${error.message}`,
+    );
+  if (error instanceof ProtocolError)
+    return new ProviderRequestError(502, `Helium 10 MCP request failed: ${error.message}`);
+  return error;
 }
 
 function validateArguments(tool: Tool, args: Record<string, unknown>): void {
@@ -151,8 +165,4 @@ function normalizeResult(result: ToolResult): unknown {
   } catch {
     return text.text;
   }
-}
-
-function badRequest(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

@@ -1,3 +1,4 @@
+import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-runtime.ts";
 import type { SupermemoryActionName } from "./actions.ts";
 
 import { compactObject, requiredString } from "../../core/cast.ts";
@@ -8,14 +9,6 @@ export interface SupermemoryCredentialCheck {
   accountLabel: string;
   providerScopes: string[];
   providerMetadata: Record<string, unknown>;
-}
-
-interface ApiKeyProviderActionInput {
-  apiKey: string;
-  actionName: string;
-  input: Record<string, unknown>;
-  providerMetadata?: Record<string, unknown>;
-  values?: Record<string, string>;
 }
 
 type SupermemoryActionHandler = (
@@ -32,7 +25,7 @@ type SupermemoryRequestInput = {
 export const supermemoryApiBaseUrl = "https://api.supermemory.ai";
 export const supermemoryUserAgent: string = providerUserAgent;
 
-export const supermemoryActionHandlers: Record<SupermemoryActionName, SupermemoryActionHandler> = {
+export const supermemoryActionHandlers: ProviderActionHandlers<"supermemory", SupermemoryActionHandler> = {
   create_memories(input, context) {
     return supermemoryRequest("/v4/memories", { method: "POST", body: input }, context.apiKey, context.fetcher);
   },
@@ -92,7 +85,7 @@ export const supermemoryActionHandlers: Record<SupermemoryActionName, Supermemor
 
     return { id, deleted: true };
   },
-} satisfies Record<SupermemoryActionName, SupermemoryActionHandler>;
+};
 
 export async function validateSupermemoryApiKey(
   apiKey: string,
@@ -111,7 +104,7 @@ export async function validateSupermemoryApiKey(
 }
 
 export function executeSupermemoryAction(
-  input: ApiKeyProviderActionInput & {
+  input: ApiKeyActionRequest & {
     actionName: SupermemoryActionName;
     input: Record<string, unknown>;
   },

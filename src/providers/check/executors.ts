@@ -4,6 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -16,6 +17,8 @@ import {
 import {
   defineProviderExecutors,
   defineProviderProxy,
+  isAbortLikeError,
+  providerResponseError,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
@@ -38,7 +41,7 @@ interface CheckContext {
 
 type CheckHandler = (input: Record<string, unknown>, context: CheckContext) => Promise<unknown>;
 
-export const checkActionHandlers: Record<string, CheckHandler> = {
+export const checkActionHandlers: ProviderActionHandlers<"check", CheckHandler> = {
   async validate_address(input, context) {
     const payload = await requestCheckJson({
       context,
@@ -56,7 +59,7 @@ export const checkActionHandlers: Record<string, CheckHandler> = {
     });
 
     return {
-      result: requiredRecord(payload, "Check address validation response", providerError),
+      result: requiredRecord(payload, "Check address validation response", providerResponseError),
     };
   },
   async list_agencies(input, context) {
@@ -72,7 +75,7 @@ export const checkActionHandlers: Record<string, CheckHandler> = {
         limit: optionalIntegerString(input.limit, "limit"),
       }),
     });
-    const page = requiredRecord(payload, "Check agency list response", providerError);
+    const page = requiredRecord(payload, "Check agency list response", providerResponseError);
 
     return {
       next: nullableString(page.next, "pagination URL"),
@@ -132,7 +135,7 @@ export const credentialValidators: CredentialValidators = {
       phase: "validate",
       query: { limit: "1" },
     });
-    const page = requiredRecord(payload, "Check agency validation response", providerError);
+    const page = requiredRecord(payload, "Check agency validation response", providerResponseError);
     const firstAgency = normalizeAgencyList(page.results)[0];
 
     return {
@@ -237,11 +240,11 @@ function normalizeAgencyList(value: unknown): Array<Record<string, unknown>> {
 }
 
 function normalizeAgency(value: unknown): Record<string, unknown> {
-  const record = requiredRecord(value, "Check agency", providerError);
+  const record = requiredRecord(value, "Check agency", providerResponseError);
   return {
-    id: requiredString(record.id, "agency.id", providerError),
-    label: requiredString(record.label, "agency.label", providerError),
-    jurisdiction: requiredString(record.jurisdiction, "agency.jurisdiction", providerError),
+    id: requiredString(record.id, "agency.id", providerResponseError),
+    label: requiredString(record.label, "agency.label", providerResponseError),
+    jurisdiction: requiredString(record.jurisdiction, "agency.jurisdiction", providerResponseError),
     raw: record,
   };
 }
@@ -272,12 +275,4 @@ function resolveEnvironment(value: unknown): CheckEnvironment {
 
 function resolveApiBaseUrl(environment: CheckEnvironment): string {
   return environment === "production" ? productionApiBaseUrl : sandboxApiBaseUrl;
-}
-
-function providerError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return error instanceof Error && error.name === "AbortError";
 }

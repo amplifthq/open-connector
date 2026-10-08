@@ -1,8 +1,15 @@
-import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidationResult, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  isAbortLikeError,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "reducto";
 const reductoApiBaseUrl = "https://platform.reducto.ai";
@@ -11,7 +18,7 @@ const reductoDefaultRequestTimeoutMs = 120_000;
 type ReductoPhase = "validate" | "execute";
 type ReductoActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const reductoActionHandlers: Record<string, ReductoActionHandler> = {
+export const reductoActionHandlers: ProviderActionHandlers<"reducto", ReductoActionHandler> = {
   parse_document(input, context) {
     return executeParseDocument(input, context);
   },
@@ -24,6 +31,18 @@ export const reductoActionHandlers: Record<string, ReductoActionHandler> = {
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, reductoActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: reductoApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) {
+      headers.set("accept", "application/json");
+    }
+  },
+});
 
 export const credentialValidators = {
   async apiKey(
@@ -77,7 +96,7 @@ async function executeExtractData(input: Record<string, unknown>, context: ApiKe
       input: readRequiredDocumentUrl(input),
       instructions: compactObject({
         schema: optionalRecord(input.schema) ?? {},
-        system_prompt: readOptionalTrimmedString(input.systemPrompt),
+        system_prompt: optionalString(input.systemPrompt),
       }),
       parsing: optionalRecord(input.parsing),
       settings: optionalRecord(input.settings),
@@ -93,7 +112,7 @@ async function executeSplitDocument(input: Record<string, unknown>, context: Api
     compactObject({
       input: readRequiredDocumentUrl(input),
       split_description: input.splitDescription,
-      split_rules: readOptionalTrimmedString(input.splitRules),
+      split_rules: optionalString(input.splitRules),
       parsing: optionalRecord(input.parsing),
       settings: optionalRecord(input.settings),
     }),
@@ -275,14 +294,4 @@ function requirePayloadRecord(payload: unknown): Record<string, unknown> {
 
 function readRequiredDocumentUrl(input: Record<string, unknown>): string {
   return requiredString(input.documentUrl, "documentUrl", (message) => new ProviderRequestError(400, message));
-}
-
-function readOptionalTrimmedString(value: unknown): string | undefined {
-  return optionalString(value);
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return error instanceof DOMException
-    ? error.name === "AbortError"
-    : error instanceof Error && error.name === "AbortError";
 }

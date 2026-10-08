@@ -1,7 +1,8 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject, optionalInteger, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { compactObject, optionalInteger, optionalString, requiredRecord } from "../../core/cast.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 export const altTextAiApiBaseUrl = "https://alttext.ai/api/v1";
 
@@ -21,7 +22,7 @@ interface RequestOptions {
 
 type ActionHandler = (input: Record<string, unknown>, context: ActionContext) => Promise<unknown>;
 
-export const altTextAiActionHandlers: Record<string, ActionHandler> = {
+export const altTextAiActionHandlers: ProviderActionHandlers<"alt_text_ai", ActionHandler> = {
   get_account(_input, context) {
     return fetchJson("/account", { method: "GET" }, context);
   },
@@ -320,8 +321,4 @@ function readNullableHeaderInteger(headers: Headers, name: string): number | nul
   }
   const parsed = Number(value);
   return Number.isInteger(parsed) ? parsed : null;
-}
-
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }

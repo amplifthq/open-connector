@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalString, positiveInteger } from "../../core/cast.ts";
@@ -11,14 +12,13 @@ import {
 
 export const streamtimeApiBaseUrl = "https://api.streamtime.net/v2";
 const streamtimeValidationPath = "/organisation";
-const streamtimeRequestTimeoutMs = 30_000;
 
 type StreamtimeMode = "validation" | "execution";
 type StreamtimeMethod = "GET" | "POST" | "PUT";
 type StreamtimeActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type StreamtimeActionHandler = (input: Record<string, unknown>, context: StreamtimeActionContext) => Promise<unknown>;
 
-export const streamtimeActionHandlers: Record<string, StreamtimeActionHandler> = {
+export const streamtimeActionHandlers: ProviderActionHandlers<"streamtime", StreamtimeActionHandler> = {
   get_organisation(_input, context) {
     return getWrappedObject("/organisation", "organisation", context);
   },
@@ -160,7 +160,7 @@ async function streamtimeRequest(
   mode: StreamtimeMode,
 ): Promise<unknown> {
   const url = new URL(path.startsWith("/") ? path.slice(1) : path, `${streamtimeApiBaseUrl}/`);
-  const timeout = createProviderTimeout(context.signal, streamtimeRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
 
   let response: Response;
   try {

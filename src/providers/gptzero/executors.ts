@@ -4,6 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -16,19 +17,17 @@ import {
   requiredRecord,
 } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
   defineApiKeyProviderExecutors,
   defineProviderProxy,
-  isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
   readProviderJsonBody,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 const service = "gptzero";
 const gptzeroApiBaseUrl = "https://api.gptzero.me";
 const gptzeroPredictTextPath = "/v2/predict/text";
-const gptzeroDefaultRequestTimeoutMs = 30_000;
 const gptzeroValidationDocument = "This is a GPTZero API key validation request.";
 
 type GptzeroRequestPhase = "validate" | "execute";
@@ -41,7 +40,7 @@ interface GptzeroJsonRequestOptions {
   phase: GptzeroRequestPhase;
 }
 
-export const gptzeroActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const gptzeroActionHandlers: ProviderActionHandlers<"gptzero", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   async detect_text(input, context) {
     const payload = await requestGptzeroJson({
       apiKey: context.apiKey,
@@ -91,8 +90,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestGptzeroJson(input: GptzeroJsonRequestOptions): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, gptzeroDefaultRequestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "GPTZero" }, async (signal) => {
     const response = await input.context.fetcher(new URL(gptzeroPredictTextPath, gptzeroApiBaseUrl), {
       method: "POST",
       headers: {
@@ -107,7 +105,7 @@ async function requestGptzeroJson(input: GptzeroJsonRequestOptions): Promise<unk
           version: input.version,
         }),
       ),
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readProviderJsonBody(response, {
       emptyBody: null,
@@ -117,20 +115,7 @@ async function requestGptzeroJson(input: GptzeroJsonRequestOptions): Promise<unk
       throw createGptzeroError(response.status, payload, input.phase);
     }
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "GPTZero request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `GPTZero request failed: ${error.message}` : "GPTZero request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function normalizeGptzeroPredictionPayload(payload: unknown): Record<string, unknown> {

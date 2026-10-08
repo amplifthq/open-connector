@@ -4,6 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -22,9 +23,12 @@ import {
   defineProviderExecutors,
   defineProviderProxy,
   isAbortLikeError,
+  providerInputError,
   ProviderRequestError,
+  providerResponseError,
   providerUserAgent,
   requireApiKeyCredential,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 const service = "quentn";
@@ -52,7 +56,7 @@ interface QuentnCredentialInput {
   metadata?: Record<string, unknown>;
 }
 
-export const quentnActionHandlers: Record<string, QuentnActionHandler> = {
+export const quentnActionHandlers: ProviderActionHandlers<"quentn", QuentnActionHandler> = {
   list_users(input, context) {
     return requestQuentnObjectAction({
       context,
@@ -63,7 +67,7 @@ export const quentnActionHandlers: Record<string, QuentnActionHandler> = {
     });
   },
   async get_user(input, context) {
-    const userId = positiveInteger(input.user_id, "user_id", invalidInputError);
+    const userId = positiveInteger(input.user_id, "user_id", providerInputError);
     const payload = await requestQuentnJson({
       context,
       path: `/user/${userId}`,
@@ -72,11 +76,11 @@ export const quentnActionHandlers: Record<string, QuentnActionHandler> = {
     return { user: normalizeUser(requirePayloadObject(payload, "Quentn user")) };
   },
   get_contact_by_id(input, context) {
-    const contactId = positiveInteger(input.contact_id, "contact_id", invalidInputError);
+    const contactId = positiveInteger(input.contact_id, "contact_id", providerInputError);
     return requestContact(input, context, `/contact/${contactId}`);
   },
   async find_contacts_by_email(input, context) {
-    const email = requiredString(input.email, "email", invalidInputError);
+    const email = requiredString(input.email, "email", providerInputError);
     const payload = await requestQuentnJson({
       context,
       path: `/contact/${encodeURIComponent(email)}`,
@@ -84,7 +88,7 @@ export const quentnActionHandlers: Record<string, QuentnActionHandler> = {
       query: buildFieldsQuery(input),
     });
     const raw = Array.isArray(payload)
-      ? objectArray(payload, "Quentn contacts", providerError)
+      ? objectArray(payload, "Quentn contacts", providerResponseError)
       : [requirePayloadObject(payload, "Quentn contact")];
     return {
       contacts: raw.map(normalizeContact),
@@ -92,7 +96,7 @@ export const quentnActionHandlers: Record<string, QuentnActionHandler> = {
     };
   },
   async create_contact(input, context) {
-    const contact = requiredRecord(input.contact, "contact", invalidInputError);
+    const contact = requiredRecord(input.contact, "contact", providerInputError);
     assertCreateContactHasRequiredFields(contact);
     const payload = await requestQuentnJson({
       context,
@@ -103,15 +107,15 @@ export const quentnActionHandlers: Record<string, QuentnActionHandler> = {
         duplicate_check_method: optionalString(input.duplicate_check_method),
         duplicate_merge_method: optionalString(input.duplicate_merge_method),
         return_fields: readStringArray(input.return_fields),
-        flood_limit: optionalIntegerLike(input.flood_limit, "flood_limit", invalidInputError),
+        flood_limit: optionalIntegerLike(input.flood_limit, "flood_limit", providerInputError),
         spam_protection: optionalBoolean(input.spam_protection),
       }),
     });
     return { contact: normalizeContact(requirePayloadObject(payload, "Quentn contact")) };
   },
   async update_contact(input, context) {
-    const contactId = positiveInteger(input.contact_id, "contact_id", invalidInputError);
-    const updates = requiredRecord(input.updates, "updates", invalidInputError);
+    const contactId = positiveInteger(input.contact_id, "contact_id", providerInputError);
+    const updates = requiredRecord(input.updates, "updates", providerInputError);
     const payload = await requestQuentnJson({
       context,
       path: `/contact/${contactId}`,
@@ -130,7 +134,7 @@ export const quentnActionHandlers: Record<string, QuentnActionHandler> = {
     };
   },
   async delete_contact(input, context) {
-    const contactId = positiveInteger(input.contact_id, "contact_id", invalidInputError);
+    const contactId = positiveInteger(input.contact_id, "contact_id", providerInputError);
     const payload = await requestQuentnJson({
       context,
       path: `/contact/${contactId}`,
@@ -144,18 +148,18 @@ export const quentnActionHandlers: Record<string, QuentnActionHandler> = {
       path: "/terms",
       method: "GET",
       query: compactObject({
-        offset: optionalIntegerLike(input.offset, "offset", invalidInputError),
-        limit: optionalIntegerLike(input.limit, "limit", invalidInputError),
+        offset: optionalIntegerLike(input.offset, "offset", providerInputError),
+        limit: optionalIntegerLike(input.limit, "limit", providerInputError),
       }),
     });
-    const raw = objectArray(payload, "Quentn terms", providerError);
+    const raw = objectArray(payload, "Quentn terms", providerResponseError);
     return {
       terms: raw.map(normalizeTerm),
       raw,
     };
   },
   async get_term(input, context) {
-    const termId = positiveInteger(input.term_id, "term_id", invalidInputError);
+    const termId = positiveInteger(input.term_id, "term_id", providerInputError);
     const payload = await requestQuentnJson({
       context,
       path: `/terms/${termId}`,
@@ -169,7 +173,7 @@ export const quentnActionHandlers: Record<string, QuentnActionHandler> = {
       path: "/terms",
       method: "POST",
       body: compactObject({
-        name: requiredString(input.name, "name", invalidInputError),
+        name: requiredString(input.name, "name", providerInputError),
         description: optionalRawString(input.description),
       }),
     });
@@ -180,7 +184,7 @@ export const quentnActionHandlers: Record<string, QuentnActionHandler> = {
     };
   },
   async update_term(input, context) {
-    const termId = positiveInteger(input.term_id, "term_id", invalidInputError);
+    const termId = positiveInteger(input.term_id, "term_id", providerInputError);
     const payload = await requestQuentnJson({
       context,
       path: `/terms/${termId}`,
@@ -193,7 +197,7 @@ export const quentnActionHandlers: Record<string, QuentnActionHandler> = {
     return normalizeSuccess(requirePayloadObject(payload, "Quentn update term"));
   },
   async delete_term(input, context) {
-    const termId = positiveInteger(input.term_id, "term_id", invalidInputError);
+    const termId = positiveInteger(input.term_id, "term_id", providerInputError);
     const payload = await requestQuentnJson({
       context,
       path: `/terms/${termId}`,
@@ -202,20 +206,20 @@ export const quentnActionHandlers: Record<string, QuentnActionHandler> = {
     return normalizeSuccess(requirePayloadObject(payload, "Quentn delete term"));
   },
   async list_contact_terms(input, context) {
-    const contactId = positiveInteger(input.contact_id, "contact_id", invalidInputError);
+    const contactId = positiveInteger(input.contact_id, "contact_id", providerInputError);
     const payload = await requestQuentnJson({
       context,
       path: `/contact/${contactId}/terms`,
       method: "GET",
     });
-    const raw = objectArray(payload, "Quentn contact terms", providerError);
+    const raw = objectArray(payload, "Quentn contact terms", providerResponseError);
     return {
       terms: raw.map(normalizeTerm),
       raw,
     };
   },
   async set_contact_terms(input, context) {
-    const contactId = positiveInteger(input.contact_id, "contact_id", invalidInputError);
+    const contactId = positiveInteger(input.contact_id, "contact_id", providerInputError);
     const termIds = readPositiveIntegerArray(input.term_ids, "term_ids");
     const payload = await requestQuentnJson({
       context,
@@ -226,7 +230,7 @@ export const quentnActionHandlers: Record<string, QuentnActionHandler> = {
     return normalizeSuccess(requirePayloadObject(payload, "Quentn set contact terms"));
   },
   async remove_contact_terms(input, context) {
-    const contactId = positiveInteger(input.contact_id, "contact_id", invalidInputError);
+    const contactId = positiveInteger(input.contact_id, "contact_id", providerInputError);
     const termIds = readPositiveIntegerArray(input.term_ids, "term_ids");
     const payload = await requestQuentnJson({
       context,
@@ -457,8 +461,8 @@ function readValidationCredential(input: { apiKey: string; values: Record<string
   serverId: string;
   apiBaseUrl: string;
 } {
-  const systemId = normalizeQuentnLabel(requiredCredentialValue(input.values.systemId, "systemId"));
-  const serverId = normalizeQuentnLabel(requiredCredentialValue(input.values.serverId, "serverId"));
+  const systemId = normalizeQuentnLabel(requiredInputString(input.values.systemId, "systemId"));
+  const serverId = normalizeQuentnLabel(requiredInputString(input.values.serverId, "serverId"));
   return {
     apiKey: input.apiKey,
     values: input.values,
@@ -472,10 +476,10 @@ function readStoredCredential(
   input: QuentnCredentialInput,
 ): Pick<QuentnActionContext, "apiKey" | "systemId" | "serverId" | "apiBaseUrl"> {
   const systemId = normalizeQuentnLabel(
-    optionalString(input.metadata?.systemId) ?? requiredCredentialValue(input.values.systemId, "systemId"),
+    optionalString(input.metadata?.systemId) ?? requiredInputString(input.values.systemId, "systemId"),
   );
   const serverId = normalizeQuentnLabel(
-    optionalString(input.metadata?.serverId) ?? requiredCredentialValue(input.values.serverId, "serverId"),
+    optionalString(input.metadata?.serverId) ?? requiredInputString(input.values.serverId, "serverId"),
   );
   return {
     apiKey: input.apiKey,
@@ -495,10 +499,6 @@ function readStoredApiBaseUrl(
     return normalizeQuentnApiBaseUrl(apiBaseUrl);
   }
   return buildQuentnApiBaseUrl(normalizedSystemId, normalizedServerId);
-}
-
-function requiredCredentialValue(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function normalizeQuentnLabel(value: string): string {
@@ -547,8 +547,8 @@ function normalizeQuentnApiBaseUrl(value: string): string {
 
 function buildListUsersQuery(input: Record<string, unknown>): Record<string, QuentnQueryValue> {
   return compactObject({
-    range: optionalIntegerLike(input.range, "range", invalidInputError),
-    limit: optionalIntegerLike(input.limit, "limit", invalidInputError),
+    range: optionalIntegerLike(input.range, "range", providerInputError),
+    limit: optionalIntegerLike(input.limit, "limit", providerInputError),
     sort: optionalString(input.sort),
   });
 }
@@ -565,18 +565,18 @@ function readStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     throw new ProviderRequestError(400, "string array input is required");
   }
-  return value.map((item) => requiredString(item, "array item", invalidInputError));
+  return value.map((item) => requiredString(item, "array item", providerInputError));
 }
 
 function readPositiveIntegerArray(value: unknown, fieldName: string): number[] {
   if (!Array.isArray(value) || value.length === 0) {
     throw new ProviderRequestError(400, `${fieldName} must be a non-empty integer array`);
   }
-  return value.map((item) => positiveInteger(item, fieldName, invalidInputError));
+  return value.map((item) => positiveInteger(item, fieldName, providerInputError));
 }
 
 function requirePayloadObject(value: unknown, name: string): Record<string, unknown> {
-  return requiredRecord(value, `${name} response`, providerError);
+  return requiredRecord(value, `${name} response`, providerResponseError);
 }
 
 function assertCreateContactHasRequiredFields(contact: Record<string, unknown>): void {
@@ -703,7 +703,7 @@ function readNullableInteger(value: unknown): number | null {
   if (value === null || value === undefined) {
     return null;
   }
-  return optionalIntegerLike(value, "integer", providerError) ?? null;
+  return optionalIntegerLike(value, "integer", providerResponseError) ?? null;
 }
 
 function readNullableString(value: unknown): string | null {
@@ -719,12 +719,4 @@ function buildUserLabel(user: ReturnType<typeof normalizeUser> | undefined): str
     return `${name} (${user.mail})`;
   }
   return name || user.mail || undefined;
-}
-
-function invalidInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

@@ -4,8 +4,10 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
+  basicAuthorizationHeader,
   defineProviderExecutors,
   defineProviderProxy,
   ProviderRequestError,
@@ -24,7 +26,7 @@ interface ProviderContext {
 
 type Handler = (input: Record<string, unknown>, context: ProviderContext) => Promise<unknown>;
 
-const handlers: Record<string, Handler> = {
+const handlers: ProviderActionHandlers<"helpdesk", Handler> = {
   list_tickets(input, context) {
     return executeHelpdeskAction(
       {
@@ -150,7 +152,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
       throw new ProviderRequestError(401, "Configure HelpDesk account ID and API key credentials first.");
     }
     headers.delete("x-connector-api-key");
-    headers.set("authorization", `Basic ${btoa(`${credential.values.accountId}:${credential.apiKey}`)}`);
+    headers.set("authorization", basicAuthorizationHeader(`${credential.values.accountId}:${credential.apiKey}`));
   },
 });
 

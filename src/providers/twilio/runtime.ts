@@ -1,9 +1,9 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
-import type { TwilioActionName } from "./actions.ts";
 
-import { optionalInteger, optionalString, requiredString } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { optionalInteger, optionalString, optionalStringArray } from "../../core/cast.ts";
+import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
 export const twilioApiBaseUrl: string = "https://api.twilio.com/2010-04-01";
 
@@ -51,9 +51,29 @@ interface TwilioMessagePayload {
   body?: unknown;
 }
 
+interface TwilioCallPayload {
+  sid?: unknown;
+  account_sid?: unknown;
+  status?: unknown;
+  direction?: unknown;
+  to?: unknown;
+  from?: unknown;
+  duration?: unknown;
+  price?: unknown;
+  price_unit?: unknown;
+  start_time?: unknown;
+  end_time?: unknown;
+  date_created?: unknown;
+  date_updated?: unknown;
+  phone_number_sid?: unknown;
+  parent_call_sid?: unknown;
+  queue_time?: unknown;
+  uri?: unknown;
+}
+
 type TwilioActionHandler = (input: Record<string, unknown>, context: TwilioActionContext) => Promise<unknown>;
 
-export const twilioActionHandlers: Record<TwilioActionName, TwilioActionHandler> = {
+export const twilioActionHandlers: ProviderActionHandlers<"twilio", TwilioActionHandler> = {
   get_account(_input, context) {
     return twilioGetAccount(context);
   },
@@ -69,6 +89,15 @@ export const twilioActionHandlers: Record<TwilioActionName, TwilioActionHandler>
   send_message(input, context) {
     return twilioSendMessage(input, context);
   },
+  list_calls(input, context) {
+    return twilioListCalls(input, context);
+  },
+  get_call(input, context) {
+    return twilioGetCall(input, context);
+  },
+  create_call(input, context) {
+    return twilioCreateCall(input, context);
+  },
 };
 
 export async function validateTwilioCredential(
@@ -76,8 +105,8 @@ export async function validateTwilioCredential(
   fetcher: ProviderFetch,
   signal?: AbortSignal,
 ): Promise<CredentialValidationResult> {
-  const accountSid = requireTwilioField(values.accountSid, "accountSid");
-  const authToken = requireTwilioField(values.authToken, "authToken");
+  const accountSid = requiredInputString(values.accountSid, "accountSid");
+  const authToken = requiredInputString(values.authToken, "authToken");
   const account = await twilioRequest<TwilioAccountPayload>({
     accountSid,
     authToken,
@@ -155,7 +184,7 @@ async function twilioListMessages(input: Record<string, unknown>, context: Twili
 }
 
 async function twilioGetMessage(input: Record<string, unknown>, context: TwilioActionContext): Promise<unknown> {
-  const messageSid = requireTwilioField(input.messageSid, "messageSid");
+  const messageSid = requiredInputString(input.messageSid, "messageSid");
   const payload = await twilioRequest<TwilioMessagePayload>({
     ...context,
     path: `/Accounts/${encodeURIComponent(context.accountSid)}/Messages/${encodeURIComponent(messageSid)}.json`,
@@ -166,9 +195,9 @@ async function twilioGetMessage(input: Record<string, unknown>, context: TwilioA
 
 async function twilioSendMessage(input: Record<string, unknown>, context: TwilioActionContext): Promise<unknown> {
   const body = new URLSearchParams();
-  body.append("To", requireTwilioField(input.to, "to"));
-  body.append("From", requireTwilioField(input.from, "from"));
-  body.append("Body", requireTwilioField(input.body, "body"));
+  body.append("To", requiredInputString(input.to, "to"));
+  body.append("From", requiredInputString(input.from, "from"));
+  body.append("Body", requiredInputString(input.body, "body"));
   const payload = await twilioRequest<TwilioMessagePayload>({
     ...context,
     method: "POST",
@@ -177,6 +206,80 @@ async function twilioSendMessage(input: Record<string, unknown>, context: Twilio
     phase: "execute",
   });
   return normalizeTwilioMessage(payload);
+}
+
+async function twilioListCalls(input: Record<string, unknown>, context: TwilioActionContext): Promise<unknown> {
+  const payload = await twilioRequest<{
+    calls?: TwilioCallPayload[];
+    page?: unknown;
+    page_size?: unknown;
+    next_page_uri?: unknown;
+    previous_page_uri?: unknown;
+  }>({
+    ...context,
+    path: `/Accounts/${encodeURIComponent(context.accountSid)}/Calls.json`,
+    query: [
+      ["To", optionalString(input.to)],
+      ["From", optionalString(input.from)],
+      ["Status", optionalString(input.status)],
+      ["StartTime>", optionalString(input.startTime)],
+      ["StartTime<", optionalString(input.endTime)],
+      ["ParentCallSid", optionalString(input.parentCallSid)],
+      ["PageSize", optionalPositiveInteger(input.pageSize, "pageSize")],
+      ["PageToken", optionalString(input.pageToken)],
+    ],
+    phase: "execute",
+  });
+
+  return {
+    calls: (payload.calls ?? []).map((call) => normalizeTwilioCall(call)),
+    page: optionalInteger(payload.page) ?? null,
+    pageSize: optionalInteger(payload.page_size) ?? null,
+    nextPageUri: optionalString(payload.next_page_uri) ?? null,
+    previousPageUri: optionalString(payload.previous_page_uri) ?? null,
+  };
+}
+
+async function twilioGetCall(input: Record<string, unknown>, context: TwilioActionContext): Promise<unknown> {
+  const callSid = requiredInputString(input.callSid, "callSid");
+  const payload = await twilioRequest<TwilioCallPayload>({
+    ...context,
+    path: `/Accounts/${encodeURIComponent(context.accountSid)}/Calls/${encodeURIComponent(callSid)}.json`,
+    phase: "execute",
+  });
+  return normalizeTwilioCall(payload);
+}
+
+async function twilioCreateCall(input: Record<string, unknown>, context: TwilioActionContext): Promise<unknown> {
+  const body = new URLSearchParams();
+  body.append("To", requiredInputString(input.to, "to"));
+  body.append("From", requiredInputString(input.from, "from"));
+
+  const url = optionalString(input.url);
+  const twiml = optionalString(input.twiml);
+  if ((url === undefined) === (twiml === undefined)) {
+    throw new ProviderRequestError(400, "Exactly one of url or twiml is required");
+  }
+  if (url !== undefined) body.append("Url", url);
+  if (twiml !== undefined) body.append("Twiml", twiml);
+
+  appendTwilioBodyField(body, "Method", optionalString(input.method));
+  appendTwilioBodyField(body, "FallbackUrl", optionalString(input.fallbackUrl));
+  appendTwilioBodyField(body, "FallbackMethod", optionalString(input.fallbackMethod));
+  appendTwilioBodyField(body, "StatusCallback", optionalString(input.statusCallback));
+  appendTwilioBodyField(body, "StatusCallbackMethod", optionalString(input.statusCallbackMethod));
+  for (const event of optionalStringArray(input.statusCallbackEvent) ?? []) {
+    body.append("StatusCallbackEvent", event);
+  }
+
+  const payload = await twilioRequest<TwilioCallPayload>({
+    ...context,
+    method: "POST",
+    path: `/Accounts/${encodeURIComponent(context.accountSid)}/Calls.json`,
+    body,
+    phase: "execute",
+  });
+  return normalizeTwilioCall(payload);
 }
 
 async function twilioRequest<T>(input: TwilioRequestInput): Promise<T> {
@@ -250,6 +353,32 @@ function normalizeTwilioMessage(payload: TwilioMessagePayload): Record<string, u
   };
 }
 
+function normalizeTwilioCall(payload: TwilioCallPayload): Record<string, unknown> {
+  return {
+    callSid: optionalString(payload.sid) ?? "",
+    accountSid: optionalString(payload.account_sid) ?? null,
+    status: optionalString(payload.status) ?? null,
+    direction: optionalString(payload.direction) ?? null,
+    to: optionalString(payload.to) ?? null,
+    from: optionalString(payload.from) ?? null,
+    duration: optionalString(payload.duration) ?? null,
+    price: optionalString(payload.price) ?? null,
+    priceUnit: optionalString(payload.price_unit) ?? null,
+    startTime: optionalString(payload.start_time) ?? null,
+    endTime: optionalString(payload.end_time) ?? null,
+    dateCreated: optionalString(payload.date_created) ?? null,
+    dateUpdated: optionalString(payload.date_updated) ?? null,
+    phoneNumberSid: optionalString(payload.phone_number_sid) ?? null,
+    parentCallSid: optionalString(payload.parent_call_sid) ?? null,
+    queueTime: optionalString(payload.queue_time) ?? null,
+    uri: optionalString(payload.uri) ?? null,
+  };
+}
+
+function appendTwilioBodyField(body: URLSearchParams, key: string, value: string | undefined): void {
+  if (value !== undefined) body.append(key, value);
+}
+
 async function readTwilioError(response: Response): Promise<string> {
   try {
     const payload = (await response.json()) as { message?: unknown; detail?: unknown; code?: unknown };
@@ -266,10 +395,6 @@ async function readTwilioError(response: Response): Promise<string> {
 
 export function buildTwilioAuthorizationHeader(accountSid: string, authToken: string): string {
   return `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString("base64")}`;
-}
-
-function requireTwilioField(value: unknown, name: string): string {
-  return requiredString(value, name, (message) => new ProviderRequestError(400, message));
 }
 
 function optionalPositiveInteger(value: unknown, fieldName: string): number | undefined {

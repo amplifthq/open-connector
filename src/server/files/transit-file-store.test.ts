@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contentDispositionForFileName, createTransitFileResponse } from "./transit-file-store.ts";
+import { contentDispositionForFileName, normalizeDescriptor, transitFileResponse } from "./transit-file-store.ts";
 
 describe("contentDispositionForFileName", () => {
   it("leaves an ASCII file name in the plain filename parameter", () => {
@@ -27,20 +27,35 @@ describe("contentDispositionForFileName", () => {
       "attachment; filename=\"chart_.pdf\"; filename*=UTF-8''chart%F0%9F%93%8A.pdf",
     );
   });
+
+  it("repairs a lone surrogate instead of failing while encoding the name", () => {
+    // A multipart `filename*` with a UTF-16 charset can carry an unpaired
+    // surrogate; `encodeURIComponent` throws on it, which would fail every
+    // download of the file for as long as its metadata lives.
+    expect(contentDispositionForFileName("\ud800.pdf")).toBe(
+      "attachment; filename=\"_.pdf\"; filename*=UTF-8''%EF%BF%BD.pdf",
+    );
+  });
 });
 
-describe("createTransitFileResponse", () => {
-  it("builds a response for a file whose name is outside Latin-1", async () => {
-    const response = createTransitFileResponse({
-      file: new File(["hello"], "发票.pdf", { type: "application/pdf" }),
-      sizeBytes: 5,
-      name: "发票.pdf",
+describe("normalizeDescriptor", () => {
+  it("repairs a lone surrogate in a stored file name", () => {
+    expect(normalizeDescriptor({ name: "\ud800.pdf", mimeType: "application/pdf" })).toEqual({
+      name: "\ufffd.pdf",
       mimeType: "application/pdf",
     });
+  });
+});
+
+describe("transitFileResponse", () => {
+  it("builds a response for a file whose name is outside Latin-1", async () => {
+    const response = transitFileResponse("hello", { name: "发票.pdf", mimeType: "application/pdf", sizeBytes: 5 });
 
     expect(response.headers.get("content-disposition")).toBe(
       "attachment; filename=\"__.pdf\"; filename*=UTF-8''%E5%8F%91%E7%A5%A8.pdf",
     );
+    expect(response.headers.get("content-type")).toBe("application/pdf");
+    expect(response.headers.get("content-length")).toBe("5");
     expect(await response.text()).toBe("hello");
   });
 });

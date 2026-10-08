@@ -71,11 +71,10 @@ const pagedAccessRequestsOutputSchema = s.object("A normalized page of Lumos acc
   raw: s.looseObject("The raw Lumos response payload."),
 });
 
-export type LumosActionName = "list_appstore_apps" | "get_appstore_app" | "list_access_requests" | "get_access_request";
-
 export const lumosActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_appstore_apps",
+    operationType: "read",
     description: "List AppStore apps in Lumos with optional search and visibility filters.",
     inputSchema: s.object(
       "Input parameters for listing Lumos AppStore apps.",
@@ -97,6 +96,7 @@ export const lumosActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_appstore_app",
+    operationType: "read",
     description: "Get a single AppStore app from Lumos by app ID.",
     inputSchema: s.object(
       "Input parameters for getting a Lumos AppStore app.",
@@ -112,6 +112,7 @@ export const lumosActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_access_requests",
+    operationType: "read",
     description: "List access requests in Lumos with optional user and status filters.",
     inputSchema: s.object(
       "Input parameters for listing Lumos access requests.",
@@ -137,6 +138,7 @@ export const lumosActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_access_request",
+    operationType: "read",
     description: "Get a single Lumos access request by ID.",
     inputSchema: s.object(
       "Input parameters for getting a Lumos access request.",

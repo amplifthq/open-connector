@@ -1,7 +1,13 @@
-import type { ZylvieActionName } from "./actions.ts";
+import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  createProviderTimeout,
+  getProviderActionHandler,
+  ProviderRequestError,
+  providerUserAgent,
+  requiredResponseRecord,
+} from "../provider-runtime.ts";
 
 export interface ZylvieCredentialCheck {
   providerAccountId?: string;
@@ -10,20 +16,10 @@ export interface ZylvieCredentialCheck {
   providerMetadata: Record<string, unknown>;
 }
 
-interface ApiKeyProviderActionInput {
-  apiKey: string;
-  actionName: string;
-  input: Record<string, unknown>;
-  providerMetadata?: Record<string, unknown>;
-  values?: Record<string, string>;
-}
-
 type RequestPhase = "validate" | "execute";
-type ActionHandler = (input: ApiKeyProviderActionInput, fetcher: typeof fetch) => Promise<unknown>;
+type ActionHandler = (input: ApiKeyActionRequest, fetcher: typeof fetch) => Promise<unknown>;
 
 export const zylvieApiBaseUrl = "https://api.zylvie.com";
-
-const requestTimeoutMs = 30_000;
 
 const productFieldMap = {
   title: "title",
@@ -72,7 +68,7 @@ const couponFieldMap = {
   requiredSubscriptionProductId: "requires_subscription_product",
 } as const;
 
-const actionHandlers: Record<string, ActionHandler> = {
+const actionHandlers: ProviderActionHandlers<"zylvie", ActionHandler> = {
   get_current_user(input, fetcher) {
     return requestZylvieJson({
       apiKey: input.apiKey,
@@ -167,7 +163,7 @@ const actionHandlers: Record<string, ActionHandler> = {
     }
     return { subscriptions: payload };
   },
-} satisfies Record<ZylvieActionName, ActionHandler>;
+};
 
 export async function validateZylvieCredential(
   input: Record<string, string>,
@@ -180,7 +176,7 @@ export async function validateZylvieCredential(
     fetcher,
     phase: "validate",
   });
-  const user = requireRecord(payload, "Zylvie current-user response");
+  const user = requiredResponseRecord(payload, "Zylvie current-user response");
   const brand = optionalString(user.brand)?.trim();
   const email = optionalString(user.email)?.trim();
 
@@ -194,8 +190,8 @@ export async function validateZylvieCredential(
   };
 }
 
-export async function executeZylvieAction(input: ApiKeyProviderActionInput, fetcher: typeof fetch): Promise<unknown> {
-  const handler = actionHandlers[input.actionName as ZylvieActionName];
+export async function executeZylvieAction(input: ApiKeyActionRequest, fetcher: typeof fetch): Promise<unknown> {
+  const handler = getProviderActionHandler(actionHandlers, input.actionName);
   if (!handler) {
     throw new ProviderRequestError(500, `Zylvie action is not implemented yet: ${input.actionName}`);
   }
@@ -215,7 +211,7 @@ export async function requestZylvieJson(input: {
   for (const [key, value] of Object.entries(input.query ?? {})) {
     url.searchParams.set(key, value);
   }
-  const timeoutHandle = createProviderTimeout(undefined, requestTimeoutMs);
+  const timeoutHandle = createProviderTimeout(undefined);
 
   try {
     const response = await input.fetcher(url, {
@@ -251,7 +247,7 @@ export async function requestZylvieJson(input: {
 }
 
 async function mutation(
-  input: ApiKeyProviderActionInput,
+  input: ApiKeyActionRequest,
   fetcher: typeof fetch,
   path: string,
   method: "POST" | "PUT" | "DELETE",
@@ -294,7 +290,7 @@ function createRequestError(response: Response, payload: unknown, phase: Request
     return new ProviderRequestError(400, message);
   }
   if (phase === "execute" && (response.status === 401 || response.status === 403)) {
-    return new ProviderRequestError(409, message);
+    return new ProviderRequestError(401, message);
   }
   if ([400, 404, 409, 422].includes(response.status)) {
     return new ProviderRequestError(400, message);
@@ -317,14 +313,6 @@ function extractErrorMessage(payload: unknown) {
     }
   }
   return undefined;
-}
-
-function requireRecord(value: unknown, label: string) {
-  const record = optionalRecord(value);
-  if (!record) {
-    throw new ProviderRequestError(502, `${label} must be an object`);
-  }
-  return record;
 }
 
 function requireString(value: unknown, fieldName: string) {

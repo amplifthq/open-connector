@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
-import type { WejamAiActionName } from "./actions.ts";
 
 import { compactObject, objectArray, optionalRecord, optionalString } from "../../core/cast.ts";
 import { queryParams } from "../../core/request.ts";
@@ -16,14 +16,13 @@ export const wejamAiApiBaseUrl: string = "https://api.wejam.ai";
 export const wejamAiDataExportPathPrefix: string = "/api/v1/data-exports";
 export const wejamAiValidationPath: string = `${wejamAiDataExportPathPrefix}/users`;
 
-const wejamAiDefaultRequestTimeoutMs = 30_000;
 const wejamAiExportResourceSet = new Set<string>(wejamAiExportResourceValues);
 
 type WejamAiPhase = "validate" | "execute";
 type WejamAiActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type WejamAiActionHandler = (input: Record<string, unknown>, context: WejamAiActionContext) => Promise<unknown>;
 
-export const wejamAiActionHandlers: Record<WejamAiActionName, WejamAiActionHandler> = {
+export const wejamAiActionHandlers: ProviderActionHandlers<"wejam_ai", WejamAiActionHandler> = {
   async export_data(input, context) {
     const resource = readExportResource(input.resource);
     const payload = await requestWejamAiJson({
@@ -87,7 +86,7 @@ async function requestWejamAiJson(input: {
   signal?: AbortSignal;
   query?: URLSearchParams;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, wejamAiDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
 
   let response: Response;
   let payload: unknown;

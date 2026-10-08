@@ -1,20 +1,23 @@
 import type { CredentialValidationResult, ExecutionResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredString, requiredStringArray } from "../../core/cast.ts";
+import { compactObject, optionalRecord, optionalString, requiredStringArray } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderJsonBody,
+  requiredInputString,
+  requiredResponseRecord,
   toProviderExecutionError,
 } from "../provider-runtime.ts";
 
 export const sellerSpriteApiBaseUrl = "https://api.sellersprite.com";
 
 const sellerSpriteValidationPath = "/v1/visits";
-const sellerSpriteRequestTimeoutMs = 30_000;
 const sellerSpriteMarketplaces = new Set(["US", "JP", "UK", "DE", "FR", "IT", "ES", "CA", "IN"]);
 const competitorStringFields: readonly string[] = ["brand", "sellerName", "nodeIdPath", "keyword"];
 const researchStringFields: readonly string[] = [
@@ -56,16 +59,10 @@ interface SellerSpriteErrorInput {
   phase: SellerSpritePhase;
 }
 
-class SellerSpriteRequestError extends ProviderRequestError {
-  readonly code: string;
-
-  constructor(code: string, status: number, message: string, details?: unknown) {
-    super(status, message, details);
-    this.code = code;
-  }
-}
-
-export const sellerSpriteActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const sellerSpriteActionHandlers: ProviderActionHandlers<
+  "sellersprite",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   async get_api_usage(_input, context): Promise<unknown> {
     const data = await requestSellerSpriteData({
       path: sellerSpriteValidationPath,
@@ -82,7 +79,7 @@ export const sellerSpriteActionHandlers: Record<string, ProviderRuntimeHandler<A
       context,
       phase: "execute",
     });
-    const detail = requireResponseObject(data, "SellerSprite ASIN detail");
+    const detail = requiredResponseRecord(data, "SellerSprite ASIN detail");
     requireResponseString(detail.asin, "data.asin");
     return detail;
   },
@@ -144,24 +141,11 @@ export async function validateSellerSpriteCredential(
 }
 
 export function toSellerSpriteExecutionError(error: unknown): ExecutionResult {
-  if (error instanceof SellerSpriteRequestError) {
-    return {
-      ok: false,
-      error: {
-        code: error.code,
-        message: error.message,
-        details: {
-          status: error.status,
-          details: error.details,
-        },
-      },
-    };
-  }
   return toProviderExecutionError(error, "SellerSprite request failed");
 }
 
 async function requestSellerSpriteData(input: SellerSpriteRequest): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, sellerSpriteRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   let response: Response;
   let payload: unknown;
 
@@ -267,15 +251,15 @@ function normalizeOptionalStrings(
 }
 
 function normalizeOptionalString(value: unknown, fieldName: string): string | undefined {
-  return value === undefined ? undefined : requireInputString(value, fieldName);
+  return value === undefined ? undefined : requiredInputString(value, fieldName);
 }
 
 function normalizeOptionalStringArray(value: unknown, fieldName: string): string[] | undefined {
   if (value === undefined) {
     return undefined;
   }
-  return requiredStringArray(value, fieldName, requestError).map((item, index) =>
-    requireInputString(item, `${fieldName}[${index}]`),
+  return requiredStringArray(value, fieldName, providerInputError).map((item, index) =>
+    requiredInputString(item, `${fieldName}[${index}]`),
   );
 }
 
@@ -283,14 +267,16 @@ function normalizeOptionalAsins(value: unknown): string[] | undefined {
   if (value === undefined) {
     return undefined;
   }
-  return requiredStringArray(value, "asins", requestError).map((item, index) => requireAsin(item, `asins[${index}]`));
+  return requiredStringArray(value, "asins", providerInputError).map((item, index) =>
+    requireAsin(item, `asins[${index}]`),
+  );
 }
 
 function normalizeOptionalMonth(value: unknown): string | undefined {
   if (value === undefined) {
     return undefined;
   }
-  const month = requireInputString(value, "month");
+  const month = requiredInputString(value, "month");
   if (!isValidMonth(month)) {
     throw new ProviderRequestError(400, "month must use YYYYMM format");
   }
@@ -316,7 +302,7 @@ function normalizeOptionalOrder(value: unknown): Record<string, unknown> | undef
 }
 
 function requireMarketplace(value: unknown): string {
-  const marketplace = requireInputString(value, "marketplace");
+  const marketplace = requiredInputString(value, "marketplace");
   if (!sellerSpriteMarketplaces.has(marketplace)) {
     throw new ProviderRequestError(400, "marketplace is not supported by SellerSprite");
   }
@@ -324,19 +310,11 @@ function requireMarketplace(value: unknown): string {
 }
 
 function requireAsin(value: unknown, fieldName: string): string {
-  const asin = requireInputString(value, fieldName).toUpperCase();
+  const asin = requiredInputString(value, fieldName).toUpperCase();
   if (!isAsin(asin)) {
     throw new ProviderRequestError(400, `${fieldName} must contain 10 ASCII letters or digits`);
   }
   return asin;
-}
-
-function requireInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, requestError);
-}
-
-function requestError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function asSellerSpriteEnvelope(value: unknown): SellerSpriteEnvelope {
@@ -359,42 +337,37 @@ function createSellerSpriteError(input: SellerSpriteErrorInput): ProviderRequest
   };
 
   if (input.status === 429 || input.code === "ERROR_VISIT_MAX" || isRateLimitMessage(message)) {
-    return new SellerSpriteRequestError("rate_limited", 429, message, {
-      ...details,
-      reason: input.code === "ERROR_VISIT_MAX" ? "quota_exhausted" : "rate_limit",
-    });
-  }
-
-  if (input.code === "ERROR_SECRET_KEY_OVERDUE") {
-    return new SellerSpriteRequestError("credential_expired", 401, message, details);
-  }
-
-  if (input.code === "ERROR_SECRET_KEY" || input.code === "ERROR_SECRET_KEY_INVALID" || input.status === 401) {
-    return new SellerSpriteRequestError(
-      input.phase === "validate" ? "invalid_input" : "credential_expired",
-      input.phase === "validate" ? 400 : 401,
-      message,
-      details,
-    );
-  }
-
-  if (input.code === "ERROR_AUTH_ERROR" || input.status === 403 || isModuleAccessMessage(message)) {
-    return new SellerSpriteRequestError(
-      input.phase === "validate" ? "invalid_input" : "scope_missing",
-      input.phase === "validate" ? 400 : 403,
+    return new ProviderRequestError(
+      429,
       message,
       {
         ...details,
-        reason: "module_not_purchased_or_unavailable",
+        reason: input.code === "ERROR_VISIT_MAX" ? "quota_exhausted" : "rate_limit",
       },
+      "rate_limited",
     );
   }
 
-  if (input.code === "ERROR_PARAM" || (input.status >= 400 && input.status < 500)) {
-    return new SellerSpriteRequestError("invalid_input", 400, message, details);
+  if (input.code === "ERROR_SECRET_KEY_OVERDUE") {
+    return new ProviderRequestError(401, message, details);
   }
 
-  return new SellerSpriteRequestError("provider_error", input.status >= 500 ? input.status : 502, message, details);
+  if (input.code === "ERROR_SECRET_KEY" || input.code === "ERROR_SECRET_KEY_INVALID" || input.status === 401) {
+    return new ProviderRequestError(input.phase === "validate" ? 400 : 401, message, details);
+  }
+
+  if (input.code === "ERROR_AUTH_ERROR" || input.status === 403 || isModuleAccessMessage(message)) {
+    return new ProviderRequestError(input.phase === "validate" ? 400 : 403, message, {
+      ...details,
+      reason: "module_not_purchased_or_unavailable",
+    });
+  }
+
+  if (input.code === "ERROR_PARAM" || (input.status >= 400 && input.status < 500)) {
+    return new ProviderRequestError(400, message, details, "invalid_input");
+  }
+
+  return new ProviderRequestError(input.status >= 500 ? input.status : 502, message, details, "provider_error");
 }
 
 function isRateLimitMessage(message: string): boolean {
@@ -419,7 +392,7 @@ function isModuleAccessMessage(message: string): boolean {
 }
 
 function normalizeProductPage(value: unknown): Record<string, unknown> {
-  const data = requireResponseObject(value, "SellerSprite product page");
+  const data = requiredResponseRecord(value, "SellerSprite product page");
   return {
     ...data,
     pages: requireResponseInteger(data.pages, "data.pages"),
@@ -431,7 +404,7 @@ function normalizeProductPage(value: unknown): Record<string, unknown> {
 }
 
 function normalizeReverseKeywords(value: unknown): Record<string, unknown> {
-  const data = requireResponseObject(value, "SellerSprite reverse keyword page");
+  const data = requiredResponseRecord(value, "SellerSprite reverse keyword page");
   return {
     ...data,
     marketplace: requireResponseString(data.marketplace, "data.marketplace"),
@@ -442,19 +415,11 @@ function normalizeReverseKeywords(value: unknown): Record<string, unknown> {
   };
 }
 
-function requireResponseObject(value: unknown, fieldName: string): Record<string, unknown> {
-  const object = optionalRecord(value);
-  if (!object) {
-    throw new ProviderRequestError(502, `${fieldName} must be an object`);
-  }
-  return object;
-}
-
 function requireResponseObjectArray(value: unknown, fieldName: string): Array<Record<string, unknown>> {
   if (!Array.isArray(value)) {
     throw new ProviderRequestError(502, `${fieldName} must be an array`);
   }
-  return value.map((item, index) => requireResponseObject(item, `${fieldName}[${index}]`));
+  return value.map((item, index) => requiredResponseRecord(item, `${fieldName}[${index}]`));
 }
 
 function requireResponseString(value: unknown, fieldName: string): string {

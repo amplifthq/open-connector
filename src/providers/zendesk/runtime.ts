@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { ZendeskActionName } from "./actions.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -22,7 +22,6 @@ import {
 } from "../provider-runtime.ts";
 
 const zendeskCurrentUserPath = "/api/v2/users/me.json";
-const zendeskRequestTimeoutMs = 30_000;
 
 type ZendeskActionContext =
   | {
@@ -54,7 +53,7 @@ interface ZendeskListPayload {
   [key: string]: unknown;
 }
 
-export const zendeskActionHandlers: Record<ZendeskActionName, ZendeskActionHandler> = {
+export const zendeskActionHandlers: ProviderActionHandlers<"zendesk", ZendeskActionHandler> = {
   async get_current_user(_input, context) {
     const payload = await requestZendeskJson<{ user?: unknown }>({
       context,
@@ -278,7 +277,7 @@ async function requestZendeskJson<T>(input: {
   phase: "validate" | "execute";
   notFoundAsInvalidInput?: boolean;
 }): Promise<T> {
-  const timeout = createProviderTimeout(input.context.signal, zendeskRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const response = await input.context.fetcher(buildZendeskUrl(input.context.baseUrl, input.path, input.query), {
       method: input.method ?? "GET",
@@ -456,7 +455,8 @@ function normalizeZendeskPagination(payload: ZendeskListPayload): Record<string,
   return {
     count: nullableInteger(payload.count),
     hasMore:
-      nullableBoolean(meta?.has_more) ?? Boolean(optionalString(payload.next_page) ?? optionalString(links?.next)),
+      optionalBooleanOrNull(meta?.has_more) ??
+      Boolean(optionalString(payload.next_page) ?? optionalString(links?.next)),
     nextPage: nullableString(payload.next_page) ?? nullableString(links?.next),
     previousPage: nullableString(payload.previous_page) ?? nullableString(links?.prev),
     afterCursor: nullableString(meta?.after_cursor),
@@ -514,7 +514,7 @@ function normalizeZendeskComment(value: unknown, fieldName = "comment"): Record<
     body: nullableString(record.body),
     htmlBody: nullableString(record.html_body),
     plainBody: nullableString(record.plain_body),
-    public: nullableBoolean(record.public),
+    public: optionalBooleanOrNull(record.public),
     createdAt: nullableString(record.created_at),
     attachments: Array.isArray(record.attachments)
       ? record.attachments.map((item, index) => normalizeZendeskAttachment(item, `${fieldName}.attachments[${index}]`))
@@ -552,7 +552,7 @@ function normalizeZendeskUser(
     name: nullableString(record.name),
     email: nullableString(record.email),
     role: nullableString(record.role),
-    active: nullableBoolean(record.active),
+    active: optionalBooleanOrNull(record.active),
     organizationId: nullableInteger(record.organization_id),
     externalId: nullableString(record.external_id),
     phone: nullableString(record.phone),
@@ -576,8 +576,8 @@ function normalizeZendeskOrganization(value: unknown, fieldName = "organization"
     createdAt: nullableString(record.created_at),
     updatedAt: nullableString(record.updated_at),
     groupId: nullableInteger(record.group_id),
-    sharedTickets: nullableBoolean(record.shared_tickets),
-    sharedComments: nullableBoolean(record.shared_comments),
+    sharedTickets: optionalBooleanOrNull(record.shared_tickets),
+    sharedComments: optionalBooleanOrNull(record.shared_comments),
     domainNames: readRawStringArray(record.domain_names),
     tags: readRawStringArray(record.tags),
     raw: record,
@@ -633,10 +633,6 @@ function nullableString(value: unknown): string | null {
 
 function nullableInteger(value: unknown): number | null {
   return optionalIntegerOrNull(value);
-}
-
-function nullableBoolean(value: unknown): boolean | null {
-  return optionalBooleanOrNull(value);
 }
 
 function stringifyArrayQuery(value: unknown): string[] | undefined {

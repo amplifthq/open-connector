@@ -4,6 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { defineProviderExecutors, defineProviderProxy, requireApiKeyCredential } from "../provider-runtime.ts";
 import { executeSorftimeAction, sorftimeApiBaseUrl, validateSorftimeCredential } from "./runtime.ts";
@@ -19,7 +20,7 @@ interface ProviderContext {
 
 type Handler = (input: Record<string, unknown>, context: ProviderContext) => Promise<unknown>;
 
-const handlers: Record<string, Handler> = {
+const handlers: ProviderActionHandlers<"sorftime", Handler> = {
   get_product_details(input, context) {
     return executeSorftimeAction("get_product_details", input, context.apiKey, context.fetcher);
   },
@@ -88,6 +89,36 @@ const handlers: Record<string, Handler> = {
   },
   get_asin_keyword_rankings(input, context) {
     return executeSorftimeAction("get_asin_keyword_rankings", input, context.apiKey, context.fetcher);
+  },
+  get_walmart_category_report(input, context) {
+    return executeSorftimeAction("get_walmart_category_report", input, context.apiKey, context.fetcher);
+  },
+  get_walmart_product_details(input, context) {
+    return executeSorftimeAction("get_walmart_product_details", input, context.apiKey, context.fetcher);
+  },
+  get_walmart_product_trend(input, context) {
+    return executeSorftimeAction("get_walmart_product_trend", input, context.apiKey, context.fetcher);
+  },
+  get_walmart_product_sales_history(input, context) {
+    return executeSorftimeAction("get_walmart_product_sales_history", input, context.apiKey, context.fetcher);
+  },
+  search_walmart_keywords(input, context) {
+    return executeSorftimeAction("search_walmart_keywords", input, context.apiKey, context.fetcher);
+  },
+  search_walmart_keywords_by_name(input, context) {
+    return executeSorftimeAction("search_walmart_keywords_by_name", input, context.apiKey, context.fetcher);
+  },
+  get_walmart_keyword_search_results(input, context) {
+    return executeSorftimeAction("get_walmart_keyword_search_results", input, context.apiKey, context.fetcher);
+  },
+  get_walmart_keyword_details(input, context) {
+    return executeSorftimeAction("get_walmart_keyword_details", input, context.apiKey, context.fetcher);
+  },
+  reverse_lookup_walmart_product_keywords(input, context) {
+    return executeSorftimeAction("reverse_lookup_walmart_product_keywords", input, context.apiKey, context.fetcher);
+  },
+  extend_walmart_keywords(input, context) {
+    return executeSorftimeAction("extend_walmart_keywords", input, context.apiKey, context.fetcher);
   },
 };
 

@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
-import type { TaniumActionName } from "./actions.ts";
 
 import { createHash } from "node:crypto";
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -8,13 +8,14 @@ import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/r
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
+  requiredResponseRecord,
 } from "../provider-runtime.ts";
 
 export const taniumGatewayPath = "/plugin/products/gateway/graphql";
 
-const taniumRequestTimeoutMs = 30_000;
 const taniumValidationOperationName = "OomolConnectValidation";
 const taniumValidationQuery = "query OomolConnectValidation { __typename }";
 
@@ -36,13 +37,13 @@ interface TaniumGraphqlPayload {
   message?: unknown;
 }
 
-export const taniumActionHandlers: Record<TaniumActionName, TaniumActionHandler> = {
+export const taniumActionHandlers: ProviderActionHandlers<"tanium", TaniumActionHandler> = {
   async execute_graphql(input, context) {
     const payload = await requestTaniumGraphql({
       gatewayUrl: context.gatewayUrl,
       apiKey: context.apiKey,
       operationName: optionalString(input.operationName),
-      query: requiredString(input.query, "query", requestInputError),
+      query: requiredString(input.query, "query", providerInputError),
       variables: optionalRecord(input.variables),
       phase: "execute",
       fetcher: context.fetcher,
@@ -58,7 +59,7 @@ export async function validateTaniumCredential(
   fetcher: ProviderFetch,
   signal?: AbortSignal,
 ): Promise<CredentialValidationResult> {
-  const apiKey = requiredString(input.apiKey, "apiKey", requestInputError);
+  const apiKey = requiredString(input.apiKey, "apiKey", providerInputError);
   const gatewayUrl = normalizeTaniumGatewayUrl(input.gatewayUrl);
   const payload = await requestTaniumGraphql({
     gatewayUrl,
@@ -124,7 +125,7 @@ export function normalizeTaniumGatewayUrl(
 
   return assertPublicHttpUrl(url.toString(), {
     fieldName: "gatewayUrl",
-    createError: requestInputError,
+    createError: providerInputError,
     allowPrivateNetwork,
   }).toString();
 }
@@ -139,7 +140,7 @@ async function requestTaniumGraphql(input: {
   operationName?: string;
   variables?: Record<string, unknown>;
 }): Promise<TaniumGraphqlPayload> {
-  const timeout = createProviderTimeout(input.signal, taniumRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const response = await input.fetcher(input.gatewayUrl, {
       method: "POST",
@@ -208,7 +209,7 @@ function normalizeTaniumGraphqlResult(payload: TaniumGraphqlPayload): Record<str
       ? null
       : payload.data === undefined
         ? undefined
-        : expectObject(payload.data, "Tanium Gateway data");
+        : requiredResponseRecord(payload.data, "Tanium Gateway data");
   const errors = readGraphqlErrors(payload.errors);
   const extensions = optionalRecord(payload.extensions);
   const message = summarizeGraphqlErrors(errors);
@@ -303,18 +304,6 @@ function readGraphqlErrorCode(error: Record<string, unknown>): string | undefine
   return optionalString(extensions?.code);
 }
 
-function expectObject(value: unknown, label: string): Record<string, unknown> {
-  const record = optionalRecord(value);
-  if (!record) {
-    throw new ProviderRequestError(502, `${label} must be an object`);
-  }
-  return record;
-}
-
 function buildTokenFingerprint(apiKey: string): string {
   return createHash("sha256").update(apiKey).digest("hex").slice(0, 12);
-}
-
-function requestInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

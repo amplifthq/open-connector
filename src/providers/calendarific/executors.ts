@@ -1,23 +1,23 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
   defineApiKeyProviderExecutors,
-  isAbortLikeError,
+  defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 const service = "calendarific";
 const calendarificApiBaseUrl = "https://calendarific.com/api/v2";
-const requestTimeoutMs = 30_000;
 
 type CalendarificPhase = "validate" | "execute";
 type CalendarificActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-const calendarificActionHandlers: Record<string, CalendarificActionHandler> = {
+const calendarificActionHandlers: ProviderActionHandlers<"calendarific", CalendarificActionHandler> = {
   async list_supported_countries(_input, context) {
     const payload = await requestCalendarificJson({
       path: "/countries",
@@ -76,6 +76,16 @@ const calendarificActionHandlers: Record<string, CalendarificActionHandler> = {
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, calendarificActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: calendarificApiBaseUrl,
+  auth: { type: "api_key_query", name: "api_key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestCalendarificJson({
@@ -114,16 +124,14 @@ async function requestCalendarificJson(input: {
   context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
   phase: CalendarificPhase;
 }): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(input.context.signal, requestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "Calendarific" }, async (signal) => {
     const response = await input.context.fetcher(buildCalendarificUrl(input.path, input.context.apiKey, input.params), {
       method: "GET",
       headers: {
         accept: "application/json",
         "user-agent": providerUserAgent,
       },
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readCalendarificPayload(response);
 
@@ -136,20 +144,7 @@ async function requestCalendarificJson(input: {
       throw new ProviderRequestError(502, "Calendarific returned an invalid payload");
     }
     return payloadRecord;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Calendarific request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Calendarific request failed: ${error.message}` : "Calendarific request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildCalendarificUrl(path: string, apiKey: string, params: Record<string, string | undefined>): URL {

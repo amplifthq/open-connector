@@ -17,11 +17,10 @@ const graphQLErrorSchema = s.looseObject("One GraphQL error returned by Contentf
   extensions: s.looseObject("Provider-specific GraphQL error extensions."),
 });
 
-export type ContentfulGraphqlActionName = "execute_query";
-
 export const contentfulGraphqlActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "execute_query",
+    operationType: "read",
     description: "Execute a Contentful GraphQL Content API query against a space and environment.",
     requiredScopes: [],
     inputSchema: s.object(

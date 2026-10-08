@@ -1,11 +1,12 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { BreatheActionName } from "./actions.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -13,12 +14,11 @@ import {
 
 const service = "breathe";
 const breatheApiBaseUrl = "https://api.breathehr.com/v1";
-const breatheDefaultRequestTimeoutMs = 30_000;
 
 type BreathePhase = "validate" | "execute";
 type BreatheActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
-export const breatheActionHandlers: Record<BreatheActionName, BreatheActionHandler> = {
+export const breatheActionHandlers: ProviderActionHandlers<"breathe", BreatheActionHandler> = {
   async list_employees(input, context) {
     const payload = await requestBreatheJson({
       path: "/employees",
@@ -96,6 +96,16 @@ export const breatheActionHandlers: Record<BreatheActionName, BreatheActionHandl
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, breatheActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: breatheApiBaseUrl,
+  auth: { type: "api_key_header", name: "X-API-KEY" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestBreatheJson({
@@ -136,7 +146,7 @@ async function requestBreatheJson(input: {
   params: Record<string, string | undefined>;
   phase: BreathePhase;
 }): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(input.context.signal, breatheDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   let response: Response;
   let payload: unknown;
 

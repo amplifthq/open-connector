@@ -35,7 +35,6 @@ function apiKeyCredential(): Extract<ResolvedCredential, { authType: "api_key" }
     metadata: { accountId: "account-1" },
   };
 }
-
 afterEach(() => {
   setDefaultGuardedFetchDnsLookup(null);
   vi.unstubAllGlobals();
@@ -157,7 +156,6 @@ describe("Cloudflare Browser Run OAuth", () => {
       expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer api-key-token" }) }),
     );
   });
-
   it("requires an explicit accessible account when OAuth can reach more than one", async () => {
     const fetch = vi.fn(async () => Response.json({ success: true, result: "# OpenMeld" }));
     vi.stubGlobal("fetch", fetch);
@@ -184,5 +182,20 @@ describe("Cloudflare Browser Run OAuth", () => {
     });
     expect(selectedAccount).toEqual({ ok: true, output: { markdown: "# OpenMeld" } });
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("directs OAuth callers to list_accounts when no Cloudflare account is selected", async () => {
+    const result = await executors["cloudflare_browser_rendering.get_markdown"]!(
+      { url: "https://openmeld.ai" },
+      executionContext(oauthCredential({})),
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        message:
+          "accountId is required for this Cloudflare Browser Run action. Use list_accounts to find an accessible Cloudflare account ID.",
+      },
+    });
   });
 });

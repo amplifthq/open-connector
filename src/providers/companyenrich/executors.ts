@@ -1,9 +1,14 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { CompanyenrichActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "companyenrich";
 const companyenrichApiBaseUrl = "https://api.companyenrich.com";
@@ -19,7 +24,7 @@ interface CompanyenrichRequest {
   body?: Record<string, unknown>;
 }
 
-export const companyenrichActionHandlers: Record<CompanyenrichActionName, CompanyenrichActionHandler> = {
+export const companyenrichActionHandlers: ProviderActionHandlers<"companyenrich", CompanyenrichActionHandler> = {
   async get_current_user(_input, context) {
     return {
       user: asProviderObject(await requestCompanyenrich({ path: "/me", context }), "current user"),
@@ -97,6 +102,13 @@ export const companyenrichActionHandlers: Record<CompanyenrichActionName, Compan
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, companyenrichActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: companyenrichApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

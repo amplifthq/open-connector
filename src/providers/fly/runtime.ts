@@ -1,17 +1,17 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { FlyActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import { encodePathSegment, jsonObject } from "../../core/request.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { isAbortLikeError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const flyApiBaseUrl = "https://api.machines.dev/v1/";
+export const flyApiBaseUrl = "https://api.machines.dev/v1/";
 const flyValidationPath = "tokens/current";
 
 type FlyRequestPhase = "validate" | "execute";
 type FlyQueryValue = string | number | boolean | undefined;
 
-export const flyActionHandlers: Record<FlyActionName, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const flyActionHandlers: ProviderActionHandlers<"fly", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   list_apps(input, context) {
     return requestFlyJson({
       ...requestContext(context),
@@ -334,8 +334,4 @@ function requiredActionString(value: unknown, fieldName: string): string {
     throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return result;
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
 }

@@ -5,24 +5,19 @@
     "catalogOnly": "Catalog only",
     "clear": "Clear",
     "close": "Close",
-    "connected": "Connected",
-    "copied": "Copied {{label}}",
-    "copy": "Copy {{label}}",
     "credential": "Credential",
     "currentSelection": "Current selection",
-    "docs": "Docs",
     "failed": "Failed",
     "loadingRuntimeData": "Loading runtime data...",
     "local": "Local",
     "noAuth": "No auth",
-    "notConnected": "Not connected",
-    "open": "Open",
     "refresh": "Refresh",
-    "required": "Required",
     "runtimeReady": "Runtime ready",
     "showMore": "Show more",
     "showing": "Showing {{shown}} of {{total}}",
-    "success": "Success"
+    "success": "Success",
+    "cancel": "Cancel",
+    "undo": "Undo"
   },
   "brand": {
     "subtitle": "Local runtime console",
@@ -40,11 +35,12 @@
   "nav": {
     "overview": "Overview",
     "providers": "Providers",
+    "marketplace": "Marketplace",
     "oauthApps": "OAuth Apps",
     "actions": "Actions",
     "runs": "Runs",
     "access": "API Key",
-    "docs": "Docs"
+    "docs": "Connect clients"
   },
   "shell": {
     "invalidUnlockToken": "Enter a valid admin token to unlock the console.",
@@ -61,34 +57,34 @@
     },
     "headings": {
       "overview": {
-        "title": "Overview",
-        "subtitle": "Runtime status and health."
+        "title": "Overview"
       },
       "providers": {
-        "title": "Providers",
-        "subtitle": "Connect providers and review provider capabilities."
+        "title": "Providers"
+      },
+      "marketplace": {
+        "title": "Marketplace"
       },
       "oauthApps": {
-        "title": "OAuth Apps",
-        "subtitle": "Manage the default OAuth app for each provider."
+        "title": "OAuth Apps"
       },
       "actions": {
-        "title": "Actions",
-        "subtitle": "Search, inspect, and debug local runtime actions."
+        "title": "Actions"
       },
       "runs": {
-        "title": "Runs",
-        "subtitle": "Recent local action executions."
+        "title": "Runs"
       },
       "access": {
-        "title": "API Key",
-        "subtitle": "Manage runtime API tokens for agents and clients."
+        "title": "API Key"
       },
       "resources": {
-        "title": "Resources",
-        "subtitle": "Generated API references and tool metadata."
+        "title": "Connect clients"
       }
-    }
+    },
+    "settings": "Settings",
+    "settingsDescription": "Manage language, appearance, connections, and runtime.",
+    "oomolKeyDescription": "Explore supported services and offers, then connect or manage your key.",
+    "notifications": "Notifications"
   },
   "unlock": {
     "token": "Admin token",
@@ -100,7 +96,6 @@
     "capabilityStatus": "Capability Status",
     "metrics": {
       "providers": "Providers",
-      "actions": "Actions",
       "executable": "Executable",
       "runHealth": "Run Health"
     },
@@ -111,8 +106,6 @@
     "unavailable": "Unavailable",
     "needsAttention": "Needs attention",
     "recentFailures": "Recent Failures",
-    "noFailedRunsTitle": "No failed runs",
-    "noFailedRunsDescription": "Recent action runs are clean.",
     "callTrend": "Tool Call Trend",
     "callTrendLegend": "Services",
     "noCallTrendTitle": "No call trend yet",
@@ -124,20 +117,196 @@
     "noRecentCallsTitle": "No recent calls",
     "noRecentCallsDescription": "Run an action to see provider call counts."
   },
+  "marketplace": {
+    "oneKey": {
+      "headline": "One key for AI and data services",
+      "description": "Use compatible services in this catalog with an official OOMOL key. Skip separate provider signups and setup. Pay for what you use.",
+      "getKey": "Get an OOMOL Key",
+      "haveKey": "Already have a key? Connect it",
+      "benefitsLabel": "How OOMOL Key works",
+      "benefitSetup": "Skip separate API key setup for each provider",
+      "benefitChoice": "Keep the option to use provider keys directly",
+      "benefitPricing": "Selected models have discounts; usage is metered",
+      "connectTitle": "Connect OOMOL Key",
+      "connectDescription": "Paste your official OOMOL key to verify and manage compatible services.",
+      "keyLabel": "OOMOL Key",
+      "keyHelp": "Copy your key from the OOMOL console. After connecting, manage compatible services here.",
+      "advanced": "Advanced: Marketplace source",
+      "keyPlaceholder": "Paste your official OOMOL API key"
+    },
+    "default": {
+      "browseDescription": "Browse available features",
+      "title": "Services and actions supported by OOMOL Key",
+      "description": "Only actions compatible with this version are listed. Support for some actions does not include every feature offered by a provider.",
+      "failed": "The official catalog could not be loaded. Please try again.",
+      "retry": "Retry",
+      "loading": "Loading official apps…",
+      "empty": "No official apps are compatible with this version",
+      "view": "View features",
+      "disconnected": "Not connected",
+      "descriptions": {
+        "kling": "Video generation",
+        "minimax": "AI creation services",
+        "seedance": "Video generation"
+      },
+      "offers": {
+        "kling": "30% off",
+        "minimax": "20% off",
+        "seedance": "10% off"
+      },
+      "supportedActions": "{{count}} supported actions",
+      "connected": "Connected",
+      "providerDetails": "View provider details"
+    },
+    "summary": {
+      "title": "Connector Marketplace",
+      "description": "Managed provider access for this Connector runtime.",
+      "providers": "Providers",
+      "actions": "Actions"
+    },
+    "status": {
+      "disabled": "Disabled",
+      "available": "Available",
+      "unavailable": "Unavailable",
+      "auth_error": "Authentication error"
+    },
+    "pricing": {
+      "free": "Free",
+      "metered": "Metered usage"
+    },
+    "configuration": {
+      "reconnect": "This source is not ready. Check the configuration above and validate again.",
+      "title": "Configuration",
+      "description": "Connect this runtime to one Marketplace discovery endpoint.",
+      "configured": "Configured",
+      "discoveryUrl": "Discovery URL",
+      "discoveryHelp": "Connect fetches and validates this document when you save.",
+      "apiKey": "API key",
+      "getDefaultKey": "Get OOMOL API key",
+      "apiKeyPlaceholder": "Enter a Marketplace API key",
+      "keepCurrentKey": "Leave blank to keep the current key",
+      "apiKeyHelp": "Stored with runtime encryption when an encryption key is configured.",
+      "showApiKey": "Show API key",
+      "hideApiKey": "Hide API key",
+      "connect": "Connect and validate",
+      "revalidate": "Save and revalidate",
+      "remove": "Remove configuration",
+      "removeConfirmation": "Remove the Marketplace connection?",
+      "confirmRemove": "Remove"
+    },
+    "providers": {
+      "title": "Managed providers",
+      "description": "Enable the compatible providers exposed as virtual connections.",
+      "count": "{{count}} providers",
+      "actionCount": "{{count}} catalog actions",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "enable": "Enable",
+      "disable": "Disable",
+      "emptyTitle": "No compatible providers",
+      "emptyDescription": "Connect a Marketplace whose action IDs overlap this runtime catalog."
+    },
+    "messages": {
+      "saved": "Marketplace configuration saved and validated.",
+      "saveFailed": "Could not save the Marketplace configuration.",
+      "removed": "Marketplace configuration removed.",
+      "removeFailed": "Could not remove the Marketplace configuration.",
+      "providerFailed": "Could not update the provider preference."
+    }
+  },
   "providers": {
+    "managedEmpty": {
+      "title": "No configured connections yet",
+      "description": "Connect OOMOL Key above, or open a provider in Discover connections and add your credentials."
+    },
+    "hostedAccess": {
+      "connectedCustom": "The managed source is connected. View available services under Configured connections.",
+      "intro": "Use one OOMOL key for compatible AI and data services, or connect provider keys directly.",
+      "connected": "Built-in accounts are connected. View available services under Configured connections.",
+      "connect": "Connect OOMOL Key",
+      "manage": "Manage OOMOL Key",
+      "close": "Hide settings",
+      "features": "Supported services",
+      "hideFeatures": "Collapse features",
+      "removeKey": "Delete key",
+      "removeHelp": "Delete the saved key and disable all built-in accounts? Your own provider credentials will be kept.",
+      "confirmRemove": "Confirm key deletion",
+      "hide": "Hide OOMOL Key recommendation",
+      "restore": "OOMOL Key",
+      "hiddenNotice": "Show it again from Settings ⚙️ in the top right → OOMOL Key.",
+      "hiddenTitle": "OOMOL Key hidden"
+    },
+    "managedSources": {
+      "label": "Connection source",
+      "all": "All",
+      "builtIn": "Built-in accounts",
+      "ownKey": "Own credentials"
+    },
+    "oneKey": {
+      "title": "Use OOMOL Key",
+      "description": "Access {{name}} with one OOMOL key, without configuring this provider’s API key separately.",
+      "alternative": "You can also configure a provider key below.",
+      "connect": "Connect OOMOL Key",
+      "available": "Supports OOMOL Key",
+      "builtIn": "Built-in account",
+      "connectedTitle": "Built-in account",
+      "connectedDescription": "This service can run through the built-in account provided by {{name}}."
+    },
     "catalogTitle": "Providers",
+    "viewLabel": "Provider view",
+    "views": {
+      "manage": "Configured connections",
+      "discover": "Discover connections"
+    },
+    "discovery": {
+      "browseByTask": "Browse by task",
+      "explore": "Explore apps",
+      "scenarios": {
+        "ai": {
+          "title": "AI & agents",
+          "description": "Models, agents, search, and media generation"
+        },
+        "investment": {
+          "title": "Investing & trading",
+          "description": "Stocks, crypto, market data, portfolios, and trades"
+        },
+        "crossBorderEcommerce": {
+          "title": "E-commerce operations",
+          "description": "Storefronts, orders, fulfillment, and market data"
+        },
+        "communication": {
+          "title": "Collaboration & knowledge",
+          "description": "Messaging, email, meetings, docs, drives, and knowledge bases"
+        },
+        "productivity": {
+          "title": "Projects & productivity",
+          "description": "Projects, tasks, schedules, and automation"
+        },
+        "marketing": {
+          "title": "Marketing & growth",
+          "description": "Ads, content, leads, and growth data"
+        },
+        "dataStorage": {
+          "title": "Data & analytics",
+          "description": "Warehouses, databases, BI, and storage"
+        },
+        "developer": {
+          "title": "Development & cloud",
+          "description": "Code, deployment, cloud services, and observability"
+        }
+      }
+    },
     "brandNotice": "Third-party names, logos, and trademarks belong to their respective owners and are displayed only to identify the corresponding providers. This project does not claim ownership of them. Users who redistribute or commercialize this project are responsible for reviewing the applicable brand guidelines and obtaining any permissions required for their intended use.",
     "searchPlaceholder": "Search providers",
     "statusFilterLabel": "Provider status",
     "filters": {
       "all": "All",
       "connected": "Connected",
+      "oneKey": "Supports OOMOL Key",
+      "noSetup": "No setup",
       "notConnected": "Not connected",
       "oauthNeedsConfig": "OAuth needs config"
     },
-    "providerMeta": "{{service}} · {{authTypes}} · {{count}} actions",
-    "noAuth": "no auth",
-    "oauthConfigBadge": "OAuth config",
     "noProvidersTitle": "No providers found",
     "noProvidersDescription": "Try a different search or status filter.",
     "resultCount": "Showing {{shown}} / {{total}}",
@@ -147,9 +316,12 @@
     "providerNotFoundDescription": "{{service}} does not match the current catalog.",
     "backToProviders": "Back to providers",
     "providerHomepage": "Homepage",
-    "selectProviderTitle": "Select a provider",
-    "selectProviderDescription": "Choose a provider to inspect connection settings.",
-    "connectedBy": "Connected by {{authType}}",
+    "marketplaceBadge": "Managed",
+    "marketplaceConnection": {
+      "title": "Managed Marketplace connection",
+      "description": "Actions can run with credentials managed by {{name}}.",
+      "manage": "Manage Marketplace"
+    },
     "configuredBadge": "Configured",
     "noSetupBadge": "No setup",
     "unconfiguredBadge": "Not connected",
@@ -157,14 +329,6 @@
     "runtimeUnavailableBadge": "Unavailable",
     "runtimeUnavailableTitle": "Unavailable in this runtime",
     "runtimeUnavailableDescription": "{{name}} remains visible for catalog reference, but connections and actions are unavailable in the current runtime.",
-    "summary": {
-      "actions": "Actions",
-      "auth": "Auth",
-      "oauthConfig": "OAuth config",
-      "configured": "Configured",
-      "required": "Required",
-      "notUsed": "Not used"
-    },
     "connection": "Connection",
     "connectionCount": "{{count}} connections",
     "savedConnections": "Saved connections",
@@ -207,6 +371,8 @@
       "noAuth": "No auth"
     },
     "connectionMessages": {
+      "disconnectNotice": "“{{name}}” disconnected",
+      "cloudDisconnectNotice": "The cloud account will be deleted in the background.",
       "noAuth": "This provider runs without local credentials.",
       "needsOAuthClient": "{{name}} needs a local OAuth client before it can connect.",
       "manualOAuthClient": "Connect {{name}} with a custom OAuth app.",
@@ -241,6 +407,9 @@
       "resetOAuthClient": "Reset Default App"
     },
     "oauthClientSettings": {
+      "setupTitle": "Create the OAuth app",
+      "setupIntro": "Register an OAuth app with {{name}}, then paste its credentials below.",
+      "setupDocsLink": "Open {{name}} developer portal",
       "callbackUrl": "Callback URL",
       "clientId": "Client ID",
       "clientSecret": "Client Secret",
@@ -311,7 +480,10 @@
     "running": "Running",
     "runningAction": "Running action...",
     "actionFailed": "Action failed.",
-    "loadingDetails": "Loading action details..."
+    "loadingDetails": "Loading action details...",
+    "useFromClient": "Use from your client",
+    "clientExampleHelp": "Copy an example for your gateway. Choose a connection when you have more than one.",
+    "clientGuide": "Setup guide"
   },
   "runs": {
     "noRunsTitle": "No runs yet",
@@ -348,7 +520,6 @@
     "policy": {
       "title": "Access Policy",
       "description": "Limit actions and provider proxy requests.",
-      "rulesHint": "Block rules take priority. Non-empty allowlists intersect across deployment, runtime, and token layers. Enter one rule per line.",
       "deployment": "Deployment policy (read-only)",
       "runtime": "Runtime policy",
       "allowedActions": "Allowed actions",
@@ -359,7 +530,6 @@
       "saving": "Saving policy...",
       "saved": "Policy saved.",
       "saveFailed": "Failed to save policy.",
-      "unrestricted": "No token-specific restrictions",
       "edit": "Edit Policy",
       "editToken": "Edit Token Policy",
       "baseline": {
@@ -420,6 +590,8 @@
       },
       "layerSummary": "Actions: {{action}} · Proxies: {{proxy}}",
       "tokenSummary": "Action allow rules {{allowed}} · Action block rules {{blocked}} · Proxy grants {{proxies}} · Further limited by the runtime baseline",
+      "connectionsUnrestricted": "All connections",
+      "connectionsRestricted": "Connections: {{names}}",
       "editor": {
         "title": "Edit runtime policy",
         "description": "Changes are previewed against deployment constraints before you save.",
@@ -463,9 +635,16 @@
         "noRules": "No rules in this list.",
         "actionAllowRequired": "Add at least one action allow rule, or choose no additional restriction.",
         "proxyAllowRequired": "Add at least one provider allow rule, or choose no additional restriction.",
-        "tokenHint": "Action rules and proxy grants are independent. An empty proxy grant list denies provider proxy requests.",
-        "discard": "Discard changes",
-        "preview": "Preview impact"
+        "connectionsTitle": "Connection access",
+        "connectionsUnrestrictedHint": "This token can use any stored connection, including default when the request omits a name.",
+        "connectionsRestrictedHint": "This token can use only the selected provider connections.",
+        "connectionsList": "Allowed connections",
+        "connectionsRequired": "Select at least one connection, or choose no additional restriction.",
+        "tooManyConnections": "A connection list cannot contain more than 128 connections.",
+        "connectionCount": "{{count}} connections",
+        "noConnections": "No connections in this list.",
+        "connectionsDefaultHint": "Select a provider's default connection to allow its unnamed HTTP, MCP, or proxy requests.",
+        "discard": "Discard changes"
       },
       "impact": {
         "title": "Draft impact",
@@ -530,6 +709,136 @@
     "openapi": {
       "title": "OpenAPI JSON",
       "description": "Use the generated spec from scripts or tool importers."
+    },
+    "onboarding": {
+      "eyebrow": "Your gateway is ready. Connect a client.",
+      "title": "Bring your gateway to your apps and agents",
+      "description": "Choose how you want to use this self-hosted gateway. Start with one action, then explore the services you have connected.",
+      "stepAddress": "Confirm the gateway address",
+      "stepClient": "Choose a client",
+      "stepAction": "Run your first action",
+      "prepare": "Confirm your connection details",
+      "prepareHelp": "Set the address once. Every example below uses your gateway.",
+      "gatewayUrl": "Your gateway base URL",
+      "gatewayHelp": "Use an address reachable from the client. Do not append /v1 or /mcp.",
+      "urlError": "Enter a full HTTP or HTTPS URL without credentials, query parameters, or a fragment.",
+      "authLabel": "Runtime authentication",
+      "tokenAuth": "Use a Runtime Token",
+      "noAuth": "Authentication is off",
+      "tokenHelp": "Create a token, then replace <RUNTIME_TOKEN> in the examples. Tokens are never stored on this page.",
+      "createToken": "Create a Runtime Token",
+      "tokenDifferenceTitle": "Which key do I need?",
+      "tokenDifference": "A Runtime Token authorizes clients to call your gateway. An OOMOL Key enables hosted services inside the gateway. Provider credentials stay on the gateway.",
+      "localhostHelp": "localhost refers to the client’s own device. Use your server address when the gateway runs on another machine.",
+      "clientTitle": "Choose how you will use the gateway",
+      "clientHelp": "All three clients discover and execute the same actions. Pick the workflow that fits your client.",
+      "mcpAudience": "Agent clients",
+      "cliAudience": "Terminal and scripts",
+      "sdkAudience": "Application code",
+      "mcpTitle": "Give your agent access to the gateway",
+      "mcpHelp": "Use an MCP client that supports remote HTTP servers and Authorization headers.",
+      "mcpConfigure": "Copy the configuration into your client’s MCP server settings. Replace the token placeholder if authentication is enabled.",
+      "mcpDiscover": "Ask the agent to use search_actions, then get_action_guide to inspect the selected action.",
+      "mcpExecute": "Try execute_action with the arguments shown on the right. list_connections helps select an account.",
+      "cliTitle": "Run actions from your terminal",
+      "cliHelp": "oo connector sends requests to your own gateway. You do not need to sign in to OOMOL for these commands.",
+      "cliInstall": "Install oo on the machine that will run your commands.",
+      "cliConfigure": "Set the gateway environment variables in the same terminal. They take precedence over saved connections and hosted keys.",
+      "cliExecute": "Search for an action, read its schema, and run it with JSON input.",
+      "sdkTitle": "Call actions from your application",
+      "sdkHelp": "Use OpenConnector for a self-hosted gateway. It is a thin client; credentials and provider requests stay on the gateway.",
+      "sdkInstall": "Install the SDK in your Node.js or TypeScript project.",
+      "sdkConfigure": "If authentication is enabled, set OOMOL_CONNECT_RUNTIME_TOKEN in your application environment.",
+      "sdkExecute": "Check health, inspect the catalog, and execute the same action from code.",
+      "install": "Install the client",
+      "configure": "Connect to your gateway",
+      "firstAction": "Try hackernews.get_top_stories",
+      "copy": "Copy code",
+      "copied": "Code copied",
+      "fullGuide": "Read the complete guide",
+      "platform": "Client operating system",
+      "tokenEnv": "Runtime Token in your application environment",
+      "nextTitle": "Ready for your own workflow?",
+      "nextHelp": "Hacker News needs no provider credentials. Next, choose one of your connected services. Every action has CLI and SDK examples.",
+      "browseActions": "Explore actions",
+      "actionDetails": "View this action",
+      "moreTitle": "Protocol references",
+      "sdkRunHelp": "Save the code above as client.mjs, then run it from the same terminal.",
+      "runExample": "Run the example"
     }
+  },
+  "saas": {
+    "authorizationSettings": "Authorization settings",
+    "updateKey": "Update key",
+    "keyStored": "Project key is saved with encryption.",
+    "manageProject": "Project maintenance",
+    "errors": {
+      "title": "Operation unsuccessful",
+      "encryption": "Set OOMOL_CONNECT_ENCRYPTION_KEY and restart Connect before saving the project key. Keep the same encryption key for future starts.",
+      "origin": "Set OOMOL_CONNECT_ORIGIN to your browser’s Console address and restart. Scheme, host and port must match; localhost and 127.0.0.1 differ.",
+      "blocked": "The cloud address was blocked. Check proxy Fake-IP and DNS settings so the hostname resolves to a public IP.",
+      "dns": "Could not resolve the cloud hostname. Check DNS on the machine running Connect.",
+      "network": "Could not connect to the cloud. Check the Connect machine’s network, proxy and TLS certificates.",
+      "redirect": "The cloud redirected the request. Redirects are blocked to protect the project key. Check the cloud address.",
+      "json": "The cloud did not return valid JSON. Check the endpoint, proxy or login interception page.",
+      "size": "The cloud response exceeded the size limit. Check the cloud service logs.",
+      "timeout": "The cloud request timed out. Check the network and try again.",
+      "key": "The project key is invalid or lacks permission. Use an API key from your cloud project, not a Marketplace key.",
+      "protocol": "The cloud API response is incompatible. Check the deployed cloud and Connect versions.",
+      "notFound": "The cloud resource was not found. Check the project configuration and API deployment.",
+      "inUse": "The project is still in use. Switch default authorization methods, remove its connections and resolve pending authorization and cleanup tasks.",
+      "mismatch": "The project or authorization configuration changed. Refresh and select it again.",
+      "rateLimit": "Too many requests. Please try again later.",
+      "configuration": "The cloud project is not configured correctly. Check its key, encryption settings and Console address.",
+      "scopes": "The cloud OAuth configuration lacks required permissions. Update its scopes in the cloud.",
+      "input": "Invalid input. Check the project key or selected configuration.",
+      "session": "Your Console session has expired. Sign in and try again.",
+      "unknown": "The operation could not be completed. Try again; if it persists, check the Connect server logs."
+    },
+    "configurationId": "Configuration ID",
+    "configurationDetails": "Configuration details",
+    "settingsDescription": "Choose where new accounts are authorized and their actions run.",
+    "settingsTitle": "{{name}} authorization settings",
+    "openProjects": "Open cloud projects",
+    "project": "OOMOL cloud authorization",
+    "projectDescription": "Connect third-party accounts such as Gmail through OOMOL cloud without configuring an OAuth app locally. Actions on these connections run in the cloud.",
+    "remoteNotice": "Action inputs and results pass through OOMOL cloud. Calls may consume project credits; no spending limit is set here.",
+    "projectId": "Project ID",
+    "projectKey": "Project API key",
+    "keyHint": "Enter the API key for your OOMOL cloud project, not a Marketplace key. Saved keys are never displayed. Enter a new key to replace it.",
+    "cleanup": "Cleanup: {{pending}} pending · {{manual}} need attention",
+    "paused": "Cleanup is paused. Update the project key to resume.",
+    "save": "Save project",
+    "saving": "Saving…",
+    "saved": "Saved.",
+    "failed": "The operation failed. Try again.",
+    "remove": "Remove project",
+    "removed": "Project removed.",
+    "removeHint": "First switch service defaults to local, remove SaaS connections, and resolve pending requests and cleanup tasks. Removing this configuration does not delete the SaaS project.",
+    "confirmRemove": "Confirm removal",
+    "defaultSource": "Authorization method",
+    "local": "Local OAuth app",
+    "remote": "OOMOL cloud",
+    "sourceHint": "Applies to new connections only. Existing connections keep their source when reconnecting.",
+    "loading": "Loading…",
+    "loadFailed": "Could not load",
+    "configUnavailable": "Unavailable",
+    "configUnavailableHint": "The saved cloud configuration is unavailable. Check the cloud project and its provider configuration, then check again or choose another authorization method.",
+    "noConfigs": "No compatible cloud configurations are available. Configure a cloud project and a matching provider configuration first.",
+    "saveSource": "Save source",
+    "capabilities": "{{count}} compatible actions",
+    "proxyYes": "Proxy supported",
+    "proxyNo": "Proxy unavailable",
+    "scopes": "Scopes",
+    "pending": "Waiting for authorization. Keep the completion page open.",
+    "connected": "Connection complete.",
+    "manualResult": "Authorization could not be confirmed. Check the SaaS project before starting again.",
+    "status": {
+      "unconfigured": "Not configured",
+      "available": "Available",
+      "unavailable": "Unavailable",
+      "auth_error": "Invalid project key"
+    },
+    "retry": "Check again"
   }
 }

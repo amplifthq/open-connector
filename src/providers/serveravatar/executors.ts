@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -13,7 +14,6 @@ import {
 
 const service = "serveravatar";
 const serverAvatarApiBaseUrl = "https://api.serveravatar.com";
-const serverAvatarRequestTimeoutMs = 30_000;
 
 type ServerAvatarRequestPhase = "validate" | "execute";
 type QueryValue = string | number | undefined;
@@ -30,7 +30,7 @@ interface ServerAvatarRequestInput {
   query?: Record<string, QueryValue>;
 }
 
-export const serverAvatarActionHandlers: Record<string, ServerAvatarActionHandler> = {
+export const serverAvatarActionHandlers: ProviderActionHandlers<"serveravatar", ServerAvatarActionHandler> = {
   list_organizations(_input, context) {
     return requestServerAvatarJson({
       path: "/organizations",
@@ -126,7 +126,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestServerAvatarJson(input: ServerAvatarRequestInput): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(input.context.signal, serverAvatarRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   const url = new URL(input.path, serverAvatarApiBaseUrl);
   appendQuery(url, input.query);
 

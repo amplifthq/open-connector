@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { MetronomeActionName } from "./actions.ts";
 
 import {
   optionalBoolean,
@@ -8,6 +8,7 @@ import {
   optionalNumber,
   optionalRawString,
   optionalRecord,
+  recordOrEmpty,
   stringArray,
 } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
@@ -22,7 +23,7 @@ interface PaginatedPayload {
   nextPage: string | null;
 }
 
-export const metronomeActionHandlers: Record<MetronomeActionName, MetronomeActionHandler> = {
+export const metronomeActionHandlers: ProviderActionHandlers<"metronome", MetronomeActionHandler> = {
   list_customers(input, context) {
     return listMetronomeCustomers(input, context);
   },
@@ -274,7 +275,7 @@ function createMetronomeError(
   }
 
   if (phase === "execute" && (response.status === 401 || response.status === 403)) {
-    return new ProviderRequestError(409, message, payload);
+    return new ProviderRequestError(401, message, payload);
   }
 
   if ([400, 404, 422].includes(response.status)) {
@@ -333,8 +334,8 @@ function normalizeCustomer(value: unknown): Record<string, unknown> {
     createdAt: readRequiredString(record.created_at, "customer.created_at"),
     updatedAt: readRequiredString(record.updated_at, "customer.updated_at"),
     archivedAt: readNullableString(record.archived_at),
-    customerConfig: readLooseObject(record.customer_config),
-    customFields: readLooseObject(record.custom_fields),
+    customerConfig: recordOrEmpty(record.customer_config),
+    customFields: recordOrEmpty(record.custom_fields),
     raw: record,
   };
 }
@@ -347,7 +348,7 @@ function normalizeBillableMetric(value: unknown): Record<string, unknown> {
     aggregationType: readNullableString(record.aggregation_type),
     aggregationKey: readNullableString(record.aggregation_key),
     archivedAt: readNullableString(record.archived_at),
-    customFields: readLooseObject(record.custom_fields),
+    customFields: recordOrEmpty(record.custom_fields),
     raw: record,
   };
 }
@@ -377,10 +378,6 @@ function readObject(value: unknown, fieldName: string): Record<string, unknown> 
     throw new ProviderRequestError(502, `metronome response did not include ${fieldName}`);
   }
   return record;
-}
-
-function readLooseObject(value: unknown): Record<string, unknown> {
-  return optionalRecord(value) ?? {};
 }
 
 function readObjectArray(value: unknown): Array<Record<string, unknown>> {

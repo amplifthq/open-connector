@@ -1,9 +1,15 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { SevdeskActionName } from "./actions.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { optionalBoolean, optionalIntegerLike, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   defineProviderExecutors,
+  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
@@ -38,7 +44,7 @@ interface SevdeskListPayload {
   total: number | null;
 }
 
-export const sevdeskActionHandlers: Record<SevdeskActionName, SevdeskActionHandler> = {
+export const sevdeskActionHandlers: ProviderActionHandlers<"sevdesk", SevdeskActionHandler> = {
   async list_contacts(input, context): Promise<unknown> {
     const payload = await requestSevdeskJson({
       context,
@@ -121,6 +127,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<SevdeskActio
       fetcher,
       signal: context.signal,
     };
+  },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: sevdeskApiBaseUrl,
+  auth: { type: "api_key_header", name: "Authorization" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
   },
 });
 

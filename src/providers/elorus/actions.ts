@@ -137,23 +137,10 @@ const updateInput = (description: string): JsonSchema =>
     description,
   );
 
-export type ElorusActionName =
-  | "list_contacts"
-  | "get_contact"
-  | "create_contact"
-  | "update_contact"
-  | "list_products"
-  | "get_product"
-  | "create_product"
-  | "update_product"
-  | "list_invoices"
-  | "get_invoice"
-  | "create_invoice"
-  | "update_invoice";
-
 export const elorusActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_contacts",
+    operationType: "read",
     description: "List Elorus contacts with optional search, filters, and pagination.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -176,6 +163,7 @@ export const elorusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_contact",
+    operationType: "read",
     description: "Get one Elorus contact by ID.",
     requiredScopes: [],
     inputSchema: objectInput("The Elorus contact identifier to retrieve."),
@@ -183,6 +171,7 @@ export const elorusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_contact",
+    operationType: "write",
     description: "Create one Elorus contact in the selected organization.",
     requiredScopes: [],
     inputSchema: createInput("The Elorus contact payload to create."),
@@ -190,6 +179,7 @@ export const elorusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_contact",
+    operationType: "write",
     description: "Update one Elorus contact by ID.",
     requiredScopes: [],
     inputSchema: updateInput("The Elorus contact ID and full payload to update."),
@@ -197,6 +187,7 @@ export const elorusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_products",
+    operationType: "read",
     description: "List Elorus products or services with optional filters and pagination.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -217,6 +208,7 @@ export const elorusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_product",
+    operationType: "read",
     description: "Get one Elorus product or service by ID.",
     requiredScopes: [],
     inputSchema: objectInput("The Elorus product or service identifier to retrieve."),
@@ -224,6 +216,7 @@ export const elorusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_product",
+    operationType: "write",
     description: "Create one Elorus product or service in the selected organization.",
     requiredScopes: [],
     inputSchema: createInput("The Elorus product or service payload to create."),
@@ -231,6 +224,7 @@ export const elorusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_product",
+    operationType: "write",
     description: "Update one Elorus product or service by ID.",
     requiredScopes: [],
     inputSchema: updateInput("The Elorus product or service ID and full payload to update."),
@@ -238,6 +232,7 @@ export const elorusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_invoices",
+    operationType: "read",
     description: "List Elorus invoices with optional filters and pagination.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -268,6 +263,7 @@ export const elorusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_invoice",
+    operationType: "read",
     description: "Get one Elorus invoice by ID.",
     requiredScopes: [],
     inputSchema: objectInput("The Elorus invoice identifier to retrieve."),
@@ -275,6 +271,7 @@ export const elorusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_invoice",
+    operationType: "write",
     description: "Create one Elorus invoice in the selected organization.",
     requiredScopes: [],
     inputSchema: createInput("The Elorus invoice payload to create."),
@@ -282,6 +279,7 @@ export const elorusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_invoice",
+    operationType: "write",
     description: "Update one Elorus invoice by ID using the official full-update endpoint.",
     requiredScopes: [],
     inputSchema: updateInput("The Elorus invoice ID and full payload to update."),

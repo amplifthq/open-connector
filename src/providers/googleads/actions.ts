@@ -8,6 +8,7 @@ const service = "googleads";
 
 interface GoogleAdsActionSource {
   name: GoogleAdsActionName;
+  operationType: ActionDefinition["operationType"];
   description: string;
   inputSchema: JsonSchema;
   outputSchema: JsonSchema;
@@ -27,8 +28,12 @@ const campaign = s.object(
     status: s.string("The campaign status."),
     advertisingChannelType: s.string("The high-level advertising channel type."),
     advertisingChannelSubType: s.string("The advertising channel subtype."),
-    startDate: s.string("The campaign start date in YYYY-MM-DD format."),
-    endDate: s.string("The campaign end date in YYYY-MM-DD format."),
+    startDateTime: s.string(
+      "The campaign start date and time in YYYY-MM-DD HH:mm:ss format in the customer's time zone. Use 00:00:00 for daily granularity.",
+    ),
+    endDateTime: s.string(
+      "The campaign end date and time in YYYY-MM-DD HH:mm:ss format in the customer's time zone. Use 23:59:59 for daily granularity.",
+    ),
   },
   {
     required: ["resourceName", "id", "name"],
@@ -107,8 +112,12 @@ const campaignCreateInput = s.object(
     campaignBudget: s.nonEmptyString("The campaign budget resource name to attach."),
     advertisingChannelType: s.nonEmptyString("The advertising channel type."),
     status: s.nonEmptyString("The campaign status."),
-    startDate: s.nonEmptyString("The campaign start date."),
-    endDate: s.nonEmptyString("The campaign end date."),
+    startDateTime: s.nonEmptyString(
+      "The campaign start date and time in YYYY-MM-DD HH:mm:ss format in the customer's time zone. Use 00:00:00 for daily granularity.",
+    ),
+    endDateTime: s.nonEmptyString(
+      "The campaign end date and time in YYYY-MM-DD HH:mm:ss format in the customer's time zone. Use 23:59:59 for daily granularity.",
+    ),
     manualCpc: looseObject,
     finalUrlSuffix: s.nonEmptyString("The final URL suffix."),
     networkSettings: campaignNetworkSettings,
@@ -126,8 +135,12 @@ const campaignUpdateInput = s.object(
     resourceName: s.nonEmptyString("The resource name of the campaign to update."),
     name: s.nonEmptyString("The updated campaign name."),
     status: s.nonEmptyString("The updated campaign status."),
-    startDate: s.nonEmptyString("The updated campaign start date."),
-    endDate: s.nonEmptyString("The updated campaign end date."),
+    startDateTime: s.nonEmptyString(
+      "The campaign start date and time in YYYY-MM-DD HH:mm:ss format in the customer's time zone. Use 00:00:00 for daily granularity.",
+    ),
+    endDateTime: s.nonEmptyString(
+      "The campaign end date and time in YYYY-MM-DD HH:mm:ss format in the customer's time zone. Use 23:59:59 for daily granularity.",
+    ),
     manualCpc: looseObject,
     campaignBudget: s.nonEmptyString("The updated campaign budget resource name."),
     finalUrlSuffix: s.nonEmptyString("The updated final URL suffix."),
@@ -173,6 +186,7 @@ const campaignMutationResult = s.object(
 const actions: GoogleAdsActionSource[] = [
   action(
     "get_campaign_by_id",
+    "read",
     "Retrieve one Google Ads campaign by its campaign ID.",
     customerInput(
       {
@@ -186,6 +200,7 @@ const actions: GoogleAdsActionSource[] = [
   ),
   action(
     "get_campaign_by_name",
+    "read",
     "Retrieve all Google Ads campaigns that exactly match a campaign name.",
     customerInput(
       {
@@ -199,6 +214,7 @@ const actions: GoogleAdsActionSource[] = [
   ),
   action(
     "list_accessible_customers",
+    "read",
     "List Google Ads customer resource names accessible to the current OAuth credential.",
     input({
       developerToken: googleAdsDeveloperToken,
@@ -209,6 +225,7 @@ const actions: GoogleAdsActionSource[] = [
   ),
   action(
     "search_stream_gaql",
+    "read",
     "Execute a GAQL streaming query and return the aggregated result rows in one response.",
     customerInput(
       {
@@ -242,6 +259,7 @@ const actions: GoogleAdsActionSource[] = [
   ),
   action(
     "list_customer_lists",
+    "read",
     "List Google Ads customer lists available under the specified customer account.",
     customerInput({
       pageToken: s.nonEmptyString("The nextPageToken returned by a previous call."),
@@ -253,6 +271,7 @@ const actions: GoogleAdsActionSource[] = [
   ),
   action(
     "create_customer_list",
+    "write",
     "Create a new Google Ads CRM-based customer list for Customer Match uploads.",
     customerInput(
       {
@@ -267,6 +286,7 @@ const actions: GoogleAdsActionSource[] = [
   ),
   action(
     "add_or_remove_to_customer_list",
+    "destructive",
     "Submit Customer Match user identifiers to add users to or remove users from a Google Ads customer list.",
     customerInput(
       {
@@ -299,6 +319,7 @@ const actions: GoogleAdsActionSource[] = [
   ),
   action(
     "mutate_ad_groups",
+    "destructive",
     "Create, update, or remove Google Ads ad groups in a single mutate request.",
     customerInput(
       {
@@ -321,6 +342,7 @@ const actions: GoogleAdsActionSource[] = [
   ),
   action(
     "mutate_campaigns",
+    "destructive",
     "Create, update, or remove Google Ads campaigns in a single mutate request.",
     customerInput(
       {
@@ -369,12 +391,14 @@ export type GoogleAdsActionName =
 
 function action(
   name: GoogleAdsActionName,
+  operationType: ActionDefinition["operationType"],
   description: string,
   inputSchema: JsonSchema,
   outputSchema: JsonSchema,
 ): GoogleAdsActionSource {
   return {
     name,
+    operationType,
     description,
     inputSchema,
     outputSchema,

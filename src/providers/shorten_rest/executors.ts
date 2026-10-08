@@ -1,9 +1,14 @@
-import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidationResult, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ShortenRestActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "shorten_rest";
 const shortenRestApiBaseUrl = "https://api.shorten.rest";
@@ -21,7 +26,7 @@ interface ShortenRestRequestInput {
   body?: Record<string, unknown>;
 }
 
-export const shortenRestActionHandlers: Record<ShortenRestActionName, ShortenRestActionHandler> = {
+export const shortenRestActionHandlers: ProviderActionHandlers<"shorten_rest", ShortenRestActionHandler> = {
   async create_alias(input, context) {
     const payload = await shortenRestRequest({
       method: "POST",
@@ -95,6 +100,16 @@ export const shortenRestActionHandlers: Record<ShortenRestActionName, ShortenRes
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, shortenRestActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: shortenRestApiBaseUrl,
+  auth: { type: "api_key_header", name: "x-api-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators = {
   apiKey(
@@ -231,8 +246,8 @@ function extractShortenRestErrorMessage(payload: unknown): string | undefined {
 
 function buildAliasReferenceQuery(input: Record<string, unknown>): Record<string, string | undefined> {
   return compactObject({
-    domainName: readOptionalTrimmedString(input.domainName),
-    aliasName: readOptionalTrimmedString(input.aliasName),
+    domainName: optionalString(input.domainName),
+    aliasName: optionalString(input.aliasName),
   });
 }
 
@@ -241,8 +256,8 @@ function buildListQuery(
   domainField?: "domainName",
 ): Record<string, string | number | undefined> {
   return compactObject({
-    ...(domainField ? { domainName: readOptionalTrimmedString(input[domainField]) } : {}),
-    continueFrom: readOptionalTrimmedString(input.continueFrom),
+    ...(domainField ? { domainName: optionalString(input[domainField]) } : {}),
+    continueFrom: optionalString(input.continueFrom),
     limit: optionalInteger(input.limit),
   });
 }
@@ -265,21 +280,21 @@ function normalizeInputArray<T>(value: unknown, normalize: (record: Record<strin
 function normalizeInputDestination(value: Record<string, unknown>): Record<string, unknown> {
   return compactObject({
     url: value.url,
-    country: readOptionalTrimmedString(value.country),
-    os: readOptionalTrimmedString(value.os),
+    country: optionalString(value.country),
+    os: optionalString(value.os),
   });
 }
 
 function normalizeInputMetatag(value: Record<string, unknown>): Record<string, unknown> {
   return compactObject({
-    name: readOptionalTrimmedString(value.name),
-    content: readOptionalTrimmedString(value.content),
+    name: optionalString(value.name),
+    content: optionalString(value.content),
   });
 }
 
 function normalizeInputSnippet(value: Record<string, unknown>): Record<string, unknown> {
   return compactObject({
-    id: readOptionalTrimmedString(value.id),
+    id: optionalString(value.id),
     parameters: optionalRecord(value.parameters),
   });
 }
@@ -390,10 +405,6 @@ function requireResponseObject(value: unknown, fieldName: string): Record<string
     throw new ProviderRequestError(502, `Shorten.REST response missing ${fieldName}`);
   }
   return record;
-}
-
-function readOptionalTrimmedString(value: unknown): string | undefined {
-  return optionalString(value);
 }
 
 function readRequiredString(value: unknown, fieldName: string): string {

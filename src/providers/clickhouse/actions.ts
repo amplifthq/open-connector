@@ -88,6 +88,7 @@ const columnSchema = s.object("One ClickHouse table column.", {
 
 const executeQueryAction = defineProviderAction(service, {
   name: "execute_query",
+  operationType: "destructive",
   description: "Execute a SQL query against a ClickHouse instance and return JSON rows.",
   inputSchema: queryInputSchema,
   outputSchema: queryOutputSchema,
@@ -95,6 +96,7 @@ const executeQueryAction = defineProviderAction(service, {
 
 const listDatabasesAction = defineProviderAction(service, {
   name: "list_databases",
+  operationType: "read",
   description: "List databases available in the connected ClickHouse instance.",
   inputSchema: s.object(
     "The input payload for listing ClickHouse databases.",
@@ -113,6 +115,7 @@ const listDatabasesAction = defineProviderAction(service, {
 
 const listTablesAction = defineProviderAction(service, {
   name: "list_tables",
+  operationType: "read",
   description: "List tables or views in ClickHouse databases.",
   inputSchema: s.object(
     "The input payload for listing ClickHouse tables.",
@@ -145,6 +148,7 @@ const listTablesAction = defineProviderAction(service, {
 
 const getTableSchemaAction = defineProviderAction(service, {
   name: "get_table_schema",
+  operationType: "read",
   description: "Get column metadata for one ClickHouse table.",
   inputSchema: s.object(
     "The input payload for fetching a ClickHouse table schema.",
@@ -181,6 +185,7 @@ const getTableSchemaAction = defineProviderAction(service, {
 
 const getDatabaseSchemaAction = defineProviderAction(service, {
   name: "get_database_schema",
+  operationType: "read",
   description: "Get an overview of one ClickHouse database with tables and optional column name lists.",
   inputSchema: s.object(
     "The input payload for fetching a ClickHouse database schema.",
@@ -202,13 +207,6 @@ const getDatabaseSchemaAction = defineProviderAction(service, {
     raw: s.looseObject("The raw ClickHouse JSON response payload."),
   }),
 });
-
-export type ClickhouseActionName =
-  | "execute_query"
-  | "list_databases"
-  | "list_tables"
-  | "get_table_schema"
-  | "get_database_schema";
 
 export const clickhouseActions: ActionDefinition[] = [
   executeQueryAction,

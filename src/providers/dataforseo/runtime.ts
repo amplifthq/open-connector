@@ -1,5 +1,7 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
+
 import { Buffer } from "node:buffer";
-import { compactObject, optionalString } from "../../core/cast.ts";
+import { compactObject, optionalBoolean, optionalString } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 type DataForSeoPhase = "validate" | "execute";
@@ -33,7 +35,7 @@ type DataForSeoRequestInput = {
 export const dataForSeoApiBaseUrl: string = "https://api.dataforseo.com/v3";
 const dataForSeoApiBase = new URL(`${dataForSeoApiBaseUrl}/`);
 
-export const dataForSeoActionHandlers: Record<string, DataForSeoActionHandler> = {
+export const dataForSeoActionHandlers: ProviderActionHandlers<"dataforseo", DataForSeoActionHandler> = {
   async get_user_data(_input, context) {
     return requestDataForSeoUserData(context, "execute");
   },
@@ -152,7 +154,7 @@ export const dataForSeoActionHandlers: Record<string, DataForSeoActionHandler> =
           language_name: readOptionalString(input.languageName),
           language_code: readOptionalString(input.languageCode),
           limit: readOptionalInteger(input.limit, "limit"),
-          include_seed_keyword: readOptionalBoolean(input.includeSeedKeyword),
+          include_seed_keyword: optionalBoolean(input.includeSeedKeyword),
           tag: readOptionalString(input.tag),
         }),
       ],
@@ -591,7 +593,7 @@ function buildDataForSeoBody(
     body[outputKey] = readOptionalInteger(input[inputKey], inputKey);
   }
   for (const [inputKey, outputKey] of options.booleanFields ?? []) {
-    body[outputKey] = readOptionalBoolean(input[inputKey]);
+    body[outputKey] = optionalBoolean(input[inputKey]);
   }
   for (const [inputKey, outputKey] of options.objectFields ?? []) {
     body[outputKey] = readOptionalObject(input[inputKey]);
@@ -771,8 +773,4 @@ function readOptionalNumber(value: unknown) {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;
-}
-
-function readOptionalBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
 }

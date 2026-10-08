@@ -66,26 +66,10 @@ const deletionOutput = s.actionOutput(
   "The Cyberimpact deletion response.",
 );
 
-export type CyberimpactActionName =
-  | "list_members"
-  | "get_member"
-  | "create_member"
-  | "update_member"
-  | "delete_member"
-  | "list_groups"
-  | "get_group"
-  | "create_group"
-  | "update_group"
-  | "delete_group"
-  | "list_templates"
-  | "get_template"
-  | "create_template"
-  | "replace_template"
-  | "delete_template";
-
 export const cyberimpactActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_members",
+    operationType: "read",
     description: "Retrieve a paginated list of Cyberimpact members with optional status, date, and sort filters.",
     inputSchema: s.object(
       "Filters for listing Cyberimpact members.",
@@ -139,12 +123,14 @@ export const cyberimpactActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_member",
+    operationType: "read",
     description: "Retrieve a Cyberimpact member by email address or numerical member ID.",
     inputSchema: s.object({ key: memberKey, dateReturnFormat }, { required: ["key"], description: "Input." }),
     outputSchema: objectOutput("The Cyberimpact member response.", "member"),
   }),
   defineProviderAction(service, {
     name: "create_member",
+    operationType: "write",
     description: "Add a member to Cyberimpact and optionally subscribe them to groups.",
     inputSchema: s.object("Input for creating a Cyberimpact member.", memberFields, {
       required: ["email"],
@@ -166,6 +152,7 @@ export const cyberimpactActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_member",
+    operationType: "write",
     description: "Edit one or more fields on a Cyberimpact member by email address or member ID.",
     inputSchema: s.object(
       "Input for editing a Cyberimpact member.",
@@ -179,12 +166,14 @@ export const cyberimpactActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_member",
+    operationType: "destructive",
     description: "Delete a Cyberimpact member by email address or numerical member ID.",
     inputSchema: s.actionInput({ key: memberKey }, ["key"], "Input for deleting a Cyberimpact member."),
     outputSchema: deletionOutput,
   }),
   defineProviderAction(service, {
     name: "list_groups",
+    operationType: "read",
     description: "Retrieve a paginated list of Cyberimpact groups.",
     inputSchema: s.object(
       "Filters for listing Cyberimpact groups.",
@@ -217,12 +206,14 @@ export const cyberimpactActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_group",
+    operationType: "read",
     description: "Retrieve a Cyberimpact group by numerical ID.",
     inputSchema: s.object({ id, dateReturnFormat }, { required: ["id"], description: "Input." }),
     outputSchema: objectOutput("The Cyberimpact group response.", "group"),
   }),
   defineProviderAction(service, {
     name: "create_group",
+    operationType: "write",
     description: "Create a static Cyberimpact group.",
     inputSchema: s.actionInput(
       {
@@ -236,6 +227,7 @@ export const cyberimpactActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_group",
+    operationType: "write",
     description: "Edit the title or visibility of a static Cyberimpact group.",
     inputSchema: s.object(
       {
@@ -249,12 +241,14 @@ export const cyberimpactActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_group",
+    operationType: "destructive",
     description: "Delete a Cyberimpact group by numerical ID.",
     inputSchema: s.actionInput({ id }, ["id"], "Input for deleting a Cyberimpact group."),
     outputSchema: deletionOutput,
   }),
   defineProviderAction(service, {
     name: "list_templates",
+    operationType: "read",
     description: "Retrieve a paginated list of Cyberimpact email templates.",
     inputSchema: s.object(
       {
@@ -291,12 +285,14 @@ export const cyberimpactActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_template",
+    operationType: "read",
     description: "Retrieve a Cyberimpact email template by numerical ID.",
     inputSchema: s.object({ id, dateReturnFormat }, { required: ["id"], description: "Input." }),
     outputSchema: objectOutput("The Cyberimpact template response.", "template"),
   }),
   defineProviderAction(service, {
     name: "create_template",
+    operationType: "write",
     description: "Create a Cyberimpact email template with HTML or plain text body content.",
     inputSchema: s.object(
       {
@@ -310,6 +306,7 @@ export const cyberimpactActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "replace_template",
+    operationType: "destructive",
     description: "Replace a Cyberimpact email template by numerical ID.",
     inputSchema: s.object(
       {
@@ -324,6 +321,7 @@ export const cyberimpactActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_template",
+    operationType: "destructive",
     description: "Delete a Cyberimpact email template by numerical ID.",
     inputSchema: s.actionInput({ id }, ["id"], "Input for deleting a Cyberimpact template."),
     outputSchema: deletionOutput,

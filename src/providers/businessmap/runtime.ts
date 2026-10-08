@@ -1,9 +1,14 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { BusinessmapActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  createProviderTimeout,
+  isAbortLikeError,
+  ProviderRequestError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 const businessmapDefaultRequestTimeoutMs = 30_000;
 const businessmapValidationPath = "/workspaces";
@@ -32,7 +37,10 @@ interface BusinessmapAccountUrl {
   apiBaseUrl: string;
 }
 
-export const businessmapActionHandlers: Record<BusinessmapActionName, ProviderRuntimeHandler<BusinessmapContext>> = {
+export const businessmapActionHandlers: ProviderActionHandlers<
+  "businessmap",
+  ProviderRuntimeHandler<BusinessmapContext>
+> = {
   async list_workspaces(input, context) {
     const payload = await requestBusinessmapJson({
       ...context,
@@ -436,8 +444,4 @@ function requirePositiveInteger(value: unknown, fieldName: string): number {
     throw new ProviderRequestError(400, `${fieldName} must be a positive integer`);
   }
   return parsed;
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return error instanceof Error && error.name === "AbortError";
 }

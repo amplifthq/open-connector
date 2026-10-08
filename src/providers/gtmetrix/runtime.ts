@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { GtmetrixActionName } from "./actions.ts";
 
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
@@ -16,13 +16,13 @@ import {
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerResponseError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const gtmetrixApiBaseUrl = "https://gtmetrix.com/api/2.0";
+export const gtmetrixApiBaseUrl: string = "https://gtmetrix.com/api/2.0";
 const gtmetrixJsonMediaType = "application/vnd.api+json";
-const gtmetrixDefaultRequestTimeoutMs = 30_000;
 
 type GtmetrixRequestPhase = "validate" | "execute";
 type GtmetrixQueryValue = string | number | boolean | readonly string[] | readonly number[] | undefined;
@@ -40,7 +40,10 @@ interface GtmetrixRequestInput {
   allowedStatuses?: number[];
 }
 
-export const gtmetrixActionHandlers: Record<GtmetrixActionName, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const gtmetrixActionHandlers: ProviderActionHandlers<
+  "gtmetrix",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   async get_account_status(_input, context): Promise<unknown> {
     const { payload } = await requestGtmetrixJson({
       apiKey: context.apiKey,
@@ -152,12 +155,12 @@ export const gtmetrixActionHandlers: Record<GtmetrixActionName, ProviderRuntimeH
       signal: context.signal,
       phase: "execute",
     });
-    const root = requiredRecord(payload, "gtmetrix start test response", providerError);
+    const root = requiredRecord(payload, "gtmetrix start test response", providerResponseError);
 
     return {
       test: readDataObject(root, "gtmetrix start test response"),
-      meta: requiredRecord(root.meta, "gtmetrix start test response meta", providerError),
-      links: requiredRecord(root.links, "gtmetrix start test response links", providerError),
+      meta: requiredRecord(root.meta, "gtmetrix start test response meta", providerResponseError),
+      links: requiredRecord(root.links, "gtmetrix start test response links", providerResponseError),
     };
   },
   async list_tests(input, context): Promise<unknown> {
@@ -170,7 +173,7 @@ export const gtmetrixActionHandlers: Record<GtmetrixActionName, ProviderRuntimeH
       signal: context.signal,
       phase: "execute",
     });
-    const root = requiredRecord(payload, "gtmetrix tests response", providerError);
+    const root = requiredRecord(payload, "gtmetrix tests response", providerResponseError);
 
     return {
       tests: readDataArray(root, "gtmetrix tests response"),
@@ -190,7 +193,7 @@ export const gtmetrixActionHandlers: Record<GtmetrixActionName, ProviderRuntimeH
       redirect: "manual",
       allowedStatuses: [303],
     });
-    const root = requiredRecord(payload, "gtmetrix test response", providerError);
+    const root = requiredRecord(payload, "gtmetrix test response", providerResponseError);
     const test = readDataObject(root, "gtmetrix test response");
     const reportUrlHeader = optionalString(response.headers.get("Location"));
     const retryAfterHeader = parseOptionalIntegerHeader(response.headers.get("Retry-After"));
@@ -215,7 +218,7 @@ export const gtmetrixActionHandlers: Record<GtmetrixActionName, ProviderRuntimeH
       signal: context.signal,
       phase: "execute",
     });
-    const root = requiredRecord(payload, "gtmetrix pages response", providerError);
+    const root = requiredRecord(payload, "gtmetrix pages response", providerResponseError);
 
     return {
       pages: readDataArray(root, "gtmetrix pages response"),
@@ -249,7 +252,7 @@ export const gtmetrixActionHandlers: Record<GtmetrixActionName, ProviderRuntimeH
       signal: context.signal,
       phase: "execute",
     });
-    const root = requiredRecord(payload, "gtmetrix page reports response", providerError);
+    const root = requiredRecord(payload, "gtmetrix page reports response", providerResponseError);
 
     return {
       reports: readDataArray(root, "gtmetrix page reports response"),
@@ -343,7 +346,7 @@ async function requestGtmetrixJson(input: GtmetrixRequestInput): Promise<{
 }
 
 async function fetchGtmetrix(input: GtmetrixRequestInput): Promise<Response> {
-  const timeout = createProviderTimeout(input.signal, gtmetrixDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   const url = new URL(normalizePath(input.path), `${gtmetrixApiBaseUrl}/`);
   for (const [key, value] of Object.entries(input.query ?? {})) {
     if (value === undefined) continue;
@@ -494,18 +497,18 @@ function addTimestampComparisons(
 
 function readStatusAttributes(payload: Record<string, unknown>): Record<string, unknown> {
   const resource = readDataObject(payload, "gtmetrix status response");
-  return requiredRecord(resource.attributes, "gtmetrix status attributes", providerError);
+  return requiredRecord(resource.attributes, "gtmetrix status attributes", providerResponseError);
 }
 
 function readDataObject(payload: Record<string, unknown>, label: string): Record<string, unknown> {
-  return requiredRecord(payload.data, `${label} data`, providerError);
+  return requiredRecord(payload.data, `${label} data`, providerResponseError);
 }
 
 function readDataArray(payload: Record<string, unknown>, label: string): Array<Record<string, unknown>> {
   if (!Array.isArray(payload.data)) {
     throw new ProviderRequestError(502, `${label} must contain a data array`);
   }
-  return payload.data.map((item) => requiredRecord(item, `${label} item`, providerError));
+  return payload.data.map((item) => requiredRecord(item, `${label} item`, providerResponseError));
 }
 
 function extractGtmetrixErrorMessage(payload: unknown): string | undefined {
@@ -551,8 +554,4 @@ function parseOptionalIntegerHeader(value: string | null): number | undefined {
 
 function normalizePath(path: string): string {
   return path.startsWith("/") ? path.slice(1) : path;
-}
-
-function providerError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

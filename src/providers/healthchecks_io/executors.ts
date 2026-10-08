@@ -1,6 +1,6 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { HealthchecksIoActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -13,6 +13,8 @@ import {
 import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
+  isAbortLikeError,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
 } from "../provider-runtime.ts";
@@ -29,7 +31,7 @@ type HealthchecksIoActionHandler = (
   context: HealthchecksIoActionContext,
 ) => Promise<unknown>;
 
-export const healthchecksIoActionHandlers: Record<HealthchecksIoActionName, HealthchecksIoActionHandler> = {
+export const healthchecksIoActionHandlers: ProviderActionHandlers<"healthchecks_io", HealthchecksIoActionHandler> = {
   async list_checks(input, context) {
     const payload = await requestHealthchecksIoJson({
       context,
@@ -399,20 +401,6 @@ function assertUpdateCheckInput(input: Record<string, unknown>): void {
   if (!mutationKeys.some((key) => input[key] !== undefined)) {
     throw new ProviderRequestError(400, "At least one update field must be provided.");
   }
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === "object" &&
-    "name" in error &&
-    (String((error as { name?: unknown }).name) === "AbortError" ||
-      String((error as { name?: unknown }).name) === "TimeoutError")
-  );
 }
 
 export const proxy: ProviderProxyExecutor = defineProviderProxy({

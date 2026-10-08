@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -11,7 +12,6 @@ export interface BlueskyContext extends ApiKeyProviderContext {
 
 export const blueskyApiBaseUrl = "https://bsky.social";
 
-const blueskyDefaultRequestTimeoutMs = 30_000;
 const createSessionPath = "/xrpc/com.atproto.server.createSession";
 
 export type BlueskyRequestPhase = "validate" | "execute";
@@ -36,7 +36,7 @@ interface BlueskyRequestOptions {
   signal?: AbortSignal;
 }
 
-export const blueskyActionHandlers: Record<string, BlueskyActionHandler> = {
+export const blueskyActionHandlers: ProviderActionHandlers<"bluesky", BlueskyActionHandler> = {
   async get_profile(input, context) {
     const session = await createBlueskySession({
       identifier: context.handle,
@@ -82,6 +82,33 @@ export const blueskyActionHandlers: Record<string, BlueskyActionHandler> = {
       posts: requireArray(record.posts, "posts").map((post) => requireRecord(post, "Bluesky post")),
       cursor: optionalString(record.cursor) ?? null,
       hitsTotal: optionalInteger(record.hitsTotal) ?? null,
+    };
+  },
+  async get_timeline(input, context) {
+    const session = await createBlueskySession({
+      identifier: context.handle,
+      appPassword: context.apiKey,
+      fetcher: context.fetcher,
+      signal: context.signal,
+      phase: "execute",
+    });
+    const payload = await requestBlueskyJson({
+      path: "/xrpc/app.bsky.feed.getTimeline",
+      method: "GET",
+      query: compactObject({
+        algorithm: optionalString(input.algorithm),
+        limit: optionalInteger(input.limit),
+        cursor: optionalString(input.cursor),
+      }),
+      accessJwt: session.accessJwt,
+      fetcher: context.fetcher,
+      signal: context.signal,
+      phase: "execute",
+    });
+    const record = requireRecord(payload, "Bluesky timeline response");
+    return {
+      feed: requireArray(record.feed, "feed").map((item) => requireRecord(item, "Bluesky timeline item")),
+      cursor: optionalString(record.cursor) ?? null,
     };
   },
   async create_text_post(input, context) {
@@ -210,7 +237,7 @@ function buildTextPostRecord(input: Record<string, unknown>): Record<string, unk
 
 async function requestBlueskyJson(options: BlueskyRequestOptions): Promise<unknown> {
   const url = buildBlueskyUrl(options.path, options.query);
-  const timeout = createProviderTimeout(options.signal, blueskyDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(options.signal);
   try {
     let response: Response;
     try {

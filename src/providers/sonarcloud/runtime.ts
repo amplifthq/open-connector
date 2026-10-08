@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -8,19 +9,18 @@ import {
   optionalRecord,
   optionalString,
   requiredRecord,
-  requiredString,
   requiredStringArray,
 } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
+  requiredInputString,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 import { sonarCloudAllowedApiBaseUrls, sonarCloudDefaultApiBaseUrl } from "./constants.ts";
 
-const requestTimeoutMs = 30_000;
 const maxResponseBytes = 10 * 1024 * 1024;
 
 type SonarCloudPhase = "validate" | "execute";
@@ -46,13 +46,16 @@ export interface SonarCloudActionContext {
   signal?: AbortSignal;
 }
 
-export const sonarCloudActionHandlers: Record<string, ProviderRuntimeHandler<SonarCloudActionContext>> = {
+export const sonarCloudActionHandlers: ProviderActionHandlers<
+  "sonarcloud",
+  ProviderRuntimeHandler<SonarCloudActionContext>
+> = {
   async list_projects(input, context) {
     const payload = await requestSonarCloudJson({
       context,
       path: "/projects/search",
       query: {
-        organization: readInputString(input.organization, "organization"),
+        organization: requiredInputString(input.organization, "organization"),
         q: readOptionalInputString(input.query, "query"),
         projects: joinOptionalStringList(input.projectKeys, "projectKeys"),
         analyzedBefore: readOptionalInputString(input.analyzedBefore, "analyzedBefore"),
@@ -96,7 +99,7 @@ export const sonarCloudActionHandlers: Record<string, ProviderRuntimeHandler<Son
       context,
       path: "/measures/component",
       query: {
-        component: readInputString(input.componentKey, "componentKey"),
+        component: requiredInputString(input.componentKey, "componentKey"),
         metricKeys: joinRequiredStringList(input.metricKeys, "metricKeys"),
         branch: readOptionalInputString(input.branch, "branch"),
         pullRequest: readOptionalInputString(input.pullRequest, "pullRequest"),
@@ -165,8 +168,7 @@ export async function validateSonarCloudCredential(
 }
 
 async function requestSonarCloudJson(input: SonarCloudRequest): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, requestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "SonarQube Cloud" }, async (signal) => {
     const response = await input.context.fetcher(buildSonarCloudUrl(input), {
       method: "GET",
       headers: {
@@ -174,23 +176,12 @@ async function requestSonarCloudJson(input: SonarCloudRequest): Promise<unknown>
         authorization: `Bearer ${input.context.apiKey}`,
         "user-agent": providerUserAgent,
       },
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readSonarCloudPayload(response);
     if (!response.ok) throw createSonarCloudError(response.status, payload, input.phase);
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) throw error;
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "SonarQube Cloud request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `SonarQube Cloud request failed: ${error.message}` : "SonarQube Cloud request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildSonarCloudUrl(input: SonarCloudRequest): string {
@@ -388,10 +379,6 @@ function assertBranchAndPullRequestAreExclusive(input: Record<string, unknown>):
   }
 }
 
-function readInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, badRequest);
-}
-
 function readOptionalInputString(value: unknown, fieldName: string): string | undefined {
   if (value == null) return undefined;
   const stringValue = optionalString(value);
@@ -407,7 +394,9 @@ function joinRequiredStringList(value: unknown, fieldName: string): string {
 
 function joinOptionalStringList(value: unknown, fieldName: string): string | undefined {
   if (value == null) return undefined;
-  const values = requiredStringArray(value, fieldName, badRequest).map((item) => readInputString(item, fieldName));
+  const values = requiredStringArray(value, fieldName, providerInputError).map((item) =>
+    requiredInputString(item, fieldName),
+  );
   if (values.length === 0) {
     throw new ProviderRequestError(400, `${fieldName} must be a non-empty string array`);
   }
@@ -436,10 +425,6 @@ function readProviderString(value: unknown, message: string): string {
   const stringValue = optionalString(value);
   if (stringValue === undefined) throw new ProviderRequestError(502, message);
   return stringValue;
-}
-
-function badRequest(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function providerError(message: string): ProviderRequestError {

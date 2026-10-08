@@ -135,25 +135,10 @@ const listMembershipInputSchema = s.object("Path parameters and body for adding 
   contact_id: contactIdSchema,
 });
 
-export type SendfoxActionName =
-  | "list_contacts"
-  | "create_contact"
-  | "get_contact"
-  | "update_contact"
-  | "delete_contact"
-  | "unsubscribe_contact"
-  | "list_contact_lists"
-  | "create_contact_list"
-  | "get_contact_list"
-  | "update_contact_list"
-  | "delete_contact_list"
-  | "list_contacts_in_list"
-  | "add_contact_to_list"
-  | "remove_contact_from_list";
-
 export const sendfoxActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_contacts",
+    operationType: "read",
     description: "List SendFox contacts with optional search, email, and unsubscribe filters.",
     requiredScopes: [],
     inputSchema: listContactsInputSchema,
@@ -161,6 +146,7 @@ export const sendfoxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_contact",
+    operationType: "write",
     description: "Create a SendFox contact and optionally attach it to lists with custom contact fields.",
     requiredScopes: [],
     inputSchema: createContactInputSchema,
@@ -168,6 +154,7 @@ export const sendfoxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_contact",
+    operationType: "read",
     description: "Get a SendFox contact by ID.",
     requiredScopes: [],
     inputSchema: contactIdInputSchema,
@@ -175,6 +162,7 @@ export const sendfoxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_contact",
+    operationType: "write",
     description: "Update a SendFox contact's name, list memberships, or custom field values.",
     requiredScopes: [],
     inputSchema: updateContactInputSchema,
@@ -182,6 +170,7 @@ export const sendfoxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_contact",
+    operationType: "destructive",
     description: "Soft-delete a SendFox contact and cancel any scheduled deliverables.",
     requiredScopes: [],
     inputSchema: contactIdInputSchema,
@@ -189,6 +178,7 @@ export const sendfoxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "unsubscribe_contact",
+    operationType: "destructive",
     description: "Unsubscribe a SendFox contact by email address.",
     requiredScopes: [],
     inputSchema: unsubscribeContactInputSchema,
@@ -196,6 +186,7 @@ export const sendfoxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_contact_lists",
+    operationType: "read",
     description: "List SendFox contact lists with optional search filtering.",
     requiredScopes: [],
     inputSchema: listListsInputSchema,
@@ -203,6 +194,7 @@ export const sendfoxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_contact_list",
+    operationType: "write",
     description: "Create a SendFox contact list.",
     requiredScopes: [],
     inputSchema: createListInputSchema,
@@ -210,6 +202,7 @@ export const sendfoxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_contact_list",
+    operationType: "read",
     description: "Get a SendFox contact list by ID.",
     requiredScopes: [],
     inputSchema: listIdInputSchema,
@@ -217,6 +210,7 @@ export const sendfoxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_contact_list",
+    operationType: "write",
     description: "Update a SendFox contact list name.",
     requiredScopes: [],
     inputSchema: updateListInputSchema,
@@ -224,6 +218,7 @@ export const sendfoxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_contact_list",
+    operationType: "destructive",
     description: "Soft-delete a SendFox contact list when it is not used by dependent resources.",
     requiredScopes: [],
     inputSchema: listIdInputSchema,
@@ -231,6 +226,7 @@ export const sendfoxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_contacts_in_list",
+    operationType: "read",
     description: "List contacts in a SendFox contact list with optional search filtering.",
     requiredScopes: [],
     inputSchema: listContactsInListInputSchema,
@@ -238,6 +234,7 @@ export const sendfoxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "add_contact_to_list",
+    operationType: "write",
     description: "Add an existing SendFox contact to a contact list.",
     requiredScopes: [],
     inputSchema: listMembershipInputSchema,
@@ -245,6 +242,7 @@ export const sendfoxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "remove_contact_from_list",
+    operationType: "destructive",
     description: "Remove a SendFox contact from a contact list.",
     requiredScopes: [],
     inputSchema: listMembershipInputSchema,

@@ -217,29 +217,17 @@ const updateTagInputSchema = s.object(
 const subscriberOutputSchema = s.actionOutput({ subscriber: subscriberSchema }, "A Buttondown subscriber result.");
 const tagOutputSchema = s.actionOutput({ tag: tagSchema }, "A Buttondown tag result.");
 
-export type ButtondownActionName =
-  | "get_account"
-  | "list_newsletters"
-  | "list_subscribers"
-  | "get_subscriber"
-  | "create_subscriber"
-  | "update_subscriber"
-  | "delete_subscriber"
-  | "list_tags"
-  | "create_tag"
-  | "get_tag"
-  | "update_tag"
-  | "delete_tag";
-
 export const buttondownActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_account",
+    operationType: "read",
     description: "Get the account associated with the Buttondown API key.",
     inputSchema: emptyInputSchema,
     outputSchema: accountSchema,
   }),
   defineProviderAction(service, {
     name: "list_newsletters",
+    operationType: "read",
     description: "List newsletters available to the Buttondown API key.",
     inputSchema: paginationInputSchema,
     outputSchema: s.actionOutput(
@@ -252,6 +240,7 @@ export const buttondownActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_subscribers",
+    operationType: "read",
     description: "List Buttondown subscribers with common filters.",
     inputSchema: listSubscribersInputSchema,
     outputSchema: s.actionOutput(
@@ -264,24 +253,28 @@ export const buttondownActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_subscriber",
+    operationType: "read",
     description: "Retrieve one Buttondown subscriber by ID or email address.",
     inputSchema: getSubscriberInputSchema,
     outputSchema: subscriberOutputSchema,
   }),
   defineProviderAction(service, {
     name: "create_subscriber",
+    operationType: "write",
     description: "Create a Buttondown subscriber.",
     inputSchema: createSubscriberInputSchema,
     outputSchema: subscriberOutputSchema,
   }),
   defineProviderAction(service, {
     name: "update_subscriber",
+    operationType: "write",
     description: "Update a Buttondown subscriber by ID or email address.",
     inputSchema: updateSubscriberInputSchema,
     outputSchema: subscriberOutputSchema,
   }),
   defineProviderAction(service, {
     name: "delete_subscriber",
+    operationType: "destructive",
     description: "Delete a Buttondown subscriber by ID or email address.",
     inputSchema: getSubscriberInputSchema,
     outputSchema: s.actionOutput(
@@ -294,6 +287,7 @@ export const buttondownActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tags",
+    operationType: "read",
     description: "List Buttondown tags.",
     inputSchema: listTagsInputSchema,
     outputSchema: s.actionOutput(
@@ -306,24 +300,28 @@ export const buttondownActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_tag",
+    operationType: "write",
     description: "Create a Buttondown tag.",
     inputSchema: createTagInputSchema,
     outputSchema: tagOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_tag",
+    operationType: "read",
     description: "Retrieve one Buttondown tag by ID.",
     inputSchema: getTagInputSchema,
     outputSchema: tagOutputSchema,
   }),
   defineProviderAction(service, {
     name: "update_tag",
+    operationType: "write",
     description: "Update a Buttondown tag by ID.",
     inputSchema: updateTagInputSchema,
     outputSchema: tagOutputSchema,
   }),
   defineProviderAction(service, {
     name: "delete_tag",
+    operationType: "destructive",
     description: "Delete a Buttondown tag by ID.",
     inputSchema: getTagInputSchema,
     outputSchema: s.actionOutput(

@@ -1,9 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
   setSearchParams,
@@ -15,7 +17,7 @@ const callerapiApiBaseUrl = "https://api.callerapi.com";
 type CallerapiRequestPhase = "validate" | "execute";
 type CallerapiActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-const callerapiActionHandlers: Record<string, CallerapiActionHandler> = {
+const callerapiActionHandlers: ProviderActionHandlers<"callerapi", CallerapiActionHandler> = {
   get_user_information(_input, context) {
     return requestCallerapi({
       path: "/api/me",
@@ -38,6 +40,16 @@ const callerapiActionHandlers: Record<string, CallerapiActionHandler> = {
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, callerapiActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: callerapiApiBaseUrl,
+  auth: { type: "api_key_header", name: "x-auth" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

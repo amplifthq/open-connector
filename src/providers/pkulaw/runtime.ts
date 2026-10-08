@@ -1,14 +1,12 @@
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 import type { PkulawMcpServerId } from "./actions.ts";
+import type { Client } from "@modelcontextprotocol/client";
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
+import { withMcpClient } from "../mcp-client.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 export const pkulawMcpGateway = "https://apim-gateway.pkulaw.com";
 const timeoutMs = 60_000;
-const validator = new CfWorkerJsonSchemaValidator();
 
 const servers: Record<PkulawMcpServerId, { displayName: string; invokePath: string }> = {
   "law-aggregate": { displayName: "法律智能检索", invokePath: "/mcp-law-agg/1.0.0/mcp" },
@@ -41,7 +39,7 @@ export async function callTool(
   context: PkulawContext,
 ): Promise<unknown> {
   const result = await withClient(serverId, context, "execute", (client) =>
-    client.callTool({ name: toolName, arguments: arguments_ }, undefined, { timeout: timeoutMs }),
+    client.callTool({ name: toolName, arguments: arguments_ }, { timeout: timeoutMs }),
   );
   if (result.isError) throw new ProviderRequestError(502, `PKULaw MCP tool ${toolName} returned an error`, result);
   return result.structuredContent ?? result;
@@ -73,31 +71,33 @@ async function withClient<T>(
     authorization: `Bearer ${context.apiKey.trim()}`,
     "user-agent": providerUserAgent,
   });
-  const transport = new StreamableHTTPClientTransport(endpoint, {
-    fetch: context.fetcher,
-    requestInit: { headers, signal: context.signal },
-  });
-  const client = new Client({ name: "open-connector-pkulaw", version: "1.0.0" }, { jsonSchemaValidator: validator });
-  try {
-    await client.connect(transport, { timeout: timeoutMs });
-    return await run(client);
-  } catch (error) {
-    const status = readStatus(error);
-    if (status === 401 || status === 403)
-      throw new ProviderRequestError(
-        phase === "validate" ? 400 : 401,
-        "PKULaw Access Token is invalid, expired, or the selected MCP service is not enabled",
-        error,
-      );
-    if (status === 429) throw new ProviderRequestError(429, "PKULaw MCP request was rate limited", error);
-    throw new ProviderRequestError(
-      status && status >= 400 && status < 500 ? 400 : 502,
-      error instanceof Error ? `PKULaw MCP request failed: ${error.message}` : "PKULaw MCP request failed",
+  return withMcpClient(
+    {
+      endpoint,
+      transport: "streamable_http",
+      fetcher: context.fetcher,
+      headers,
+      signal: context.signal,
+      mapError: (error) => mapPkulawMcpError(error, phase),
+    },
+    run,
+  );
+}
+
+function mapPkulawMcpError(error: unknown, phase: "validate" | "execute"): ProviderRequestError {
+  const status = readStatus(error);
+  if (status === 401 || status === 403)
+    return new ProviderRequestError(
+      phase === "validate" ? 400 : 401,
+      "PKULaw Access Token is invalid, expired, or the selected MCP service is not enabled",
       error,
     );
-  } finally {
-    await client.close().catch(() => undefined);
-  }
+  if (status === 429) return new ProviderRequestError(429, "PKULaw MCP request was rate limited", error);
+  return new ProviderRequestError(
+    status && status >= 400 && status < 500 ? 400 : 502,
+    error instanceof Error ? `PKULaw MCP request failed: ${error.message}` : "PKULaw MCP request failed",
+    error,
+  );
 }
 
 function readStatus(error: unknown): number | undefined {

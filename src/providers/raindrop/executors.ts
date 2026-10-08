@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -14,7 +15,6 @@ import {
 
 const service = "raindrop";
 const raindropApiBaseUrl = "https://api.raindrop.io/rest/v1";
-const requestTimeoutMs = 30_000;
 
 type RequestPhase = "validate" | "execute";
 
@@ -22,7 +22,7 @@ type RequestContext = ApiKeyProviderContext;
 
 type ActionHandler = (input: Record<string, unknown>, context: RequestContext) => Promise<unknown>;
 
-export const raindropActionHandlers: Record<string, ActionHandler> = {
+export const raindropActionHandlers: ProviderActionHandlers<"raindrop", ActionHandler> = {
   get_user(_input, context) {
     return requestJson("/user", { method: "GET" }, context, "execute");
   },
@@ -194,7 +194,7 @@ async function requestJson(
   context: RequestContext,
   phase: RequestPhase,
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, requestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   const url = new URL(`${raindropApiBaseUrl}${path}`);
   for (const [name, value] of Object.entries(init.query ?? {})) {
     if (value !== undefined) {

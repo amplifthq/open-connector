@@ -4,6 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { Validator } from "@cfworker/json-schema";
@@ -12,6 +13,7 @@ import { objectArray, optionalRawString, optionalRecord, requiredRecord, require
 import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
+  providerResponseError,
   providerUserAgent,
   ProviderRequestError,
   readProviderJsonBody,
@@ -36,7 +38,7 @@ type PassslotRequestContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" |
 
 const emptyPassslotResponse = Symbol("empty PassSlot response");
 
-export const passslotActionHandlers: Record<string, PassslotActionHandler> = {
+export const passslotActionHandlers: ProviderActionHandlers<"passslot", PassslotActionHandler> = {
   async list_templates(_input, context) {
     return {
       templates: (await requestPassslotArray({ path: "/templates" }, context)).map(validatePassslotTemplate),
@@ -286,8 +288,4 @@ function validatePassslotUrl(value: unknown, field: string, payload: unknown): s
     throw new ProviderRequestError(502, `PassSlot ${field} must be a valid URL`, payload);
   }
   return value;
-}
-
-function providerResponseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

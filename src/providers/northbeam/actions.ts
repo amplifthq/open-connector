@@ -5,13 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "northbeam";
 
-export type NorthbeamActionName =
-  | "list_metrics"
-  | "list_attribution_models"
-  | "list_breakdowns"
-  | "list_spend"
-  | "list_hourly_spend";
-
 const nonEmptyStringSchema = (description: string): JsonSchema =>
   s.string(description, { minLength: 1, pattern: "\\S" });
 
@@ -112,6 +105,7 @@ listHourlySpendInputSchema.dependentRequired = {
 export const northbeamActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_metrics",
+    operationType: "read",
     description: "List the metrics available for Northbeam data exports.",
     inputSchema: s.object("The input payload for listing Northbeam metrics.", {}),
     outputSchema: s.object("The Northbeam metrics response.", {
@@ -120,6 +114,7 @@ export const northbeamActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_attribution_models",
+    operationType: "read",
     description: "List the attribution models available for Northbeam data exports.",
     inputSchema: s.object("The input payload for listing Northbeam attribution models.", {}),
     outputSchema: s.object("The Northbeam attribution models response.", {
@@ -128,6 +123,7 @@ export const northbeamActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_breakdowns",
+    operationType: "read",
     description: "List the breakdown keys and values available for Northbeam data exports.",
     inputSchema: s.object("The input payload for listing Northbeam breakdowns.", {}),
     outputSchema: s.object("The Northbeam breakdowns response.", {
@@ -136,12 +132,14 @@ export const northbeamActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_spend",
+    operationType: "read",
     description: "List paginated Northbeam daily spend records.",
     inputSchema: listSpendInputSchema,
     outputSchema: spendListOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_hourly_spend",
+    operationType: "read",
     description: "List paginated Northbeam hourly spend records.",
     inputSchema: listHourlySpendInputSchema,
     outputSchema: spendListOutputSchema,

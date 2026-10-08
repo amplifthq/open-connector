@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -15,6 +16,7 @@ import {
   readProviderProxyErrorMessage,
   readProviderProxyResponse,
   requireApiKeyCredential,
+  requiredResponseRecord,
   toProviderProxyError,
 } from "../provider-runtime.ts";
 
@@ -28,10 +30,10 @@ const uptimerobotProxyFetch = createProviderFetch({ skipDnsValidation: true });
 type UptimerobotRequestPhase = "validate" | "execute";
 type UptimerobotActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const uptimerobotActionHandlers: Record<string, UptimerobotActionHandler> = {
+export const uptimerobotActionHandlers: ProviderActionHandlers<"uptimerobot", UptimerobotActionHandler> = {
   async get_account_details(_input, context) {
     const payload = await requestUptimerobotJson({ context, endpoint: "getAccountDetails", phase: "execute" });
-    return { account: requireObjectPayload(payload.account, "uptimerobot account details response") };
+    return { account: requiredResponseRecord(payload.account, "uptimerobot account details response") };
   },
   async list_alert_contacts(_input, context) {
     const payload = await requestUptimerobotJson({ context, endpoint: "getAlertContacts", phase: "execute" });
@@ -74,7 +76,7 @@ export const uptimerobotActionHandlers: Record<string, UptimerobotActionHandler>
       body: buildMonitorMutationBody(input),
       phase: "execute",
     });
-    return { monitor: requireObjectPayload(payload.monitor, "uptimerobot create monitor response") };
+    return { monitor: requiredResponseRecord(payload.monitor, "uptimerobot create monitor response") };
   },
   async update_monitor(input, context) {
     const payload = await requestUptimerobotJson({
@@ -83,7 +85,7 @@ export const uptimerobotActionHandlers: Record<string, UptimerobotActionHandler>
       body: buildMonitorMutationBody(input, { includeMonitorId: true }),
       phase: "execute",
     });
-    return { monitor: requireObjectPayload(payload.monitor, "uptimerobot update monitor response") };
+    return { monitor: requiredResponseRecord(payload.monitor, "uptimerobot update monitor response") };
   },
   async delete_monitor(input, context) {
     const payload = await requestUptimerobotJson({
@@ -92,7 +94,7 @@ export const uptimerobotActionHandlers: Record<string, UptimerobotActionHandler>
       body: buildDeleteMonitorBody(input),
       phase: "execute",
     });
-    requireObjectPayload(payload.monitor, "uptimerobot delete monitor response");
+    requiredResponseRecord(payload.monitor, "uptimerobot delete monitor response");
     return { deleted: true };
   },
 };
@@ -143,7 +145,7 @@ export const credentialValidators: CredentialValidators = {
       endpoint: "getAccountDetails",
       phase: "validate",
     });
-    const account = requireObjectPayload(payload.account, "uptimerobot account details response");
+    const account = requiredResponseRecord(payload.account, "uptimerobot account details response");
     const email = optionalString(account.email);
     const firstName = optionalString(account.firstname);
     const userId = readUnknownAsString(account.user_id);
@@ -405,12 +407,6 @@ function requirePositiveInteger(value: unknown, fieldName: string): number {
   if (parsed === undefined || parsed <= 0)
     throw new ProviderRequestError(400, `${fieldName} must be a positive integer`);
   return parsed;
-}
-
-function requireObjectPayload(value: unknown, label: string): Record<string, unknown> {
-  const record = optionalRecord(value);
-  if (!record) throw new ProviderRequestError(502, `${label} must be an object`);
-  return record;
 }
 
 function requireArrayPayload(value: unknown, label: string): unknown[] {

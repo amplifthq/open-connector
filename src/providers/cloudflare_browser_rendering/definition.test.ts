@@ -10,7 +10,7 @@ describe("Cloudflare Browser Run provider definition", () => {
       authorizationUrl: "https://dash.cloudflare.com/oauth2/auth",
       tokenUrl: "https://dash.cloudflare.com/oauth2/token",
       refreshTokenUrl: "https://dash.cloudflare.com/oauth2/token",
-      scopes: ["memberships.read", "browser-rendering.read", "browser-rendering.write"],
+      scopes: ["offline_access", "memberships.read", "browser-rendering.read", "browser-rendering.write"],
       tokenEndpointAuthMethod: "client_secret_basic",
     });
   });

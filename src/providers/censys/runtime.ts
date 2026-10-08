@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -9,9 +10,8 @@ type CensysRequestPhase = "validate" | "execute";
 type CensysQueryValue = string | undefined;
 
 export const censysApiBaseUrl = "https://api.platform.censys.io/v3";
-const censysDefaultRequestTimeoutMs = 30_000;
 
-export const censysActionHandlers: Record<string, CensysActionHandler> = {
+export const censysActionHandlers: ProviderActionHandlers<"censys", CensysActionHandler> = {
   async get_host(input, context) {
     const hostId = readRequiredString(input.host_id, "host_id");
     const payload = await requestCensysJson(
@@ -106,7 +106,7 @@ async function requestCensysJson(
 ): Promise<Record<string, unknown>> {
   let response: Response;
   let payload: unknown;
-  const timeoutSignal = createProviderTimeout(signal, censysDefaultRequestTimeoutMs);
+  const timeoutSignal = createProviderTimeout(signal);
 
   try {
     response = await fetcher(buildCensysUrl(input), {
@@ -264,7 +264,7 @@ function readResultObject(payload: Record<string, unknown>) {
 
 function buildAssetQuery(input: Record<string, unknown>) {
   return compactObject({
-    at_time: readOptionalString(input.at_time),
+    at_time: optionalString(input.at_time),
   });
 }
 
@@ -274,8 +274,4 @@ function readRequiredString(value: unknown, fieldName: string) {
     throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return parsed;
-}
-
-function readOptionalString(value: unknown) {
-  return optionalString(value);
 }

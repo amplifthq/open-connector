@@ -96,17 +96,10 @@ const agentRunSchema = s.looseObject("A Codegen agent run.", {
   metadata: s.nullable(s.looseObject("Additional Codegen metadata for the agent run.")),
 });
 
-export type CodegenActionName =
-  | "get_current_user"
-  | "list_organizations"
-  | "list_repositories"
-  | "list_users"
-  | "list_agent_runs"
-  | "get_agent_run";
-
 export const codegenActions: readonly ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Retrieve the Codegen user associated with the API token.",
     inputSchema: s.actionInput({}, [], "Input parameters for retrieving the current Codegen user."),
     outputSchema: s.requiredObject("The current Codegen user response.", {
@@ -115,6 +108,7 @@ export const codegenActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_organizations",
+    operationType: "read",
     description: "List Codegen organizations available to the authenticated API token.",
     inputSchema: s.object("Input parameters for listing Codegen organizations.", paginationInputSchemas, {
       optional: ["skip", "limit"],
@@ -126,6 +120,7 @@ export const codegenActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_repositories",
+    operationType: "read",
     description: "List repositories for a Codegen organization.",
     inputSchema: s.object(
       "Input parameters for listing Codegen repositories.",
@@ -142,6 +137,7 @@ export const codegenActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List users for a Codegen organization.",
     inputSchema: s.object(
       "Input parameters for listing Codegen organization users.",
@@ -158,6 +154,7 @@ export const codegenActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_agent_runs",
+    operationType: "read",
     description: "List Codegen agent runs for an organization.",
     inputSchema: s.object(
       "Input parameters for listing Codegen agent runs.",
@@ -176,6 +173,7 @@ export const codegenActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_agent_run",
+    operationType: "read",
     description: "Retrieve a single Codegen agent run status and result.",
     inputSchema: s.object(
       "Input parameters for retrieving one Codegen agent run.",

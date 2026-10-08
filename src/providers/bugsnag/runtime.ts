@@ -1,17 +1,19 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { BugsnagActionName } from "./actions.ts";
 
-import { optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
+import { optionalBoolean, optionalString, requiredString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerResponseError,
   providerUserAgent,
   ProviderRequestError,
+  requiredInputString,
+  requiredResponseRecord,
 } from "../provider-runtime.ts";
 
 export const bugsnagApiBaseUrl: string = "https://api.bugsnag.com";
-const bugsnagDefaultRequestTimeoutMs = 30_000;
 
 type BugsnagQueryValue = string | number | boolean | undefined;
 type BugsnagRequestPhase = "validate" | "execute";
@@ -22,7 +24,7 @@ interface BugsnagJsonResponse {
   headers: Headers;
 }
 
-export const bugsnagActionHandlers: Record<BugsnagActionName, BugsnagActionHandler> = {
+export const bugsnagActionHandlers: ProviderActionHandlers<"bugsnag", BugsnagActionHandler> = {
   list_organizations(input, context) {
     return listOrganizations(input, context);
   },
@@ -53,37 +55,29 @@ export async function validateBugsnagCredential(input: {
 }): Promise<CredentialValidationResult> {
   const { payload } = await requestBugsnagJson({
     apiKey: input.apiKey,
-    path: "/user/organizations",
+    path: "/user",
     fetcher: input.fetcher,
     signal: input.signal,
     phase: "validate",
   });
 
-  const organizations = requireArrayPayload(payload, "bugsnag organizations");
-  if (organizations.length === 0) {
-    throw new ProviderRequestError(
-      502,
-      "bugsnag organizations response did not include an accessible organization",
-      payload,
-    );
-  }
-
-  const organization = requireResponseRecord(organizations[0], "bugsnag organization");
-  const organizationId = requiredString(organization.id, "bugsnag organization id", providerOutputError);
-  const organizationSlug = optionalString(organization.slug);
-  const accountLabel = optionalString(organization.name) ?? organizationSlug ?? "Bugsnag Personal Auth Token";
+  const user = requiredResponseRecord(payload, "bugsnag user");
+  const userId = requiredString(user.id, "bugsnag user id", providerResponseError);
+  const email = optionalString(user.email);
+  const name = optionalString(user.name);
 
   return {
     profile: {
-      accountId: organizationId,
-      displayName: accountLabel,
+      accountId: userId,
+      displayName: name ?? email ?? "Bugsnag Personal Auth Token",
     },
     grantedScopes: [],
     metadata: {
       apiBaseUrl: bugsnagApiBaseUrl,
-      validationEndpoint: "/user/organizations",
-      organizationId,
-      ...(organizationSlug ? { organizationSlug } : {}),
+      validationEndpoint: "/user",
+      userId,
+      ...(email ? { email } : {}),
+      ...(name ? { name } : {}),
     },
   };
 }
@@ -93,7 +87,7 @@ async function listOrganizations(input: Record<string, unknown>, context: ApiKey
     apiKey: context.apiKey,
     path: "/user/organizations",
     query: {
-      admin: readBoolean(input.admin),
+      admin: optionalBoolean(input.admin),
       per_page: readNumber(input.perPage),
     },
     fetcher: context.fetcher,
@@ -108,7 +102,7 @@ async function listOrganizations(input: Record<string, unknown>, context: ApiKey
 }
 
 async function getOrganization(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const organizationId = readRequiredInputString(input.organizationId, "organizationId");
+  const organizationId = requiredInputString(input.organizationId, "organizationId");
   const response = await requestBugsnagJson({
     apiKey: context.apiKey,
     path: `/organizations/${encodeURIComponent(organizationId)}`,
@@ -119,7 +113,7 @@ async function getOrganization(input: Record<string, unknown>, context: ApiKeyPr
   });
 
   return {
-    organization: requireResponseRecord(response.payload, "bugsnag organization"),
+    organization: requiredResponseRecord(response.payload, "bugsnag organization"),
   };
 }
 
@@ -127,7 +121,7 @@ async function listOrganizationProjects(
   input: Record<string, unknown>,
   context: ApiKeyProviderContext,
 ): Promise<unknown> {
-  const organizationId = readRequiredInputString(input.organizationId, "organizationId");
+  const organizationId = requiredInputString(input.organizationId, "organizationId");
   const response = await requestBugsnagJson({
     apiKey: context.apiKey,
     path: `/organizations/${encodeURIComponent(organizationId)}/projects`,
@@ -150,7 +144,7 @@ async function listOrganizationProjects(
 }
 
 async function listProjectErrors(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const projectId = readRequiredInputString(input.projectId, "projectId");
+  const projectId = requiredInputString(input.projectId, "projectId");
   const response = await requestBugsnagJson({
     apiKey: context.apiKey,
     path: `/projects/${encodeURIComponent(projectId)}/errors`,
@@ -173,8 +167,8 @@ async function listProjectErrors(input: Record<string, unknown>, context: ApiKey
 }
 
 async function listErrorEvents(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const projectId = readRequiredInputString(input.projectId, "projectId");
-  const errorId = readRequiredInputString(input.errorId, "errorId");
+  const projectId = requiredInputString(input.projectId, "projectId");
+  const errorId = requiredInputString(input.errorId, "errorId");
   const response = await requestBugsnagJson({
     apiKey: context.apiKey,
     path: `/projects/${encodeURIComponent(projectId)}/errors/${encodeURIComponent(errorId)}/events`,
@@ -196,7 +190,7 @@ async function listErrorEvents(input: Record<string, unknown>, context: ApiKeyPr
 }
 
 async function getLatestErrorEvent(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const errorId = readRequiredInputString(input.errorId, "errorId");
+  const errorId = requiredInputString(input.errorId, "errorId");
   const response = await requestBugsnagJson({
     apiKey: context.apiKey,
     path: `/errors/${encodeURIComponent(errorId)}/latest_event`,
@@ -207,12 +201,12 @@ async function getLatestErrorEvent(input: Record<string, unknown>, context: ApiK
   });
 
   return {
-    event: requireResponseRecord(response.payload, "bugsnag latest event"),
+    event: requiredResponseRecord(response.payload, "bugsnag latest event"),
   };
 }
 
 async function listProjectReleases(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const projectId = readRequiredInputString(input.projectId, "projectId");
+  const projectId = requiredInputString(input.projectId, "projectId");
   const response = await requestBugsnagJson({
     apiKey: context.apiKey,
     path: `/projects/${encodeURIComponent(projectId)}/releases`,
@@ -244,7 +238,7 @@ async function requestBugsnagJson(input: {
   phase: BugsnagRequestPhase;
   notFoundAsInvalidInput?: boolean;
 }): Promise<BugsnagJsonResponse> {
-  const timeout = createProviderTimeout(input.signal, bugsnagDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   const url = new URL(input.path, bugsnagApiBaseUrl);
   for (const [key, value] of Object.entries(input.query ?? {})) {
     if (value !== undefined) {
@@ -372,18 +366,10 @@ function requireArrayPayload(payload: unknown, label: string): unknown[] {
   return payload;
 }
 
-function requireResponseRecord(value: unknown, label: string): Record<string, unknown> {
-  return requiredRecord(value, label, providerOutputError);
-}
-
 function requiredOptionalRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
-}
-
-function readRequiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, providerInputError);
 }
 
 function readString(value: unknown): string | undefined {
@@ -392,16 +378,4 @@ function readString(value: unknown): string | undefined {
 
 function readNumber(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
-}
-
-function readBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerOutputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

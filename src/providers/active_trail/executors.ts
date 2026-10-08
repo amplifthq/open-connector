@@ -1,11 +1,12 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ActiveTrailActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord } from "../../core/cast.ts";
+import { compactObject, optionalBooleanOrNull, optionalRecord, rawStringOrNull } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -13,14 +14,13 @@ import {
 
 const service = "active_trail";
 const activeTrailApiBaseUrl = "https://webapi.mymarketing.co.il/api";
-const activeTrailDefaultRequestTimeoutMs = 30_000;
 
 type ActiveTrailPhase = "validate" | "execute";
 type ActiveTrailMethod = "GET" | "POST" | "PUT" | "DELETE";
 type QueryValue = string | number | undefined;
 type ActiveTrailActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const activeTrailActionHandlers: Record<ActiveTrailActionName, ActiveTrailActionHandler> = {
+export const activeTrailActionHandlers: ProviderActionHandlers<"active_trail", ActiveTrailActionHandler> = {
   async get_account_balance(_input, context) {
     const payload = await requestActiveTrailJson({
       method: "GET",
@@ -196,6 +196,17 @@ export const activeTrailActionHandlers: Record<ActiveTrailActionName, ActiveTrai
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, activeTrailActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: activeTrailApiBaseUrl,
+  auth: { type: "api_key_header", name: "Authorization" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+    headers.set("content-type", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestActiveTrailJson({
@@ -234,7 +245,7 @@ async function requestActiveTrailJson(input: {
   body?: Record<string, unknown>;
   phase: ActiveTrailPhase;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, activeTrailDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
 
   try {
     const headers: Record<string, string> = {
@@ -320,7 +331,7 @@ function createActiveTrailError(
   }
 
   if (phase === "execute" && (status === 401 || status === 403)) {
-    return new ProviderRequestError(409, message, payload);
+    return new ProviderRequestError(401, message, payload);
   }
 
   if (status >= 400 && status < 500) {
@@ -382,8 +393,8 @@ function normalizeGroup(value: unknown): Record<string, unknown> {
     name: readRequiredString(record.name, "name"),
     active_counter: readNullableInteger(record.active_counter),
     counter: readNullableInteger(record.counter),
-    created: readNullableString(record.created),
-    last_generated: readNullableString(record.last_generated),
+    created: rawStringOrNull(record.created),
+    last_generated: rawStringOrNull(record.last_generated),
     data: record,
   };
 }
@@ -392,12 +403,12 @@ function normalizeContact(value: unknown): Record<string, unknown> {
   const record = requireObjectRecord(value, "ActiveTrail contact");
   return {
     id: readRequiredInteger(record.id, "id"),
-    state: readNullableString(record.state),
-    is_optined: readNullableBoolean(record.is_optined),
-    email: readNullableString(record.email),
-    sms: readNullableString(record.sms),
-    first_name: readNullableString(record.first_name),
-    last_name: readNullableString(record.last_name),
+    state: rawStringOrNull(record.state),
+    is_optined: optionalBooleanOrNull(record.is_optined),
+    email: rawStringOrNull(record.email),
+    sms: rawStringOrNull(record.sms),
+    first_name: rawStringOrNull(record.first_name),
+    last_name: rawStringOrNull(record.last_name),
     data: record,
   };
 }
@@ -434,10 +445,6 @@ function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
 }
 
-function readNullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
-
 function readRequiredInteger(value: unknown, fieldName: string): number {
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isInteger(parsed)) {
@@ -463,8 +470,4 @@ function readOptionalNumberString(value: unknown): string | undefined {
     return undefined;
   }
   return String(value);
-}
-
-function readNullableBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
 }

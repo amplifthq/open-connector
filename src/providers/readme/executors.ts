@@ -1,17 +1,26 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
-import { defineApiKeyProviderExecutors } from "../provider-runtime.ts";
-import { executeReadMeAction, readmeActionHandlers, validateReadMeCredential } from "./runtime.ts";
+import { defineApiKeyProviderExecutors, defineProviderProxy, mapProviderActionSources } from "../provider-runtime.ts";
+import { executeReadMeAction, readmeActionHandlers, readmeApiBaseUrl, validateReadMeCredential } from "./runtime.ts";
 
 const service = "readme";
 
-const readmeExecutorHandlers = Object.fromEntries(
-  Object.keys(readmeActionHandlers).map((name) => [
-    name,
-    (input: Record<string, unknown>, context: ApiKeyProviderContext) =>
-      executeReadMeAction({ apiKey: context.apiKey, actionName: name as never, input }, context.fetcher),
-  ]),
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: readmeApiBaseUrl,
+  auth: { type: "api_key_basic", suffix: ":" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+  },
+});
+
+const readmeExecutorHandlers = mapProviderActionSources(
+  service,
+  readmeActionHandlers,
+  (name) => (input: Record<string, unknown>, context: ApiKeyProviderContext) =>
+    executeReadMeAction({ apiKey: context.apiKey, actionName: name, input }, context.fetcher),
 );
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, readmeExecutorHandlers);

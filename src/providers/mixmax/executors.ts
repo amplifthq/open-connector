@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -13,6 +14,7 @@ import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
   defineProviderProxy,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
@@ -21,7 +23,6 @@ import {
 const service = "mixmax";
 const mixmaxApiBaseUrl = "https://api.mixmax.com";
 const mixmaxValidationPath = "/v1/users/me";
-const mixmaxRequestTimeoutMs = 30_000;
 const mixmaxMaxResponseBytes = 10 * 1024 * 1024;
 
 interface MixmaxContext {
@@ -41,7 +42,7 @@ interface MixmaxRequestOptions {
   body?: unknown;
 }
 
-export const mixmaxActionHandlers: Record<string, MixmaxActionHandler> = {
+export const mixmaxActionHandlers: ProviderActionHandlers<"mixmax", MixmaxActionHandler> = {
   list_sequences(input, context) {
     if (input.next !== undefined && input.previous !== undefined) {
       throw new ProviderRequestError(400, "Use either next or previous, not both.");
@@ -176,7 +177,7 @@ async function requestMixmaxJson(input: MixmaxRequestOptions, context: MixmaxCon
     }
   }
   const method = input.method ?? "GET";
-  const timeout = createProviderTimeout(context.signal, mixmaxRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       method,
@@ -261,8 +262,4 @@ function validateRecipients(value: unknown): void {
       );
     }
   }
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

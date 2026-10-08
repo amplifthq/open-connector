@@ -1,9 +1,9 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { TriggerDevActionName } from "./actions.ts";
 
-import { compactObject, optionalString, requiredString } from "../../core/cast.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { compactObject, optionalString } from "../../core/cast.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 export const triggerDevApiBaseUrl = "https://api.trigger.dev";
 
@@ -20,14 +20,17 @@ interface TriggerDevRequestOptions {
   body?: unknown;
 }
 
-export const triggerDevActionHandlers: Record<TriggerDevActionName, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const triggerDevActionHandlers: ProviderActionHandlers<
+  "trigger_dev",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   list_runs(input, context) {
     return listRuns(input, context);
   },
   get_run(input, context) {
     return requestTriggerDevJson(
       {
-        path: `/api/v3/runs/${encodeURIComponent(requireInputString(input.runId, "runId"))}`,
+        path: `/api/v3/runs/${encodeURIComponent(requiredInputString(input.runId, "runId"))}`,
         mode: "execute",
       },
       context,
@@ -36,7 +39,7 @@ export const triggerDevActionHandlers: Record<TriggerDevActionName, ProviderRunt
   get_run_result(input, context) {
     return requestTriggerDevJson(
       {
-        path: `/api/v1/runs/${encodeURIComponent(requireInputString(input.runId, "runId"))}/result`,
+        path: `/api/v1/runs/${encodeURIComponent(requiredInputString(input.runId, "runId"))}/result`,
         mode: "execute",
       },
       context,
@@ -45,7 +48,7 @@ export const triggerDevActionHandlers: Record<TriggerDevActionName, ProviderRunt
   trigger_task(input, context) {
     return requestTriggerDevJson(
       {
-        path: `/api/v1/tasks/${encodeURIComponent(requireInputString(input.taskIdentifier, "taskIdentifier"))}/trigger`,
+        path: `/api/v1/tasks/${encodeURIComponent(requiredInputString(input.taskIdentifier, "taskIdentifier"))}/trigger`,
         method: "POST",
         body: compactObject({
           payload: input.payload,
@@ -60,7 +63,7 @@ export const triggerDevActionHandlers: Record<TriggerDevActionName, ProviderRunt
   cancel_run(input, context) {
     return requestTriggerDevJson(
       {
-        path: `/api/v2/runs/${encodeURIComponent(requireInputString(input.runId, "runId"))}/cancel`,
+        path: `/api/v2/runs/${encodeURIComponent(requiredInputString(input.runId, "runId"))}/cancel`,
         method: "POST",
         mode: "execute",
       },
@@ -70,7 +73,7 @@ export const triggerDevActionHandlers: Record<TriggerDevActionName, ProviderRunt
   replay_run(input, context) {
     return requestTriggerDevJson(
       {
-        path: `/api/v1/runs/${encodeURIComponent(requireInputString(input.runId, "runId"))}/replay`,
+        path: `/api/v1/runs/${encodeURIComponent(requiredInputString(input.runId, "runId"))}/replay`,
         method: "POST",
         mode: "execute",
       },
@@ -284,10 +287,6 @@ function commaSeparated(value: unknown): string | undefined {
     return undefined;
   }
   return value.map(String).join(",");
-}
-
-function requireInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1,11 +1,11 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { WebshareActionName } from "./actions.ts";
 
 import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
-const webshareApiBaseUrl = "https://proxy.webshare.io";
+export const webshareApiBaseUrl = "https://proxy.webshare.io";
 
 type WebshareRequestPhase = "validate" | "execute";
 type WebshareQueryValue = string | number | boolean | undefined;
@@ -16,7 +16,7 @@ interface WebshareRequestInput {
   query?: Record<string, WebshareQueryValue>;
 }
 
-export const webshareActionHandlers: Record<WebshareActionName, WebshareActionHandler> = {
+export const webshareActionHandlers: ProviderActionHandlers<"webshare", WebshareActionHandler> = {
   get_profile(_input, context) {
     return webshareGetProfile(context);
   },

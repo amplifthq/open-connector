@@ -1,7 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { AgilityActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import { booleanString, compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 export const agilityApiBaseUrl = "https://api.aglty.io";
@@ -17,7 +17,7 @@ interface AgilityActionContext {
 
 type AgilityActionHandler = (input: Record<string, unknown>, context: AgilityActionContext) => Promise<unknown>;
 
-export const agilityActionHandlers: Record<AgilityActionName, AgilityActionHandler> = {
+export const agilityActionHandlers: ProviderActionHandlers<"agility", AgilityActionHandler> = {
   async list_content_models(input, context) {
     const payload = await requestAgilityJson({
       path: buildAgilityPath(input.guid, input.apiType, "contentmodels"),
@@ -52,7 +52,7 @@ export const agilityActionHandlers: Record<AgilityActionName, AgilityActionHandl
       apiKey: context.apiKey,
       params: compactObject({
         ContentLinkDepth: readOptionalIntegerString(input.contentLinkDepth),
-        ExpandAllContentLinks: readOptionalBooleanString(input.expandAllContentLinks),
+        ExpandAllContentLinks: booleanString(input.expandAllContentLinks),
         Fields: optionalString(input.fields),
         Take: readOptionalIntegerString(input.take),
         Skip: readOptionalIntegerString(input.skip),
@@ -83,7 +83,7 @@ export const agilityActionHandlers: Record<AgilityActionName, AgilityActionHandl
       apiKey: context.apiKey,
       params: compactObject({
         contentLinkDepth: readOptionalIntegerString(input.contentLinkDepth),
-        expandAllContentLinks: readOptionalBooleanString(input.expandAllContentLinks),
+        expandAllContentLinks: booleanString(input.expandAllContentLinks),
       }),
       fetcher: context.fetcher,
       signal: context.signal,
@@ -108,7 +108,7 @@ export const agilityActionHandlers: Record<AgilityActionName, AgilityActionHandl
       apiKey: context.apiKey,
       params: compactObject({
         contentLinkDepth: readOptionalIntegerString(input.contentLinkDepth),
-        expandAllContentLinks: readOptionalBooleanString(input.expandAllContentLinks),
+        expandAllContentLinks: booleanString(input.expandAllContentLinks),
       }),
       fetcher: context.fetcher,
       signal: context.signal,
@@ -356,8 +356,4 @@ function readRequiredIntegerString(value: unknown, fieldName: string): string {
 function readOptionalIntegerString(value: unknown): string | undefined {
   const integer = optionalInteger(value);
   return integer === undefined ? undefined : String(integer);
-}
-
-function readOptionalBooleanString(value: unknown): string | undefined {
-  return typeof value === "boolean" ? String(value) : undefined;
 }

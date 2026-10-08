@@ -6,23 +6,26 @@ import type { Logger } from "./logger.ts";
 import type { ISecretCodec } from "./secrets/secret-codec-core.ts";
 
 import { ActionPolicyService, parseActionPolicyList } from "../core/action-policy.ts";
+import { PromiseCache } from "../core/promise-cache.ts";
 import {
   parseEgressTrustedHosts,
   parsePrivateNetworkAccessFlag,
   setEgressTrustedHosts,
   setPrivateNetworkAccessAllowed,
 } from "../core/request.ts";
+import { GitHubAppInstallationService } from "../providers/github/installation-service.ts";
 import { ProviderLoader } from "../providers/provider-loader.ts";
 import { executorModules } from "../providers/registry.cloudflare.generated.ts";
+import { SaasCleanupService } from "../saas/saas-cleanup-service.ts";
 import { isConsoleShellPath } from "./api/console-paths.ts";
 import { loadCatalogFromAssets } from "./cloudflare/catalog-assets.ts";
 import { readPositiveInteger, resolvePublicOrigin } from "./cloudflare/cloudflare-env.ts";
-import { IsolatePromiseCache } from "./cloudflare/isolate-promise-cache.ts";
 import { createConnectApp } from "./connect-app.ts";
+import { preloadOptionalServerModules } from "./connect-server.ts";
 import { KVTransitFileService } from "./files/kv-transit-files.ts";
 import { R2TransitFileService } from "./files/r2-transit-files.ts";
 import { createWorkerSecretCodec } from "./secrets/worker-secret-codec.ts";
-import { D1RuntimeDatabase } from "./storage/d1-runtime-store.ts";
+import { D1RuntimeDatabase } from "./storage/d1/runtime-store.ts";
 import { DEFAULT_RUN_LIMIT } from "./storage/runtime-store.ts";
 
 interface CloudflareExecutionContext {
@@ -30,11 +33,32 @@ interface CloudflareExecutionContext {
   passThroughOnException(): void;
 }
 
-const catalogCache = new IsolatePromiseCache<CatalogStore>();
-const secretCodecCache = new IsolatePromiseCache<ISecretCodec>();
-const appCache = new IsolatePromiseCache<ConnectApp>();
+const catalogCache = new PromiseCache<CatalogStore>();
+const secretCodecCache = new PromiseCache<ISecretCodec>();
+const appCache = new PromiseCache<ConnectApp>();
 
 export default {
+  async scheduled(_event: unknown, env: CloudflareEnv, ctx: CloudflareExecutionContext): Promise<void> {
+    setPrivateNetworkAccessAllowed(parsePrivateNetworkAccessFlag(env.OOMOL_CONNECT_ALLOW_PRIVATE_NETWORK));
+    setEgressTrustedHosts(parseEgressTrustedHosts(env.OOMOL_CONNECT_EGRESS_TRUSTED_HOSTS));
+    const database = new D1RuntimeDatabase(env.DB, {
+      secretCodec: await createSecretCodec(env.OOMOL_CONNECT_ENCRYPTION_KEY),
+    });
+    const cleanup = new SaasCleanupService({
+      store: database.saasProjectStore,
+      requests: database.connectionRequestStore,
+      logger: workerLogger,
+    });
+    const triggerCleanup = async () => {
+      if (!(await database.triggerStore.listFlowTriggersForMaintenance(Date.now(), 1)).length) return;
+      const origin = env.OOMOL_CONNECT_ORIGIN ?? "https://connector.invalid";
+      const { triggerMaintenance } = await appCache.get(createCacheKey(env, origin), () =>
+        createCloudflareApp(env, origin),
+      );
+      await triggerMaintenance.run();
+    };
+    ctx.waitUntil(Promise.all([cleanup.run(), triggerCleanup()]).then(() => undefined));
+  },
   async fetch(request: Request, env: CloudflareEnv, _ctx: CloudflareExecutionContext): Promise<Response> {
     setPrivateNetworkAccessAllowed(parsePrivateNetworkAccessFlag(env.OOMOL_CONNECT_ALLOW_PRIVATE_NETWORK));
     setEgressTrustedHosts(parseEgressTrustedHosts(env.OOMOL_CONNECT_EGRESS_TRUSTED_HOSTS));
@@ -54,8 +78,13 @@ async function createCloudflareApp(env: CloudflareEnv, publicOrigin: string): Pr
   if (!assets) {
     throw new Error("Cloudflare ASSETS binding is required to load the catalog");
   }
+  // The Node server defers the MCP and docs modules to their first request so its startup graph stays small.
+  // Workers keep paying their evaluation here, at app creation, so the first /mcp or /docs request of an isolate
+  // is served the same way as every later one.
+  await preloadOptionalServerModules();
   const secretCodec = await createSecretCodec(env.OOMOL_CONNECT_ENCRYPTION_KEY);
   return await createConnectApp({
+    createGitHubAppInstallations: (options) => new GitHubAppInstallationService(options),
     catalog: await loadCatalogOnce(assets),
     providerLoader: new ProviderLoader(executorModules),
     runtimeDatabase: new D1RuntimeDatabase(env.DB, {
@@ -79,6 +108,7 @@ async function createCloudflareApp(env: CloudflareEnv, publicOrigin: string): Pr
           });
     })(),
     publicOrigin,
+    configuredOrigin: env.OOMOL_CONNECT_ORIGIN,
     secretCodec,
     adminToken: env.OOMOL_CONNECT_ADMIN_TOKEN,
     runtimeToken: env.OOMOL_CONNECT_RUNTIME_TOKEN,
@@ -96,6 +126,8 @@ async function createCloudflareApp(env: CloudflareEnv, publicOrigin: string): Pr
       blockedActions: parseActionPolicyList(env.OOMOL_CONNECT_BLOCKED_ACTIONS),
       allowedProxies: parseActionPolicyList(env.OOMOL_CONNECT_ALLOWED_PROXIES),
       blockedProxies: parseActionPolicyList(env.OOMOL_CONNECT_BLOCKED_PROXIES),
+      allowedTriggers: parseActionPolicyList(env.OOMOL_CONNECT_ALLOWED_TRIGGERS),
+      blockedTriggers: parseActionPolicyList(env.OOMOL_CONNECT_BLOCKED_TRIGGERS),
     }),
     allowedCustomOAuth: parseActionPolicyList(env.OOMOL_CONNECT_ALLOWED_CUSTOM_OAUTH),
     logger: workerLogger,
@@ -147,12 +179,15 @@ function createSecretCodec(encryptionKey: string | undefined): Promise<ISecretCo
 function createCacheKey(env: CloudflareEnv, publicOrigin: string): string {
   return JSON.stringify({
     publicOrigin,
+    configuredOrigin: env.OOMOL_CONNECT_ORIGIN ?? null,
     adminToken: env.OOMOL_CONNECT_ADMIN_TOKEN ?? "",
     runtimeToken: env.OOMOL_CONNECT_RUNTIME_TOKEN ?? "",
     encryptionKey: env.OOMOL_CONNECT_ENCRYPTION_KEY ?? "",
     allowedActions: env.OOMOL_CONNECT_ALLOWED_ACTIONS ?? "",
     blockedActions: env.OOMOL_CONNECT_BLOCKED_ACTIONS ?? "",
     allowedProxies: env.OOMOL_CONNECT_ALLOWED_PROXIES ?? "",
+    allowedTriggers: env.OOMOL_CONNECT_ALLOWED_TRIGGERS ?? "",
+    blockedTriggers: env.OOMOL_CONNECT_BLOCKED_TRIGGERS ?? "",
     blockedProxies: env.OOMOL_CONNECT_BLOCKED_PROXIES ?? "",
     allowedCustomOAuth: env.OOMOL_CONNECT_ALLOWED_CUSTOM_OAUTH ?? "",
     transitFileTtlSeconds: env.OOMOL_CONNECT_TRANSIT_FILE_TTL_SECONDS ?? "",

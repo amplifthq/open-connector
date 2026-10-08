@@ -36,30 +36,10 @@ const release = looseItem("A Sentry release payload.");
 const replay = looseItem("A Sentry replay payload.");
 const alert = looseItem("A Sentry alert workflow payload.");
 
-export type SentryActionName =
-  | "list_organization_integrations"
-  | "get_organization_integration"
-  | "get_organization_integration_config"
-  | "list_organization_sentry_apps"
-  | "get_sentry_app"
-  | "list_organization_projects"
-  | "get_project"
-  | "list_organization_issues"
-  | "get_issue"
-  | "get_issue_event"
-  | "list_issue_events"
-  | "update_issue"
-  | "list_organization_releases"
-  | "get_organization_release"
-  | "get_release_health_stats"
-  | "list_organization_replays"
-  | "get_replay"
-  | "list_alerts"
-  | "get_alert";
-
 export const sentryActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_organization_integrations",
+    operationType: "read",
     description: "List installed integrations for a Sentry organization, with optional provider and feature filters.",
     requiredScopes: ["org:read"],
     inputSchema: s.actionInput(
@@ -82,6 +62,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_organization_integration",
+    operationType: "read",
     description: "Get one installed Sentry organization integration by its integration id.",
     requiredScopes: ["org:read"],
     inputSchema: s.actionInput(
@@ -96,6 +77,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_organization_integration_config",
+    operationType: "read",
     description:
       "List available integration provider configs for a Sentry organization, optionally filtered by provider key.",
     requiredScopes: ["org:read"],
@@ -115,6 +97,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_organization_sentry_apps",
+    operationType: "read",
     description: "List the custom Sentry Apps created by a Sentry organization.",
     requiredScopes: ["org:read"],
     inputSchema: s.actionInput(
@@ -130,6 +113,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_sentry_app",
+    operationType: "read",
     description: "Get one Sentry App by id or slug, including integration metadata and OAuth client settings.",
     requiredScopes: ["org:read"],
     inputSchema: s.actionInput(
@@ -143,6 +127,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_organization_projects",
+    operationType: "read",
     description: "List projects that belong to a Sentry organization.",
     requiredScopes: ["org:read"],
     inputSchema: s.actionInput(
@@ -160,6 +145,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_project",
+    operationType: "read",
     description: "Get one Sentry project by organization and project slug or id.",
     requiredScopes: ["project:read"],
     inputSchema: s.actionInput(
@@ -174,6 +160,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_organization_issues",
+    operationType: "read",
     description: "List issues for a Sentry organization with optional search, project, and environment filters.",
     requiredScopes: ["event:read"],
     inputSchema: s.actionInput(
@@ -214,6 +201,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_issue",
+    operationType: "read",
     description: "Get one issue in a Sentry organization by numeric id or short id.",
     requiredScopes: ["event:read"],
     inputSchema: s.actionInput(
@@ -228,6 +216,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_issue_event",
+    operationType: "read",
     description: "Get one event for a Sentry issue by event id, or use latest, oldest, or recommended selectors.",
     requiredScopes: ["event:read"],
     inputSchema: s.actionInput(
@@ -244,6 +233,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_issue_events",
+    operationType: "read",
     description: "List events that belong to one Sentry issue, with optional event query filters.",
     requiredScopes: ["event:read"],
     inputSchema: s.actionInput(
@@ -269,6 +259,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_issue",
+    operationType: "destructive",
     description: "Update mutable attributes on one Sentry issue, such as status, assignment, or bookmarks.",
     requiredScopes: ["event:write"],
     inputSchema: s.actionInput(
@@ -308,6 +299,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_organization_releases",
+    operationType: "read",
     description: "List releases that belong to a Sentry organization, optionally filtered by version prefix.",
     requiredScopes: ["project:releases"],
     inputSchema: s.actionInput(
@@ -324,6 +316,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_organization_release",
+    operationType: "read",
     description: "Get one release in a Sentry organization, with optional health and summary statistics included.",
     requiredScopes: ["project:releases"],
     inputSchema: s.actionInput(
@@ -348,6 +341,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_release_health_stats",
+    operationType: "read",
     description:
       "Retrieve release health session statistics for one Sentry release by querying the sessions endpoint with that release version.",
     requiredScopes: ["org:read"],
@@ -389,6 +383,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_organization_replays",
+    operationType: "read",
     description: "List session replays for a Sentry organization, with optional project and environment filters.",
     requiredScopes: ["org:read"],
     inputSchema: s.actionInput(
@@ -415,6 +410,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_replay",
+    operationType: "read",
     description: "Get one replay instance in a Sentry organization by replay id.",
     requiredScopes: ["org:read"],
     inputSchema: s.actionInput(
@@ -446,6 +442,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_alerts",
+    operationType: "read",
     description: "List alert workflows for a Sentry organization, with optional id, project, and search filters.",
     requiredScopes: ["org:read"],
     inputSchema: s.actionInput(
@@ -465,6 +462,7 @@ export const sentryActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_alert",
+    operationType: "read",
     description: "Get one alert workflow in a Sentry organization by workflow id.",
     requiredScopes: ["org:read"],
     inputSchema: s.actionInput(

@@ -1,11 +1,19 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   defineProviderExecutors,
+  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
+  requiredResponseRecord,
 } from "../provider-runtime.ts";
 
 const service = "addresszen";
@@ -22,7 +30,7 @@ interface AddresszenActionContext {
 
 type AddresszenActionHandler = (input: Record<string, unknown>, context: AddresszenActionContext) => Promise<unknown>;
 
-export const addresszenActionHandlers: Record<string, AddresszenActionHandler> = {
+export const addresszenActionHandlers: ProviderActionHandlers<"addresszen", AddresszenActionHandler> = {
   async get_key_availability(_input, context) {
     return requestKeyAvailability(context, "execute");
   },
@@ -65,6 +73,13 @@ export const executors: ProviderExecutors = defineProviderExecutors<AddresszenAc
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: `${addresszenApiBaseUrl}/${addresszenApiVersion}`,
+  auth: { type: "api_key_query", name: "api_key" },
+  skipDnsValidation: true,
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestKeyAvailability(
@@ -75,7 +90,7 @@ export const credentialValidators: CredentialValidators = {
       },
       "validate",
     );
-    const result = requireObjectRecord(payload.result, "AddressZen key availability result");
+    const result = requiredResponseRecord(payload.result, "AddressZen key availability result");
 
     return {
       profile: {
@@ -151,7 +166,7 @@ async function requestAddresszen(
     throw createAddresszenError(response, payload, phase);
   }
 
-  return requireObjectRecord(payload, "AddressZen response");
+  return requiredResponseRecord(payload, "AddressZen response");
 }
 
 async function readAddresszenPayload(response: Response): Promise<unknown> {
@@ -190,12 +205,4 @@ function createAddresszenError(
   }
 
   return new ProviderRequestError(response.status || 500, message, payload);
-}
-
-function requireObjectRecord(value: unknown, label: string): Record<string, unknown> {
-  const record = optionalRecord(value);
-  if (!record) {
-    throw new ProviderRequestError(502, `${label} must be an object`);
-  }
-  return record;
 }

@@ -1,17 +1,19 @@
-import type { ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type { ExecutionContext, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { XMLParser } from "fast-xml-parser";
 import { positiveInteger } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineProviderExecutors,
+  defineProviderProxy,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
 const service = "dealnews";
 const dealNewsBaseUrl = "https://www.dealnews.com";
-const dealNewsRequestTimeoutMs = 30_000;
 const rssParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "",
@@ -26,7 +28,7 @@ interface DealNewsContext {
 
 type DealNewsActionHandler = (input: Record<string, unknown>, context: DealNewsContext) => Promise<unknown>;
 
-export const dealNewsActionHandlers: Record<string, DealNewsActionHandler> = {
+export const dealNewsActionHandlers: ProviderActionHandlers<"dealnews", DealNewsActionHandler> = {
   list_latest_deals(_input, context) {
     return requestFeed(new URL("/?rss=1&sort=time", dealNewsBaseUrl), context);
   },
@@ -40,7 +42,7 @@ export const dealNewsActionHandlers: Record<string, DealNewsActionHandler> = {
     return requestFeed(new URL("/rss/features/", dealNewsBaseUrl), context);
   },
   list_category_deals(input, context) {
-    const categoryId = positiveInteger(input.categoryId, "categoryId", inputError);
+    const categoryId = positiveInteger(input.categoryId, "categoryId", providerInputError);
     return requestFeed(new URL(`/rss/c${categoryId}/`, dealNewsBaseUrl), context);
   },
 };
@@ -53,8 +55,15 @@ export const executors: ProviderExecutors = defineProviderExecutors<DealNewsCont
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: dealNewsBaseUrl,
+  auth: { type: "none" },
+  skipDnsValidation: true,
+});
+
 async function requestFeed(url: URL, context: DealNewsContext): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, dealNewsRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       headers: {
@@ -117,8 +126,4 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 function malformedFeedError(): ProviderRequestError {
   return new ProviderRequestError(502, "DealNews returned malformed RSS");
-}
-
-function inputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

@@ -1,16 +1,15 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { HoldedActionName } from "./actions.ts";
 
-import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
   ProviderRequestError,
   providerUserAgent,
+  requiredInputString,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 export const holdedApiBaseUrl = "https://api.holded.com/api/v2";
-const holdedDefaultRequestTimeoutMs = 30_000;
 
 type HoldedPhase = "validate" | "execute";
 type HoldedActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -24,7 +23,7 @@ interface HoldedRequestInput {
   phase: HoldedPhase;
 }
 
-export const holdedActionHandlers: Record<HoldedActionName, HoldedActionHandler> = {
+export const holdedActionHandlers: ProviderActionHandlers<"holded", HoldedActionHandler> = {
   async list_contacts(input, context) {
     const payload = await requestHoldedJson({
       method: "GET",
@@ -49,7 +48,7 @@ export const holdedActionHandlers: Record<HoldedActionName, HoldedActionHandler>
     };
   },
   async get_contact(input, context) {
-    const contactId = readRequiredString(input.contactId, "contactId");
+    const contactId = requiredInputString(input.contactId, "contactId");
     const payload = await requestHoldedJson({
       method: "GET",
       path: `/contacts/${encodeURIComponent(contactId)}`,
@@ -70,7 +69,7 @@ export const holdedActionHandlers: Record<HoldedActionName, HoldedActionHandler>
       context,
       query: {},
       body: compactObject({
-        name: readRequiredString(input.name, "name"),
+        name: requiredInputString(input.name, "name"),
         email: optionalString(input.email),
         phone: optionalString(input.phone),
         mobile: optionalString(input.mobile),
@@ -105,7 +104,7 @@ export const holdedActionHandlers: Record<HoldedActionName, HoldedActionHandler>
     };
   },
   async get_product(input, context) {
-    const productId = readRequiredString(input.productId, "productId");
+    const productId = requiredInputString(input.productId, "productId");
     const payload = await requestHoldedJson({
       method: "GET",
       path: `/products/${encodeURIComponent(productId)}`,
@@ -156,8 +155,7 @@ export async function validateHoldedCredential(
 }
 
 async function requestHoldedJson(input: HoldedRequestInput): Promise<unknown> {
-  const timeoutHandle = createProviderTimeout(input.context.signal, holdedDefaultRequestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "Holded" }, async (signal) => {
     const response = await input.context.fetcher(buildHoldedUrl(input.path, input.query), {
       method: input.method,
       headers: {
@@ -167,7 +165,7 @@ async function requestHoldedJson(input: HoldedRequestInput): Promise<unknown> {
         "user-agent": providerUserAgent,
       },
       body: input.body ? JSON.stringify(input.body) : undefined,
-      signal: timeoutHandle.signal,
+      signal,
     });
     const payload = await readHoldedPayload(response);
 
@@ -176,20 +174,7 @@ async function requestHoldedJson(input: HoldedRequestInput): Promise<unknown> {
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeoutHandle.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Holded request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Holded request failed: ${error.message}` : "Holded request failed",
-    );
-  } finally {
-    timeoutHandle.cleanup();
-  }
+  });
 }
 
 function buildHoldedUrl(path: string, query: Record<string, string | undefined>): URL {
@@ -339,10 +324,6 @@ function readObjectId(record: Record<string, unknown>): string {
     return id;
   }
   throw new ProviderRequestError(502, "Holded response missing object identifier", record);
-}
-
-function readRequiredString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function readOptionalIntegerString(value: unknown): string | undefined {

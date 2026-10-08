@@ -146,11 +146,10 @@ const addressesOutputSchema = s.object(
   { required: ["meta", "addresses"] },
 );
 
-export type RadarActionName = "forward_geocode" | "reverse_geocode" | "ip_geocode" | "autocomplete" | "search_places";
-
 export const radarActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "forward_geocode",
+    operationType: "read",
     description: "Convert a complete address into coordinates with Radar.",
     inputSchema: s.object(
       "Input parameters for Radar forward geocoding.",
@@ -166,6 +165,7 @@ export const radarActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "reverse_geocode",
+    operationType: "read",
     description: "Convert coordinates into nearby addresses with Radar.",
     inputSchema: s.object(
       "Input parameters for Radar reverse geocoding.",
@@ -180,6 +180,7 @@ export const radarActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "ip_geocode",
+    operationType: "read",
     description: "Geocode the connector request IP with Radar.",
     inputSchema: s.object("The input payload for Radar IP geocoding.", {}, { required: [] }),
     outputSchema: s.object(
@@ -195,6 +196,7 @@ export const radarActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "autocomplete",
+    operationType: "read",
     description: "Autocomplete a partial address or place name with Radar.",
     inputSchema: s.object(
       "Input parameters for Radar address autocomplete.",
@@ -218,6 +220,7 @@ export const radarActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_places",
+    operationType: "read",
     description: "Search Radar places near coordinates by chain or category.",
     inputSchema: s.object(
       "Input parameters for Radar nearby place search.",

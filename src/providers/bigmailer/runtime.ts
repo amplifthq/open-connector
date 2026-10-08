@@ -1,17 +1,18 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { BigmailerActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
-  providerUserAgent,
-  ProviderRequestError,
-} from "../provider-runtime.ts";
+  compactObject,
+  looseArray,
+  optionalBooleanOrNull,
+  optionalInteger,
+  optionalRecord,
+  optionalString,
+} from "../../core/cast.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
 
 export const bigmailerApiBaseUrl: string = "https://api.bigmailer.io";
 
-const bigmailerDefaultRequestTimeoutMs = 30_000;
 const bigmailerValidationEndpoint = "/v1/brands";
 
 type BigmailerRequestPhase = "validate" | "execute";
@@ -24,7 +25,7 @@ interface BigmailerRuntimeContext {
 
 type BigmailerActionHandler = (input: Record<string, unknown>, context: BigmailerRuntimeContext) => Promise<unknown>;
 
-export const bigmailerActionHandlers: Record<BigmailerActionName, BigmailerActionHandler> = {
+export const bigmailerActionHandlers: ProviderActionHandlers<"bigmailer", BigmailerActionHandler> = {
   list_brands: listBrands,
   get_brand: getBrand,
   list_lists: listLists,
@@ -293,14 +294,12 @@ async function requestBigmailerJson(input: {
   query?: Record<string, string | number | boolean | undefined>;
   body?: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(input.signal, bigmailerDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.signal, label: "BigMailer" }, async (signal) => {
     const response = await input.fetcher(buildBigmailerUrl(input.path, input.query), {
       method: input.method,
       headers: bigmailerHeaders(input.apiKey, input.body !== undefined),
       body: input.body === undefined ? undefined : JSON.stringify(input.body),
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readBigmailerPayload(response);
     if (!response.ok) {
@@ -312,22 +311,7 @@ async function requestBigmailerJson(input: {
       throw new ProviderRequestError(502, "BigMailer returned an invalid payload");
     }
     return objectPayload ?? {};
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "BigMailer request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `BigMailer request failed: ${error.message}` : "BigMailer request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildBigmailerUrl(path: string, query: Record<string, string | number | boolean | undefined> = {}) {
@@ -462,7 +446,7 @@ function normalizeStringArray(value: unknown) {
 
 function normalizePage(response: Record<string, unknown> | undefined) {
   return {
-    hasMore: nullableBoolean(response?.has_more),
+    hasMore: optionalBooleanOrNull(response?.has_more),
     cursor: nullableString(response?.cursor),
     total: nullableInteger(response?.total),
   };
@@ -487,7 +471,7 @@ function normalizeList(record: Record<string, unknown> | undefined) {
   return {
     id: nullableString(record?.id),
     name: nullableString(record?.name),
-    all: nullableBoolean(record?.all),
+    all: optionalBooleanOrNull(record?.all),
     numContacts: nullableInteger(record?.num_contacts),
     created: nullableInteger(record?.created),
     engagement: nullableObject(record?.engagement),
@@ -500,9 +484,9 @@ function normalizeContact(record: Record<string, unknown> | undefined) {
     id: nullableString(record?.id),
     brandId: nullableString(record?.brand_id),
     email: nullableString(record?.email),
-    fieldValues: normalizeLooseArray(record?.field_values),
+    fieldValues: looseArray(record?.field_values),
     listIds: normalizeStringArray(record?.list_ids) ?? [],
-    unsubscribeAll: nullableBoolean(record?.unsubscribe_all),
+    unsubscribeAll: optionalBooleanOrNull(record?.unsubscribe_all),
     unsubscribeIds: normalizeStringArray(record?.unsubscribe_ids) ?? [],
     numSoftBounces: nullableInteger(record?.num_soft_bounces),
     numHardBounces: nullableInteger(record?.num_hard_bounces),
@@ -530,16 +514,8 @@ function normalizeObjectArray(value: unknown) {
     .filter((item): item is Record<string, unknown> => item !== undefined);
 }
 
-function normalizeLooseArray(value: unknown) {
-  return Array.isArray(value) ? value : [];
-}
-
 function nullableObject(value: unknown) {
   return optionalRecord(value) ?? null;
-}
-
-function nullableBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : null;
 }
 
 function nullableInteger(value: unknown) {

@@ -101,17 +101,10 @@ const createNoteInputSchema = s.object("Input payload for creating a note on a L
   value: s.nonEmptyString("The note text to add to the opportunity."),
 });
 
-export type LeverActionName =
-  | "list_postings"
-  | "get_posting"
-  | "list_opportunities"
-  | "get_opportunity"
-  | "list_opportunity_notes"
-  | "create_opportunity_note";
-
 export const leverActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_postings",
+    operationType: "read",
     description: "List Lever job postings with optional state, owner, location, and team filters.",
     requiredScopes: [],
     inputSchema: listPostingsInputSchema,
@@ -122,6 +115,7 @@ export const leverActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_posting",
+    operationType: "read",
     description: "Retrieve one Lever posting by ID.",
     requiredScopes: [],
     inputSchema: s.object("Input payload for retrieving a Lever posting.", {
@@ -133,6 +127,7 @@ export const leverActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_opportunities",
+    operationType: "read",
     description:
       "List Lever opportunities with optional timestamp, posting, stage, archive, contact, and expansion filters.",
     requiredScopes: [],
@@ -144,6 +139,7 @@ export const leverActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_opportunity",
+    operationType: "read",
     description: "Retrieve one Lever opportunity by ID.",
     requiredScopes: [],
     inputSchema: opportunityIdInputSchema,
@@ -153,6 +149,7 @@ export const leverActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_opportunity_notes",
+    operationType: "read",
     description: "List notes attached to a Lever opportunity.",
     requiredScopes: [],
     inputSchema: listNotesInputSchema,
@@ -163,6 +160,7 @@ export const leverActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_opportunity_note",
+    operationType: "write",
     description: "Create a note on a Lever opportunity.",
     requiredScopes: [],
     inputSchema: createNoteInputSchema,

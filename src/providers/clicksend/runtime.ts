@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ClicksendActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
@@ -14,7 +14,6 @@ export const clicksendApiBaseUrl = "https://rest.clicksend.com/v3";
 
 const clicksendRequestBaseUrl = "https://rest.clicksend.com/v3/";
 const clicksendValidationPath = "/account";
-const clicksendDefaultTimeoutMs = 30_000;
 
 type ClicksendPhase = "validate" | "execute";
 type ClicksendActionHandler = (input: Record<string, unknown>, context: ClicksendActionContext) => Promise<unknown>;
@@ -38,7 +37,7 @@ export interface ClicksendActionContext {
   signal?: AbortSignal;
 }
 
-export const clicksendActionHandlers: Record<ClicksendActionName, ClicksendActionHandler> = {
+export const clicksendActionHandlers: ProviderActionHandlers<"clicksend", ClicksendActionHandler> = {
   get_account(_input, context) {
     return requestClicksendJson({
       method: "GET",
@@ -202,7 +201,7 @@ async function requestClicksendJson(input: ClicksendRequestInput): Promise<Recor
     }
   }
 
-  const timeout = createProviderTimeout(input.signal, clicksendDefaultTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   let response: Response;
   let payload: unknown;
   try {

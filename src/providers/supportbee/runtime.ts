@@ -1,18 +1,23 @@
 import type { CredentialValidationResult, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { SupportbeeActionName } from "./actions.ts";
 
 import {
   compactObject,
+  looseArray,
   optionalBoolean,
+  optionalBooleanOrNull,
   optionalInteger,
   optionalRecord,
   optionalString,
+  rawStringOrNull,
+  recordOrEmpty,
   requiredString,
 } from "../../core/cast.ts";
 import { compactJson, encodePathSegment } from "../../core/request.ts";
 import {
   defineProviderExecutors,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
   requireApiKeyCredential,
@@ -32,7 +37,7 @@ type SupportbeeActionHandler = ProviderRuntimeHandler<SupportbeeActionContext>;
 const service = "supportbee";
 const validationPath = "/users";
 
-export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeActionHandler> = {
+export const supportbeeActionHandlers: ProviderActionHandlers<"supportbee", SupportbeeActionHandler> = {
   list_tickets(input, context) {
     return listSupportbeeTickets(input, context, "/tickets");
   },
@@ -41,7 +46,7 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
   },
   async get_ticket(input, context) {
     const payload = await supportbeeGetJson(context, `/tickets/${encodePathSegment(input.id)}`);
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
       ticket: normalizeSupportbeeTicket(readObjectProperty(raw, "ticket") ?? raw),
       raw,
@@ -55,7 +60,7 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
         ticket: buildTicketCreateBody(input),
       },
     });
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
       ticket: normalizeSupportbeeTicket(readObjectProperty(raw, "ticket") ?? raw),
       raw,
@@ -63,7 +68,7 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
   },
   async list_ticket_replies(input, context) {
     const payload = await supportbeeGetJson(context, `/tickets/${encodePathSegment(input.ticket_id)}/replies`);
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
       replies: readObjectArray(raw, "replies").map(normalizeSupportbeeReply),
       raw,
@@ -74,7 +79,7 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
       context,
       `/tickets/${encodePathSegment(input.ticket_id)}/replies/${encodePathSegment(input.reply_id)}`,
     );
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
       reply: normalizeSupportbeeReply(readObjectProperty(raw, "reply") ?? raw),
       raw,
@@ -88,7 +93,7 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
         reply: buildReplyCreateBody(input),
       },
     });
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
       reply: normalizeSupportbeeReply(readObjectProperty(raw, "reply") ?? raw),
       raw,
@@ -96,7 +101,7 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
   },
   async list_ticket_comments(input, context) {
     const payload = await supportbeeGetJson(context, `/tickets/${encodePathSegment(input.ticket_id)}/comments`);
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
       comments: readObjectArray(raw, "comments").map(normalizeSupportbeeComment),
       raw,
@@ -110,7 +115,7 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
         comment: buildCommentCreateBody(input),
       },
     });
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
       comment: normalizeSupportbeeComment(readObjectProperty(raw, "comment") ?? raw),
       raw,
@@ -118,9 +123,9 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
   },
   async list_labels(_input, context) {
     const payload = await supportbeeGetJson(context, "/labels");
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
-      labels: readLooseArray(raw.labels).map(normalizeSupportbeeLabel),
+      labels: looseArray(raw.labels).map(normalizeSupportbeeLabel),
       raw,
     };
   },
@@ -129,7 +134,7 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
       method: "POST",
       path: `/tickets/${encodePathSegment(input.ticket_id)}/labels/${encodePathSegment(input.label_name)}`,
     });
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
       label: normalizeSupportbeeLabel(readObjectProperty(raw, "label") ?? raw),
       raw,
@@ -148,7 +153,7 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
       with_roles: readOptionalStringArray(input.with_roles)?.join(","),
       type: optionalString(input.type),
     });
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
       users: readObjectArray(raw, "users").map(normalizeSupportbeeUser),
       raw,
@@ -158,7 +163,7 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
     const payload = await supportbeeGetJson(context, `/users/${encodePathSegment(input.id)}`, {
       max_tickets: readMaxTickets(input.max_tickets),
     });
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
       user: normalizeSupportbeeUser(readObjectProperty(raw, "user") ?? raw),
       raw,
@@ -170,7 +175,7 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
       path: "/users",
       body: buildUserWriteBody(input),
     });
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
       user: normalizeSupportbeeUser(readObjectProperty(raw, "user") ?? raw),
       raw,
@@ -182,7 +187,7 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
       path: `/users/${encodePathSegment(input.id)}`,
       body: buildUserWriteBody(input),
     });
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
       user: normalizeSupportbeeUser(readObjectProperty(raw, "user") ?? raw),
       raw,
@@ -193,7 +198,7 @@ export const supportbeeActionHandlers: Record<SupportbeeActionName, SupportbeeAc
       with_users: optionalBoolean(input.with_users),
       user: optionalString(input.user),
     });
-    const raw = payloadObject(payload);
+    const raw = recordOrEmpty(payload);
     return {
       teams: readObjectArray(raw, "teams").map(normalizeSupportbeeTeam),
       raw,
@@ -272,7 +277,7 @@ async function listSupportbeeTickets(
     requester_emails: readOptionalStringArray(input.requester_emails)?.join(","),
     total_only: optionalBoolean(input.total_only),
   });
-  const raw = payloadObject(payload);
+  const raw = recordOrEmpty(payload);
 
   return {
     tickets: readObjectArray(raw, "tickets").map(normalizeSupportbeeTicket),
@@ -490,14 +495,14 @@ function readSupportbeeErrorMessage(payload: unknown): string | undefined {
 function normalizeSupportbeeTicket(value: Record<string, unknown>): Record<string, unknown> {
   return {
     id: readNullableInteger(value.id),
-    subject: readNullableString(value.subject),
+    subject: rawStringOrNull(value.subject),
     replies_count: readNullableInteger(value.replies_count),
     comments_count: readNullableInteger(value.comments_count),
-    created_at: readNullableString(value.created_at),
-    last_activity_at: readNullableString(value.last_activity_at),
-    unanswered: readNullableBoolean(value.unanswered),
-    archived: readNullableBoolean(value.archived),
-    spam: readNullableBoolean(value.spam),
+    created_at: rawStringOrNull(value.created_at),
+    last_activity_at: rawStringOrNull(value.last_activity_at),
+    unanswered: optionalBooleanOrNull(value.unanswered),
+    archived: optionalBooleanOrNull(value.archived),
+    spam: optionalBooleanOrNull(value.spam),
     labels: readLabelNames(value.labels),
     requester: readObjectProperty(value, "requester"),
     content: readObjectProperty(value, "content"),
@@ -508,8 +513,8 @@ function normalizeSupportbeeTicket(value: Record<string, unknown>): Record<strin
 function normalizeSupportbeeReply(value: Record<string, unknown>): Record<string, unknown> {
   return {
     id: readNullableInteger(value.id),
-    created_at: readNullableString(value.created_at),
-    summary: readNullableString(value.summary),
+    created_at: rawStringOrNull(value.created_at),
+    summary: rawStringOrNull(value.summary),
     cc: readStringArray(value.cc),
     bcc: readStringArray(value.bcc),
     replier: readObjectProperty(value, "replier"),
@@ -521,7 +526,7 @@ function normalizeSupportbeeReply(value: Record<string, unknown>): Record<string
 function normalizeSupportbeeComment(value: Record<string, unknown>): Record<string, unknown> {
   return {
     id: readNullableInteger(value.id),
-    created_at: readNullableString(value.created_at),
+    created_at: rawStringOrNull(value.created_at),
     commenter: readObjectProperty(value, "commenter"),
     content: readObjectProperty(value, "content"),
     raw: value,
@@ -531,11 +536,11 @@ function normalizeSupportbeeComment(value: Record<string, unknown>): Record<stri
 function normalizeSupportbeeUser(value: Record<string, unknown>): Record<string, unknown> {
   return {
     id: readNullableInteger(value.id),
-    type: readNullableString(value.type),
-    email: readNullableString(value.email),
-    name: readNullableString(value.name),
-    role: readNullableString(value.role),
-    agent: readNullableBoolean(value.agent),
+    type: rawStringOrNull(value.type),
+    email: rawStringOrNull(value.email),
+    name: rawStringOrNull(value.name),
+    role: rawStringOrNull(value.role),
+    agent: optionalBooleanOrNull(value.agent),
     teams: readObjectArray(value, "teams"),
     raw: value,
   };
@@ -544,7 +549,7 @@ function normalizeSupportbeeUser(value: Record<string, unknown>): Record<string,
 function normalizeSupportbeeTeam(value: Record<string, unknown>): Record<string, unknown> {
   return {
     id: readNullableInteger(value.id),
-    name: readNullableString(value.name),
+    name: rawStringOrNull(value.name),
     users: readObjectArray(value, "users"),
     raw: value,
   };
@@ -563,7 +568,7 @@ function normalizeSupportbeeLabel(value: unknown): Record<string, unknown> {
   const raw = optionalRecord(value) ?? {};
   return {
     id: readNullableInteger(raw.id),
-    label: readNullableString(raw.label),
+    label: rawStringOrNull(raw.label),
     ticket: readNullableInteger(raw.ticket),
     raw,
   };
@@ -589,10 +594,6 @@ export function buildSupportbeeBaseUrl(company: string): string {
   return `https://${company}.supportbee.com`;
 }
 
-function payloadObject(payload: unknown): Record<string, unknown> {
-  return optionalRecord(payload) ?? {};
-}
-
 function readObjectProperty(value: unknown, key: string): Record<string, unknown> | null {
   const record = optionalRecord(value);
   if (!record) {
@@ -602,17 +603,13 @@ function readObjectProperty(value: unknown, key: string): Record<string, unknown
 }
 
 function readObjectArray(value: Record<string, unknown>, key: string): Array<Record<string, unknown>> {
-  return readLooseArray(value[key]).filter(
+  return looseArray(value[key]).filter(
     (item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item),
   );
 }
 
-function readLooseArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
 function readStringArray(value: unknown): string[] {
-  return readLooseArray(value).filter((item): item is string => typeof item === "string");
+  return looseArray(value).filter((item): item is string => typeof item === "string");
 }
 
 function readOptionalStringArray(value: unknown): string[] | undefined {
@@ -621,7 +618,7 @@ function readOptionalStringArray(value: unknown): string[] | undefined {
 }
 
 function readOptionalIntegerArray(value: unknown): number[] | undefined {
-  const values = readLooseArray(value)
+  const values = looseArray(value)
     .map((item) => optionalInteger(item))
     .filter((item): item is number => item !== undefined);
   return values.length > 0 ? values : undefined;
@@ -635,29 +632,17 @@ function readMaxTickets(value: unknown): number | false | undefined {
 }
 
 function readLabelNames(value: unknown): string[] {
-  return readLooseArray(value)
+  return looseArray(value)
     .map((item) => {
       if (typeof item === "string") {
         return item;
       }
       const record = optionalRecord(item);
-      return record ? readNullableString(record.name) : null;
+      return record ? rawStringOrNull(record.name) : null;
     })
     .filter((item): item is string => Boolean(item));
 }
 
-function readNullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
-
-function readNullableBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
-}
-
 function readNullableInteger(value: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) ? value : null;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

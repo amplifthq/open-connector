@@ -5,14 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "icypeas";
 
-export type IcypeasActionName =
-  | "get_subscription_information"
-  | "submit_email_search"
-  | "submit_email_verification"
-  | "submit_domain_scan"
-  | "get_search_item"
-  | "reverse_email_lookup";
-
 const trimmedString = (description: string) => s.nonEmptyString(description);
 const rawObjectSchema = s.looseObject("A raw object returned by Icypeas.");
 const validationErrorSchema = s.looseObject("A validation error returned by Icypeas.", {
@@ -76,6 +68,7 @@ const getSearchItemLifecycle = {
 export const icypeasActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_subscription_information",
+    operationType: "read",
     description: "Fetch Icypeas subscription details and remaining credit balances by account email.",
     inputSchema: s.object("Input for fetching Icypeas subscription information.", {
       email: s.email("The email address of the Icypeas account owner."),
@@ -87,6 +80,7 @@ export const icypeasActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "submit_email_search",
+    operationType: "write",
     description: "Submit one Icypeas email discovery search for a person and company.",
     followUpActions: ["icypeas.get_search_item"],
     asyncLifecycle: getSearchItemLifecycle,
@@ -95,6 +89,7 @@ export const icypeasActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "submit_email_verification",
+    operationType: "write",
     description: "Submit one Icypeas email verification request and return the search item handle.",
     followUpActions: ["icypeas.get_search_item"],
     asyncLifecycle: {
@@ -113,6 +108,7 @@ export const icypeasActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "submit_domain_scan",
+    operationType: "write",
     description: "Submit one Icypeas domain scan for role-based email addresses.",
     followUpActions: ["icypeas.get_search_item"],
     asyncLifecycle: {
@@ -131,6 +127,7 @@ export const icypeasActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_search_item",
+    operationType: "read",
     description: "Retrieve one Icypeas search item by ID and expose its processing status.",
     inputSchema: s.object("Input for retrieving one Icypeas search item.", {
       id: trimmedString("The Icypeas search item ID returned by a submit action."),
@@ -148,6 +145,7 @@ export const icypeasActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "reverse_email_lookup",
+    operationType: "read",
     description: "Find a LinkedIn profile URL behind one professional email address with Icypeas.",
     inputSchema: s.object("Input for an Icypeas reverse email lookup.", {
       email: s.email("The professional email address to look up."),

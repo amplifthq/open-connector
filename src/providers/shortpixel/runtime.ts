@@ -1,23 +1,17 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ShortpixelActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import {
-  createProviderTimeout,
-  isAbortLikeError,
-  ProviderRequestError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
 
 const shortpixelAccountApiBaseUrl = "https://api.shortpixel.com/v2";
 const shortpixelCdnApiBaseUrl = "https://no-cdn.shortpixel.ai";
-const shortpixelDefaultRequestTimeoutMs = 30_000;
 
 type ShortpixelPhase = "validate" | "execute";
 type ShortpixelActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const shortpixelActionHandlers: Record<ShortpixelActionName, ShortpixelActionHandler> = {
+export const shortpixelActionHandlers: ProviderActionHandlers<"shortpixel", ShortpixelActionHandler> = {
   async get_domain_cdn_usage(input, context) {
     const domain = readRequiredDomain(input.domain);
     const payload = await requestShortpixelJson(
@@ -132,16 +126,14 @@ async function requestShortpixelJson(
   context: Pick<ApiKeyProviderContext, "fetcher" | "signal">,
   phase: ShortpixelPhase,
 ) {
-  const timeoutHandle = createProviderTimeout(context.signal, shortpixelDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: context.signal, label: "ShortPixel" }, async (signal) => {
     const response = await context.fetcher(input.url, {
       method: input.method,
       headers: {
         accept: "application/json",
         "user-agent": providerUserAgent,
       },
-      signal: timeoutHandle.signal,
+      signal,
     });
     const payload = await readShortpixelPayload(response);
 
@@ -154,22 +146,7 @@ async function requestShortpixelJson(
       throw new ProviderRequestError(502, "ShortPixel returned an invalid payload");
     }
     return payloadRecord;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-
-    if (timeoutHandle.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "ShortPixel request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `ShortPixel request failed: ${error.message}` : "ShortPixel request failed",
-    );
-  } finally {
-    timeoutHandle.cleanup();
-  }
+  });
 }
 
 async function readShortpixelPayload(response: Response) {

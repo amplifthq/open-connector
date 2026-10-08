@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { OwlProtocolActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -14,13 +14,13 @@ import {
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
 export const owlProtocolApiBaseUrl = "https://api.owl.build";
 
-const owlProtocolDefaultRequestTimeoutMs = 30_000;
 const authProbePath = "/api/auth";
 const projectInfoPath = "/api/project/info";
 
@@ -48,7 +48,7 @@ interface OwlProtocolToken {
   metadata?: Record<string, unknown>;
 }
 
-export const owlProtocolActionHandlers: Record<OwlProtocolActionName, OwlProtocolActionHandler> = {
+export const owlProtocolActionHandlers: ProviderActionHandlers<"owl_protocol", OwlProtocolActionHandler> = {
   async get_project_info(_input, context) {
     const project = normalizeProject(
       await requestOwlProtocolJson({
@@ -148,7 +148,7 @@ async function requestOwlProtocolJson(input: {
   phase: OwlProtocolRequestPhase;
   body?: Record<string, unknown>;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, owlProtocolDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   const apiKey = requiredString(input.context.apiKey, "apiKey", (message) => new ProviderRequestError(401, message));
 
   try {
@@ -245,12 +245,12 @@ function buildRequestHeaders(apiKey: string, hasJsonBody: boolean): Record<strin
 }
 
 function normalizeProject(value: unknown): OwlProtocolProject {
-  const project = requiredRecord(value, "Owl Protocol project", providerResponseError);
+  const project = requiredRecord(value, "Owl Protocol project", owlProtocolResponseError);
   return compactObject({
     slug: requiredResponseString(project.slug, "slug"),
     teamId: requiredResponseString(project.teamId, "teamId"),
     name: requiredResponseString(project.name, "name"),
-    defaultChainId: integer(project.defaultChainId, "defaultChainId", providerResponseError),
+    defaultChainId: integer(project.defaultChainId, "defaultChainId", owlProtocolResponseError),
     description: optionalString(project.description),
     authorizedDomains: optionalStringArray(project.authorizedDomains),
     coverImage: optionalString(project.coverImage),
@@ -261,9 +261,9 @@ function normalizeProject(value: unknown): OwlProtocolProject {
 }
 
 function normalizeToken(value: unknown): OwlProtocolToken {
-  const token = requiredRecord(value, "Owl Protocol token", providerResponseError);
+  const token = requiredRecord(value, "Owl Protocol token", owlProtocolResponseError);
   return compactObject({
-    chainId: integer(token.chainId, "chainId", providerResponseError),
+    chainId: integer(token.chainId, "chainId", owlProtocolResponseError),
     address: requiredResponseString(token.address, "address"),
     tokenId: requiredResponseString(token.tokenId, "tokenId"),
     metadata: optionalRecord(token.metadata),
@@ -295,13 +295,9 @@ function optionalStringArray(value: unknown): string[] | undefined {
 }
 
 function requiredResponseString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, providerResponseError);
+  return requiredString(value, fieldName, owlProtocolResponseError);
 }
 
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerResponseError(message: string): ProviderRequestError {
+function owlProtocolResponseError(message: string): ProviderRequestError {
   return new ProviderRequestError(502, `invalid Owl Protocol ${message} response`);
 }

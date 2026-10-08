@@ -5,17 +5,16 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 export const baiduNetdiskConnectorScopes = {
   accountRead: "baidu_netdisk.account.read",
-  filesRead: "baidu_netdisk.files.read",
-  filesWrite: "baidu_netdisk.files.write",
-  filesDelete: "baidu_netdisk.files.delete",
-} as const;
+  rootFilesRead: "baidu_netdisk.files.root.read",
+  rootFilesWrite: "baidu_netdisk.files.root.write",
+};
 
 export const baiduNetdiskProviderScopes = {
   basic: "basic",
   netdisk: "netdisk",
-} as const;
+};
 
-export const baiduNetdiskFileCategories = [
+export const baiduNetdiskFileCategories: string[] = [
   "video",
   "audio",
   "image",
@@ -23,9 +22,9 @@ export const baiduNetdiskFileCategories = [
   "application",
   "other",
   "torrent",
-] as const;
+];
 
-export const baiduNetdiskSemanticMatchSources = [
+export const baiduNetdiskSemanticMatchSources: string[] = [
   "filename",
   "image_ocr",
   "document_text",
@@ -34,24 +33,52 @@ export const baiduNetdiskSemanticMatchSources = [
   "audio_semantic",
   "image_semantic",
   "card",
-] as const;
+];
 
-const userPath = (description: string, _allowRoot = true) => s.nonEmptyString(description);
-const fileIdSchema = s.nonEmptyString("A Baidu Netdisk fs_id represented as an unsigned decimal string.");
-const cursorSchema = s.nonEmptyString("The decimal Baidu Netdisk start cursor returned by a previous list call.");
+export const baiduNetdiskListTypes = ["all", "document", "image", "video"] as const;
+
+export function isBaiduNetdiskAbsolutePath(value: unknown, allowRoot = true): value is string {
+  if (
+    typeof value !== "string" ||
+    !value.startsWith("/") ||
+    value.includes("\\") ||
+    value.includes("\0") ||
+    value.endsWith("/")
+  ) {
+    return value === "/" && allowRoot;
+  }
+  return value
+    .slice(1)
+    .split("/")
+    .every((segment) => segment.length > 0 && segment !== "." && segment !== "..");
+}
+
+const absolutePath = (description: string, _allowRoot = true) => s.nonEmptyString(description);
+
 const itemNameSchema = s.nonEmptyString("A single file or folder name without path separators.");
-const publicFileUrlSchema = s.url(
-  "A public HTTP or HTTPS URL whose bytes should be uploaded. For local files, use oo file upload and pass its downloadUrl.",
-);
-const extensionSchema = s.nonEmptyString("A file extension without a leading dot, such as pdf or docx.");
+
+const publicFileUrlSchema = s.url("A public HTTP or HTTPS URL that Baidu Netdisk should fetch.");
 
 const nullableString = (description: string) => s.nullable(s.string(description));
 const nullableInteger = (description: string) => s.nullable(s.integer(description));
+const pageSchema = s.withDefault(s.integer("The one-based Baidu MCP result page.", { minimum: 1 }), 1);
+const conflictStrategySchema = s.withDefault(
+  s.stringEnum("How Baidu Netdisk should handle a destination name conflict.", ["fail", "rename"]),
+  "fail",
+);
+const shareFileIdSchema = s.string("A lossless Baidu Netdisk fs_id decimal string.", {
+  minLength: 1,
+  pattern: "^[0-9]+$",
+});
+const shareAccessCodeSchema = s.string("The four-character access code for the share link.", {
+  minLength: 4,
+  maxLength: 4,
+});
 
-const fileProperties = {
+const fileSchema = s.object("A normalized Baidu Netdisk file or folder.", {
   id: s.string("The lossless Baidu Netdisk fs_id decimal string."),
   name: s.string("The file or folder name."),
-  path: s.string("The app-directory-relative path beginning with a slash."),
+  path: s.string("The absolute path below the user's Baidu Netdisk root."),
   kind: s.stringEnum("Whether this item is a file or folder.", ["file", "folder"]),
   category: s.nullable(
     s.stringEnum("The Baidu Netdisk file category, or null for folders.", [...baiduNetdiskFileCategories]),
@@ -60,124 +87,45 @@ const fileProperties = {
   createdAt: s.nullable(s.dateTime("The server creation time in ISO 8601 UTC format.")),
   modifiedAt: s.nullable(s.dateTime("The server modification time in ISO 8601 UTC format.")),
   cloudMd5: nullableString("The provider cloud hash, or null when unavailable."),
-};
-const fileSchema = s.object("A normalized Baidu Netdisk file or folder.", fileProperties);
-
-const uploadedFileSchema = s.object("A normalized file uploaded to Baidu Netdisk.", {
-  ...fileProperties,
-  id: nullableString(
-    "The lossless Baidu Netdisk fs_id decimal string, or null when instant upload succeeds without returning fs_id.",
-  ),
 });
 
-const semanticFileSchema = s.object("A normalized Baidu Netdisk semantic search match.", {
-  ...fileProperties,
+const semanticFileSchema = s.object("A normalized semantic search match.", {
+  ...(fileSchema.properties as Record<string, import("../../core/types.ts").JsonSchema>),
   matchSource: s.nullable(
-    s.stringEnum("The official Baidu recall source for this match, or null when unavailable.", [
-      ...baiduNetdiskSemanticMatchSources,
-    ]),
+    s.stringEnum("The official Baidu recall source, or null when unavailable.", [...baiduNetdiskSemanticMatchSources]),
   ),
-  matchedContent: nullableString("The matched document, audio, or video text passage, or null when unavailable."),
+  matchedContent: nullableString("The matched document, audio, or video passage."),
   ocrText: nullableString("The matched image OCR text, or null when unavailable."),
-  passageId: nullableString("The lossless Baidu semantic passage pid decimal string, or null when unavailable."),
+  passageId: nullableString("The lossless semantic passage ID, or null when unavailable."),
 });
 
 const emptyInputSchema = s.object("No input is required.", {});
-const conflictStrategySchema = s.withDefault(
-  s.stringEnum("How Baidu Netdisk should handle a destination name conflict.", ["fail", "rename", "overwrite", "skip"]),
-  "fail",
-);
-const managementOutputSchema = s.object("The result of one synchronous file operation.", {
-  sourcePath: s.string("The source app-relative path supplied by the caller."),
-  path: nullableString("The app-relative path reported by Baidu, or null when unavailable."),
+const managementOutputSchema = s.object("The result of one file operation.", {
+  sourcePath: s.string("The absolute source path supplied by the caller."),
+  path: nullableString("The resulting absolute path, or null when Baidu omits it."),
+  rawResponse: nullableString("The original successful MCP text response when it is not valid JSON, or null."),
 });
 
-const listInputSchema = s.object(
-  "Input for listing files in the Baidu Netdisk app directory.",
-  {
-    path: s.optional(s.withDefault(userPath("The app-relative directory path to list."), "/")),
-    recursive: s.optional(s.withDefault(s.boolean("Whether to recursively list descendants."), false)),
-    limit: s.optional(
-      s.withDefault(s.integer("The maximum number of items to return.", { minimum: 1, maximum: 1000 }), 1000),
-    ),
-    sortBy: s.optional(
-      s.stringEnum("The field used to sort the complete directory listing.", ["name", "modifiedTime", "size"]),
-    ),
-    sortOrder: s.optional(s.stringEnum("The directory listing sort direction.", ["ascending", "descending"])),
-    cursor: s.optional(cursorSchema),
-    categories: s.optional(
-      s.array(
-        "The file categories to include. Category-filtered results contain files, not folders.",
-        s.stringEnum("A Baidu Netdisk file category.", [...baiduNetdiskFileCategories]),
-        { minItems: 1, maxItems: baiduNetdiskFileCategories.length },
-      ),
-    ),
-    extensions: s.optional(
-      s.array("The file extensions to include within the selected categories.", extensionSchema, { minItems: 1 }),
-    ),
-    createdAfter: s.optional(s.dateTime("Only include files uploaded strictly after this ISO 8601 timestamp.")),
-    modifiedAfter: s.optional(s.dateTime("Only include files modified strictly after this ISO 8601 timestamp.")),
-  },
-  {
-    optional: [
-      "path",
-      "recursive",
-      "limit",
-      "sortBy",
-      "sortOrder",
-      "cursor",
-      "categories",
-      "extensions",
-      "createdAfter",
-      "modifiedAfter",
-    ],
-  },
-);
-
-const searchInputSchema = s.object(
-  "Input for one bounded Baidu Netdisk keyword search.",
-  {
-    query: s.nonEmptyString("The keyword to search for, up to 30 UTF-8 characters.", {
-      maxLength: 30,
-    }),
-    path: s.optional(s.withDefault(userPath("The app-relative directory path to search."), "/")),
-    recursive: s.optional(s.withDefault(s.boolean("Whether to recursively search descendants."), false)),
-    category: s.optional(
-      s.stringEnum("The optional Baidu Netdisk file category filter.", [...baiduNetdiskFileCategories]),
-    ),
-  },
-  { optional: ["path", "recursive", "category"] },
-);
-
-const semanticSearchInputSchema = s.object(
-  "Input for one bounded Baidu Netdisk natural-language semantic search.",
-  {
-    query: s.nonWhitespaceString("The natural-language description of the files to find."),
-    path: s.optional(s.withDefault(userPath("The app-relative directory path to search."), "/")),
-    limit: s.optional(
-      s.withDefault(
-        s.integer("The maximum number of semantic matches to return.", {
-          minimum: 1,
-          maximum: 500,
-        }),
-        500,
-      ),
-    ),
-  },
-  { optional: ["path", "limit"] },
-);
-
-const uploadConflictStrategySchema = s.withDefault(
-  s.stringEnum("How Baidu Netdisk should handle an existing destination path.", ["fail", "rename", "overwrite"]),
-  "fail",
-);
+const downloadedFileSchema = s.requiredObject("A downloaded Baidu Netdisk file stored in local transit storage.", {
+  fileId: s.nonEmptyString("The Baidu Netdisk fs_id decimal string."),
+  name: s.nonEmptyString("The original Baidu Netdisk file name."),
+  mimeType: s.nonEmptyString("The downloaded file MIME type."),
+  sizeBytes: s.nonNegativeInteger("The downloaded file size in bytes."),
+  file: s.requiredObject("The downloaded content in local transit file storage.", {
+    fileId: s.nonEmptyString("The local transit file identifier."),
+    downloadUrl: s.url("The local transit URL for downloading the stored file."),
+    sizeBytes: s.nonNegativeInteger("The stored transit file size in bytes."),
+    name: s.nonEmptyString("The stored transit file name."),
+    mimeType: s.nonEmptyString("The stored transit file MIME type."),
+  }),
+});
 
 const relocateInputSchema = (operation: string) =>
   s.object(
     `Input for ${operation}ing one Baidu Netdisk file or folder.`,
     {
-      sourcePath: userPath("The app-relative source path.", false),
-      destinationDirectoryPath: userPath("The app-relative destination directory path."),
+      sourcePath: absolutePath("The absolute source path.", false),
+      destinationDirectoryPath: absolutePath("The absolute destination directory path."),
       newName: s.optional(itemNameSchema),
       conflictStrategy: s.optional(conflictStrategySchema),
     },
@@ -187,6 +135,7 @@ const relocateInputSchema = (operation: string) =>
 export const baiduNetdiskActions: ProviderActionDefinition[] = [
   defineProviderAction("baidu_netdisk", {
     name: "get_current_account",
+    operationType: "read",
     description: "Get the current Baidu Netdisk account and membership summary.",
     requiredScopes: [baiduNetdiskConnectorScopes.accountRead],
     providerPermissions: [baiduNetdiskProviderScopes.basic, baiduNetdiskProviderScopes.netdisk],
@@ -200,6 +149,7 @@ export const baiduNetdiskActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction("baidu_netdisk", {
     name: "get_quota",
+    operationType: "read",
     description: "Get total, used, remaining, free, and expiring Baidu Netdisk capacity.",
     requiredScopes: [baiduNetdiskConnectorScopes.accountRead],
     providerPermissions: [baiduNetdiskProviderScopes.basic, baiduNetdiskProviderScopes.netdisk],
@@ -214,128 +164,192 @@ export const baiduNetdiskActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction("baidu_netdisk", {
     name: "list_files",
-    description: "List files and folders within the configured Baidu Netdisk app directory.",
-    requiredScopes: [baiduNetdiskConnectorScopes.filesRead],
+    operationType: "read",
+    description:
+      "List all files and folders, or only documents, images, or videos, from the user's Baidu Netdisk root.",
+    requiredScopes: [baiduNetdiskConnectorScopes.rootFilesRead],
     providerPermissions: [baiduNetdiskProviderScopes.netdisk],
-    inputSchema: listInputSchema,
-    outputSchema: s.object("A page of normalized Baidu Netdisk files and folders.", {
-      items: s.array("The normalized files and folders in this page.", fileSchema),
-      nextCursor: nullableString("The decimal cursor for the next page, or null when complete."),
-    }),
-  }),
-  defineProviderAction("baidu_netdisk", {
-    name: "get_file_metadata",
-    description: "Get normalized metadata for up to 100 Baidu Netdisk file IDs.",
-    requiredScopes: [baiduNetdiskConnectorScopes.filesRead],
-    providerPermissions: [baiduNetdiskProviderScopes.netdisk],
-    inputSchema: s.object("Input for fetching Baidu Netdisk file metadata.", {
-      fileIds: s.array("The Baidu Netdisk fs_id values to fetch.", fileIdSchema, {
-        minItems: 1,
-        maxItems: 100,
-      }),
-    }),
-    outputSchema: s.object("The normalized metadata items found by Baidu Netdisk.", {
-      items: s.array("The found items ordered by the input file IDs.", fileSchema),
+    inputSchema: s.object(
+      "Input for listing one Baidu Netdisk directory page.",
+      {
+        path: s.optional(s.withDefault(absolutePath("The absolute directory path to list."), "/")),
+        page: s.optional(pageSchema),
+        type: s.optional(
+          s.withDefault(
+            s.stringEnum("The file type to list through the matching Baidu MCP tool.", [...baiduNetdiskListTypes]),
+            "all",
+          ),
+        ),
+      },
+      { optional: ["path", "page", "type"] },
+    ),
+    outputSchema: s.object("One page of normalized Baidu Netdisk items.", {
+      items: s.array("The files and folders in this page.", fileSchema),
+      page: s.integer("The one-based page that was returned."),
     }),
   }),
   defineProviderAction("baidu_netdisk", {
     name: "search_files",
-    description: "Search up to 500 files and folders within the Baidu Netdisk app directory.",
-    requiredScopes: [baiduNetdiskConnectorScopes.filesRead],
+    operationType: "read",
+    description: "Search files and folders below an absolute Baidu Netdisk directory.",
+    requiredScopes: [baiduNetdiskConnectorScopes.rootFilesRead],
     providerPermissions: [baiduNetdiskProviderScopes.netdisk],
-    inputSchema: searchInputSchema,
-    outputSchema: s.object("One bounded Baidu Netdisk keyword search result.", {
+    inputSchema: s.object(
+      "Input for one Baidu Netdisk keyword-search page.",
+      {
+        query: s.nonEmptyString("The keyword to search for, up to 30 UTF-8 characters.", {
+          maxLength: 30,
+        }),
+        path: s.optional(s.withDefault(absolutePath("The absolute directory to search."), "/")),
+        page: s.optional(pageSchema),
+        pageSize: s.optional(
+          s.withDefault(
+            s.integer("The number of matches requested from Baidu MCP.", {
+              minimum: 1,
+              maximum: 500,
+            }),
+            100,
+          ),
+        ),
+      },
+      { optional: ["path", "page", "pageSize"] },
+    ),
+    outputSchema: s.object("One keyword-search page.", {
       items: s.array("The normalized matching files and folders.", fileSchema),
-      truncated: s.boolean("Whether Baidu reports more matches than this bounded result."),
+      page: s.integer("The one-based page that was returned."),
     }),
   }),
   defineProviderAction("baidu_netdisk", {
     name: "semantic_search_files",
-    description: "Search files in the configured Baidu Netdisk app directory using a natural-language description.",
-    requiredScopes: [baiduNetdiskConnectorScopes.filesRead],
+    operationType: "read",
+    description: "Search Baidu Netdisk using a natural-language description.",
+    requiredScopes: [baiduNetdiskConnectorScopes.rootFilesRead],
     providerPermissions: [baiduNetdiskProviderScopes.netdisk],
-    inputSchema: semanticSearchInputSchema,
-    outputSchema: s.object("One bounded Baidu Netdisk semantic search result.", {
+    inputSchema: s.object(
+      "Input for one bounded Baidu Netdisk semantic search.",
+      {
+        query: s.nonWhitespaceString("The natural-language description of files to find."),
+        path: s.optional(s.withDefault(absolutePath("The absolute directory to search."), "/")),
+        limit: s.optional(
+          s.withDefault(s.integer("The maximum number of matches to return.", { minimum: 1, maximum: 500 }), 100),
+        ),
+      },
+      { optional: ["path", "limit"] },
+    ),
+    outputSchema: s.object("One bounded semantic-search result.", {
       items: s.array("The normalized semantic matches.", semanticFileSchema),
-      truncated: s.boolean("Whether Baidu reports that more semantic matches may be available."),
+      truncated: s.boolean("Whether Baidu reports that more matches may be available."),
     }),
   }),
   defineProviderAction("baidu_netdisk", {
-    name: "upload_file_from_url",
-    description: "Download one public URL and upload its bytes to the configured Baidu Netdisk app directory.",
-    requiredScopes: [baiduNetdiskConnectorScopes.filesWrite],
+    name: "download_file",
+    operationType: "read",
+    description: "Download one Baidu Netdisk file by fs_id into local transit file storage.",
+    requiredScopes: [baiduNetdiskConnectorScopes.rootFilesRead],
     providerPermissions: [baiduNetdiskProviderScopes.netdisk],
-    inputSchema: s.object(
-      "Input for uploading one public URL to Baidu Netdisk.",
-      {
-        fileUrl: publicFileUrlSchema,
-        destinationPath: userPath("The app-relative destination file path.", false),
-        conflictStrategy: s.optional(uploadConflictStrategySchema),
-      },
-      { optional: ["conflictStrategy"] },
-    ),
-    outputSchema: uploadedFileSchema,
+    inputSchema: s.requiredObject("Input for downloading one Baidu Netdisk file.", {
+      fsId: s.string({
+        minLength: 1,
+        pattern: "^[0-9]+$",
+        description: "The lossless Baidu Netdisk fs_id decimal string.",
+      }),
+    }),
+    outputSchema: downloadedFileSchema,
+  }),
+  defineProviderAction("baidu_netdisk", {
+    name: "upload_file_from_url",
+    operationType: "write",
+    description: "Ask Baidu Netdisk to fetch one public URL into an absolute destination path.",
+    requiredScopes: [baiduNetdiskConnectorScopes.rootFilesWrite],
+    providerPermissions: [baiduNetdiskProviderScopes.netdisk],
+    inputSchema: s.object("Input for uploading one public URL through Baidu MCP.", {
+      fileUrl: publicFileUrlSchema,
+      destinationPath: absolutePath("The absolute destination file path.", false),
+    }),
+    outputSchema: fileSchema,
   }),
   defineProviderAction("baidu_netdisk", {
     name: "create_text_file",
-    description: "Create one UTF-8 text file of up to 4 MiB in the configured Baidu Netdisk app directory.",
-    requiredScopes: [baiduNetdiskConnectorScopes.filesWrite],
+    operationType: "write",
+    description: "Create one UTF-8 text file through Baidu MCP.",
+    requiredScopes: [baiduNetdiskConnectorScopes.rootFilesWrite],
     providerPermissions: [baiduNetdiskProviderScopes.netdisk],
-    inputSchema: s.object(
-      "Input for creating one UTF-8 Baidu Netdisk text file.",
-      {
-        path: userPath("The app-relative destination file path.", false),
-        content: s.string("The UTF-8 text content, limited to 4 MiB after encoding.", {
-          maxLength: 4 * 1024 * 1024,
-        }),
-        conflictStrategy: s.optional(uploadConflictStrategySchema),
-      },
-      { optional: ["conflictStrategy"] },
-    ),
-    outputSchema: uploadedFileSchema,
+    inputSchema: s.object("Input for creating one UTF-8 Baidu Netdisk text file.", {
+      path: absolutePath("The absolute destination file path.", false),
+      content: s.string("The UTF-8 text content accepted by Baidu MCP.", { maxLength: 20_000 }),
+    }),
+    outputSchema: fileSchema,
   }),
   defineProviderAction("baidu_netdisk", {
     name: "create_folder",
-    description: "Create one folder below the configured Baidu Netdisk app directory.",
-    requiredScopes: [baiduNetdiskConnectorScopes.filesWrite],
+    operationType: "write",
+    description: "Create one folder at an absolute path below the user's Baidu Netdisk root.",
+    requiredScopes: [baiduNetdiskConnectorScopes.rootFilesWrite],
     providerPermissions: [baiduNetdiskProviderScopes.netdisk],
     inputSchema: s.object(
       "Input for creating one Baidu Netdisk folder.",
       {
-        path: userPath("The app-relative path of the folder to create.", false),
-        conflictStrategy: s.optional(
-          s.withDefault(s.stringEnum("How to handle an existing folder path.", ["fail", "rename"]), "fail"),
-        ),
+        path: absolutePath("The absolute folder path to create.", false),
+        conflictStrategy: s.optional(conflictStrategySchema),
       },
       { optional: ["conflictStrategy"] },
     ),
     outputSchema: fileSchema,
   }),
   defineProviderAction("baidu_netdisk", {
+    name: "create_share_link",
+    operationType: "write",
+    description: "Create one Baidu Netdisk share link for one or more files or folders.",
+    requiredScopes: [baiduNetdiskConnectorScopes.rootFilesWrite],
+    providerPermissions: [baiduNetdiskProviderScopes.netdisk],
+    inputSchema: s.object(
+      "Input for creating one Baidu Netdisk share link.",
+      {
+        fileIds: s.array("The file and folder IDs to include in the share.", shareFileIdSchema, {
+          minItems: 1,
+        }),
+        periodDays: s.optional(s.withDefault(s.integer("The share validity period in days.", { minimum: 1 }), 7)),
+        accessCode: shareAccessCodeSchema,
+      },
+      { required: ["fileIds", "accessCode"] },
+    ),
+    outputSchema: s.object("The created Baidu Netdisk share link.", {
+      link: s.url("The full Baidu Netdisk share URL."),
+      shortUrl: s.url(
+        "The shortened Baidu Netdisk share URL, or the full URL when Baidu omits or returns an invalid short URL.",
+      ),
+      periodDays: s.integer("The share validity period in days.", { minimum: 1 }),
+      accessCode: shareAccessCodeSchema,
+    }),
+  }),
+  defineProviderAction("baidu_netdisk", {
     name: "copy",
-    description: "Synchronously copy one file or folder within the Baidu Netdisk app directory.",
-    requiredScopes: [baiduNetdiskConnectorScopes.filesWrite],
+    operationType: "write",
+    description: "Synchronously copy one Baidu Netdisk file or folder.",
+    requiredScopes: [baiduNetdiskConnectorScopes.rootFilesWrite],
     providerPermissions: [baiduNetdiskProviderScopes.netdisk],
     inputSchema: relocateInputSchema("copy"),
     outputSchema: managementOutputSchema,
   }),
   defineProviderAction("baidu_netdisk", {
     name: "move",
-    description: "Synchronously move one file or folder within the Baidu Netdisk app directory.",
-    requiredScopes: [baiduNetdiskConnectorScopes.filesWrite],
+    operationType: "destructive",
+    description: "Synchronously move one Baidu Netdisk file or folder.",
+    requiredScopes: [baiduNetdiskConnectorScopes.rootFilesWrite],
     providerPermissions: [baiduNetdiskProviderScopes.netdisk],
     inputSchema: relocateInputSchema("mov"),
     outputSchema: managementOutputSchema,
   }),
   defineProviderAction("baidu_netdisk", {
     name: "rename",
-    description: "Synchronously rename one file or folder within the Baidu Netdisk app directory.",
-    requiredScopes: [baiduNetdiskConnectorScopes.filesWrite],
+    operationType: "write",
+    description: "Synchronously rename one Baidu Netdisk file or folder.",
+    requiredScopes: [baiduNetdiskConnectorScopes.rootFilesWrite],
     providerPermissions: [baiduNetdiskProviderScopes.netdisk],
     inputSchema: s.object(
       "Input for renaming one Baidu Netdisk file or folder.",
       {
-        sourcePath: userPath("The app-relative source path.", false),
+        sourcePath: absolutePath("The absolute source path.", false),
         newName: itemNameSchema,
         conflictStrategy: s.optional(conflictStrategySchema),
       },
@@ -343,14 +357,4 @@ export const baiduNetdiskActions: ProviderActionDefinition[] = [
     ),
     outputSchema: managementOutputSchema,
   }),
-  defineProviderAction("baidu_netdisk", {
-    name: "delete",
-    description: "Delete one file or folder within the configured Baidu Netdisk app directory.",
-    requiredScopes: [baiduNetdiskConnectorScopes.filesDelete],
-    providerPermissions: [baiduNetdiskProviderScopes.netdisk],
-    inputSchema: s.object("Input for deleting one Baidu Netdisk file or folder.", {
-      path: userPath("The app-relative path to delete.", false),
-    }),
-    outputSchema: managementOutputSchema,
-  }),
-];
+] satisfies ProviderActionDefinition[];

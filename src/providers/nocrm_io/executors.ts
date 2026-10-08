@@ -4,23 +4,24 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { NocrmIoActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { optionalInteger, optionalRecord, optionalString, requiredString, stringArray } from "../../core/cast.ts";
+import { optionalInteger, optionalRecord, optionalString, stringArray } from "../../core/cast.ts";
 import { compactJson, queryParams } from "../../core/request.ts";
 import {
   createProviderTimeout,
   defineProviderExecutors,
   defineProviderProxy,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 const service = "nocrm_io";
 const nocrmValidationPath = "/api/v2/ping";
-const nocrmRequestTimeoutMs = 30_000;
 
 interface NocrmContext {
   apiKey: string;
@@ -32,7 +33,7 @@ interface NocrmContext {
 
 type NocrmActionHandler = (input: Record<string, unknown>, context: NocrmContext) => Promise<unknown>;
 
-export const nocrmIoActionHandlers: Record<NocrmIoActionName, NocrmActionHandler> = {
+export const nocrmIoActionHandlers: ProviderActionHandlers<"nocrm_io", NocrmActionHandler> = {
   async list_teams(_input, context) {
     const payload = await requestNocrmJson(context, {
       path: "/api/v2/teams",
@@ -216,7 +217,7 @@ interface NocrmRequestOptions {
 }
 
 async function requestNocrmJson(context: NocrmContext, input: NocrmRequestOptions): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, nocrmRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(buildNocrmUrl(context.baseUrl, input.path, input.query), {
       method: input.method ?? "GET",
@@ -331,14 +332,6 @@ function normalizeNocrmSubdomain(value: unknown): string {
     );
   }
   return normalized;
-}
-
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, providerInputError);
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function identifierValue(value: unknown): string | undefined {

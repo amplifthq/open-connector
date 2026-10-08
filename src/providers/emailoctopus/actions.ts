@@ -25,20 +25,10 @@ const contactIdField = s.nonEmptyString("EmailOctopus contact identifier.");
 const campaignIdField = s.nonEmptyString("EmailOctopus campaign identifier.");
 const contactFieldsSchema = s.looseObject("Custom contact fields object accepted by the official EmailOctopus API.");
 
-export type EmailoctopusActionName =
-  | "list_lists"
-  | "get_list"
-  | "list_list_contacts"
-  | "get_list_contact"
-  | "create_list_contact"
-  | "update_list_contact"
-  | "delete_list_contact"
-  | "list_campaigns"
-  | "get_campaign";
-
 export const emailoctopusActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_lists",
+    operationType: "read",
     description: "List EmailOctopus mailing lists available to the current API key.",
     inputSchema: s.object(
       "Query parameters for listing EmailOctopus lists.",
@@ -59,6 +49,7 @@ export const emailoctopusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_list",
+    operationType: "read",
     description: "Fetch a single EmailOctopus mailing list by ID.",
     inputSchema: s.object("Path parameters for fetching a single EmailOctopus list.", {
       list_id: listIdField,
@@ -69,6 +60,7 @@ export const emailoctopusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_list_contacts",
+    operationType: "read",
     description: "List contacts in a specific EmailOctopus mailing list.",
     inputSchema: s.object(
       "Path and query parameters for listing contacts in an EmailOctopus list.",
@@ -90,6 +82,7 @@ export const emailoctopusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_list_contact",
+    operationType: "read",
     description: "Fetch a single contact from an EmailOctopus mailing list.",
     inputSchema: s.object("Path parameters for fetching or deleting a single EmailOctopus contact.", {
       list_id: listIdField,
@@ -101,6 +94,7 @@ export const emailoctopusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_list_contact",
+    operationType: "write",
     description: "Create a contact in an EmailOctopus mailing list.",
     inputSchema: s.object(
       "Request payload for creating a contact in an EmailOctopus list.",
@@ -121,6 +115,7 @@ export const emailoctopusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_list_contact",
+    operationType: "write",
     description: "Update a contact in an EmailOctopus mailing list.",
     inputSchema: s.object(
       "Request payload for updating a contact in an EmailOctopus list.",
@@ -143,6 +138,7 @@ export const emailoctopusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_list_contact",
+    operationType: "destructive",
     description: "Delete a contact from an EmailOctopus mailing list.",
     inputSchema: s.object("Path parameters for fetching or deleting a single EmailOctopus contact.", {
       list_id: listIdField,
@@ -154,6 +150,7 @@ export const emailoctopusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_campaigns",
+    operationType: "read",
     description: "List EmailOctopus campaigns available to the current API key.",
     inputSchema: s.object(
       "Query parameters for listing EmailOctopus campaigns.",
@@ -174,6 +171,7 @@ export const emailoctopusActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_campaign",
+    operationType: "read",
     description: "Fetch a single EmailOctopus campaign by ID.",
     inputSchema: s.object("Path parameters for fetching a single EmailOctopus campaign.", {
       campaign_id: campaignIdField,

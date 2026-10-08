@@ -1,17 +1,24 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
-import type { TapfiliateActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import {
+  compactObject,
+  optionalBooleanOrNull,
+  optionalRecord,
+  optionalString,
+  rawStringOrNull,
+  requiredString,
+} from "../../core/cast.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
 } from "../provider-runtime.ts";
 
 export const tapfiliateApiBaseUrl: string = "https://api.tapfiliate.com/1.6";
-const tapfiliateDefaultRequestTimeoutMs = 30_000;
 
 type TapfiliatePhase = "validate" | "execute";
 type TapfiliateActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -21,7 +28,7 @@ interface TapfiliateJsonResponse {
   headers: Headers;
 }
 
-export const tapfiliateActionHandlers: Record<TapfiliateActionName, TapfiliateActionHandler> = {
+export const tapfiliateActionHandlers: ProviderActionHandlers<"tapfiliate", TapfiliateActionHandler> = {
   async list_affiliates(input, context) {
     const response = await requestTapfiliateJson({
       path: "/affiliates/",
@@ -46,7 +53,7 @@ export const tapfiliateActionHandlers: Record<TapfiliateActionName, TapfiliateAc
   },
 
   async get_affiliate(input, context) {
-    const affiliateId = requiredString(input.affiliate_id, "affiliate_id", requestInputError);
+    const affiliateId = requiredString(input.affiliate_id, "affiliate_id", providerInputError);
     const response = await requestTapfiliateJson({
       path: `/affiliates/${encodeURIComponent(affiliateId)}/`,
       method: "GET",
@@ -282,13 +289,13 @@ async function requestTapfiliateJson(input: {
   context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
   phase: TapfiliatePhase;
 }): Promise<TapfiliateJsonResponse> {
-  const timeout = createProviderTimeout(input.context.signal, tapfiliateDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
 
   try {
     const headers: Record<string, string> = {
       accept: "application/json",
       "user-agent": providerUserAgent,
-      "X-Api-Key": requiredString(input.context.apiKey, "apiKey", requestInputError),
+      "X-Api-Key": requiredString(input.context.apiKey, "apiKey", providerInputError),
     };
     const body = input.body === undefined ? undefined : JSON.stringify(input.body);
     if (body !== undefined) {
@@ -422,17 +429,17 @@ function requireObjectPayload(payload: unknown, actionName: string): Record<stri
 function normalizeAffiliate(item: Record<string, unknown>): Record<string, unknown> {
   return {
     id: stringFromUnknown(item.id),
-    firstname: stringOrNull(item.firstname),
-    lastname: stringOrNull(item.lastname),
-    email: stringOrNull(item.email),
+    firstname: rawStringOrNull(item.firstname),
+    lastname: rawStringOrNull(item.lastname),
+    email: rawStringOrNull(item.email),
     company: objectOrNull(item.company),
     address: objectOrNull(item.address),
     meta_data: objectOrNull(item.meta_data),
-    parent_id: stringOrNull(item.parent_id),
-    affiliate_group_id: stringOrNull(item.affiliate_group_id),
-    created_at: stringOrNull(item.created_at),
-    promoted_at: stringOrNull(item.promoted_at),
-    promotion_method: stringOrNull(item.promotion_method),
+    parent_id: rawStringOrNull(item.parent_id),
+    affiliate_group_id: rawStringOrNull(item.affiliate_group_id),
+    created_at: rawStringOrNull(item.created_at),
+    promoted_at: rawStringOrNull(item.promoted_at),
+    promotion_method: rawStringOrNull(item.promotion_method),
     custom_fields: objectOrNull(item.custom_fields),
     raw: item,
   };
@@ -441,7 +448,7 @@ function normalizeAffiliate(item: Record<string, unknown>): Record<string, unkno
 function normalizeConversion(item: Record<string, unknown>): Record<string, unknown> {
   return {
     id: numberOrNull(item.id),
-    external_id: stringOrNull(item.external_id),
+    external_id: rawStringOrNull(item.external_id),
     amount: numberOrNull(item.amount),
     click: objectOrNull(item.click),
     commissions: Array.isArray(item.commissions)
@@ -452,7 +459,7 @@ function normalizeConversion(item: Record<string, unknown>): Record<string, unkn
     customer: objectOrNull(item.customer),
     meta_data: objectOrNull(item.meta_data),
     affiliate_meta_data: item.affiliate_meta_data ?? null,
-    created_at: stringOrNull(item.created_at),
+    created_at: rawStringOrNull(item.created_at),
     warnings: item.warnings ?? null,
     raw: item,
   };
@@ -462,18 +469,18 @@ function normalizeCommission(item: Record<string, unknown>): Record<string, unkn
   return {
     id: numberOrNull(item.id),
     amount: numberOrNull(item.amount),
-    approved: booleanOrNull(item.approved),
-    created_at: stringOrNull(item.created_at),
-    commission_type: stringOrNull(item.commission_type),
-    commission_name: stringOrNull(item.commission_name),
-    kind: stringOrNull(item.kind),
-    currency: stringOrNull(item.currency),
+    approved: optionalBooleanOrNull(item.approved),
+    created_at: rawStringOrNull(item.created_at),
+    commission_type: rawStringOrNull(item.commission_type),
+    commission_name: rawStringOrNull(item.commission_name),
+    kind: rawStringOrNull(item.kind),
+    currency: rawStringOrNull(item.currency),
     conversion: objectOrNull(item.conversion),
     affiliate: objectOrNull(item.affiliate),
     payout: item.payout ?? null,
-    comment: stringOrNull(item.comment),
+    comment: rawStringOrNull(item.comment),
     final: item.final ?? null,
-    finalization_date: stringOrNull(item.finalization_date),
+    finalization_date: rawStringOrNull(item.finalization_date),
     raw: item,
   };
 }
@@ -483,15 +490,15 @@ function normalizeProgram(
 ): Record<string, unknown> & { id: string; title: string | null } {
   return {
     id: stringFromUnknown(item.id),
-    title: stringOrNull(item.title),
-    currency: stringOrNull(item.currency),
+    title: rawStringOrNull(item.title),
+    currency: rawStringOrNull(item.currency),
     cookie_time: numberOrNull(item.cookie_time),
-    default_landing_page_url: stringOrNull(item.default_landing_page_url),
-    recurring: booleanOrNull(item.recurring),
+    default_landing_page_url: rawStringOrNull(item.default_landing_page_url),
+    recurring: optionalBooleanOrNull(item.recurring),
     recurring_cap: numberOrNull(item.recurring_cap),
     recurring_period_days: numberOrNull(item.recurring_period_days),
     program_category: objectOrNull(item.program_category),
-    currency_symbol: stringOrNull(item.currency_symbol),
+    currency_symbol: rawStringOrNull(item.currency_symbol),
     raw: item,
   };
 }
@@ -499,7 +506,7 @@ function normalizeProgram(
 function normalizeAffiliateGroup(item: Record<string, unknown>): Record<string, unknown> {
   return {
     id: stringFromUnknown(item.id),
-    title: stringOrNull(item.title),
+    title: rawStringOrNull(item.title),
     affiliate_count: numberOrNull(item.affiliate_count),
     raw: item,
   };
@@ -508,7 +515,7 @@ function normalizeAffiliateGroup(item: Record<string, unknown>): Record<string, 
 function normalizeClick(item: Record<string, unknown>): Record<string, unknown> {
   return {
     id: stringFromUnknown(item.id),
-    created_at: stringOrNull(item.created_at),
+    created_at: rawStringOrNull(item.created_at),
     meta_data: item.meta_data ?? null,
     details: objectOrNull(item.details),
     geolocation: objectOrNull(item.geolocation),
@@ -613,16 +620,8 @@ function stringFromUnknown(value: unknown): string {
   return "";
 }
 
-function stringOrNull(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
-
 function numberOrNull(value: unknown): number | null {
   return typeof value === "number" ? value : null;
-}
-
-function booleanOrNull(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
 }
 
 function objectOrNull(value: unknown): Record<string, unknown> | null {
@@ -667,8 +666,4 @@ function extractTapfiliateErrorMessage(payload: unknown): string | undefined {
     return record.errors[0];
   }
   return undefined;
-}
-
-function requestInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

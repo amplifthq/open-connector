@@ -2,72 +2,57 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly retryAfter?: string | null,
+    readonly code?: string,
+    readonly reason?: string,
   ) {
     super(message);
   }
 }
 
-export interface RequestOptions {
-  bearerToken?: string;
+export async function apiGet<T>(path: string, bearerToken?: string): Promise<T> {
+  const token = bearerToken?.trim();
+  return request<T>(path, { headers: token ? { authorization: `Bearer ${token}` } : undefined });
 }
 
-export async function apiGet<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  return readJson<T>(
-    await fetch(path, {
-      headers: headersFor(options),
-      credentials: "same-origin",
-    }),
-  );
+export function apiPost<T = unknown>(path: string, body: unknown, headers?: Record<string, string>): Promise<T> {
+  return send<T>("POST", path, body, headers);
 }
 
-export async function apiPost<T = unknown>(path: string, body: unknown, options: RequestOptions = {}): Promise<T> {
-  return readJson<T>(
-    await fetch(path, {
-      method: "POST",
-      headers: headersFor(options, true),
-      credentials: "same-origin",
-      body: JSON.stringify(body),
-    }),
-  );
+export function apiPut<T = unknown>(path: string, body: unknown): Promise<T> {
+  return send<T>("PUT", path, body);
 }
 
-export async function apiPut<T = unknown>(path: string, body: unknown, options: RequestOptions = {}): Promise<T> {
-  return readJson<T>(
-    await fetch(path, {
-      method: "PUT",
-      headers: headersFor(options, true),
-      credentials: "same-origin",
-      body: JSON.stringify(body),
-    }),
-  );
+export function apiPatch<T = unknown>(path: string, body: unknown): Promise<T> {
+  return send<T>("PATCH", path, body);
 }
 
-export async function apiDelete<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
-  return readJson<T>(
-    await fetch(path, {
-      method: "DELETE",
-      headers: headersFor(options),
-      credentials: "same-origin",
-    }),
-  );
+export function apiDelete<T = unknown>(path: string): Promise<T> {
+  return request<T>(path, { method: "DELETE" });
 }
 
-function headersFor(options: RequestOptions, json = false): Headers {
-  const headers = new Headers();
-  if (json) {
-    headers.set("content-type", "application/json");
-  }
-  const token = options.bearerToken?.trim();
-  if (token) {
-    headers.set("authorization", `Bearer ${token}`);
-  }
-  return headers;
+function send<T>(method: string, path: string, body: unknown, headers?: Record<string, string>): Promise<T> {
+  return request<T>(path, {
+    method,
+    headers: { ...headers, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function request<T>(path: string, init: RequestInit): Promise<T> {
+  return readJson<T>(await fetch(path, { credentials: "same-origin", ...init }));
 }
 
 async function readJson<T>(response: Response): Promise<T> {
   const payload = parseJson(await response.text());
   if (!response.ok) {
-    throw new ApiError(response.status, errorMessage(payload) ?? `Request failed with ${response.status}`);
+    throw new ApiError(
+      response.status,
+      errorMessage(payload) ?? `Request failed with ${response.status}`,
+      response.headers.get("Retry-After"),
+      errorField(payload, "code"),
+      errorField(payload, "reason"),
+    );
   }
   // A successful response whose body is not JSON means something rewrote it in
   // transit. Returning the failed parse as T would hand the caller a null typed
@@ -77,6 +62,16 @@ async function readJson<T>(response: Response): Promise<T> {
     throw new ApiError(response.status, `Request succeeded with ${response.status} but the response body was not JSON`);
   }
   return payload as T;
+}
+
+function errorField(payload: unknown, field: "code" | "reason"): string | undefined {
+  if (!payload || typeof payload !== "object") return undefined;
+  if ("error" in payload && payload.error && typeof payload.error === "object") {
+    const value = (payload.error as Record<string, unknown>)[field];
+    if (typeof value === "string") return value;
+  }
+  if (field === "code" && "errorCode" in payload && typeof payload.errorCode === "string") return payload.errorCode;
+  return undefined;
 }
 
 /** Returns `undefined` for a body that is not JSON. `JSON.parse` never does. */

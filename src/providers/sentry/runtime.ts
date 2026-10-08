@@ -1,12 +1,10 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { OAuthProviderContext } from "../provider-runtime.ts";
-import type { SentryActionName } from "./actions.ts";
 
-import { compactObject } from "../../core/cast.ts";
+import { compactObject, looseArray, optionalRawString, optionalStringArray, rawStringOrNull } from "../../core/cast.ts";
 import { ProviderRequestError } from "../provider-runtime.ts";
-import { sentryProviderScopes } from "./scopes.ts";
 
 export const sentryApiBaseUrl: string = "https://sentry.io/api/0/";
-const sentryOrganizationsUrl = `${sentryApiBaseUrl}organizations/`;
 
 type SentryJsonResponse = {
   payload: unknown;
@@ -15,7 +13,7 @@ type SentryJsonResponse = {
 
 type SentryActionHandler = (input: Record<string, unknown>, context: OAuthProviderContext) => Promise<unknown>;
 
-export const sentryActionHandlers: Record<SentryActionName, SentryActionHandler> = {
+export const sentryActionHandlers: ProviderActionHandlers<"sentry", SentryActionHandler> = {
   list_organization_integrations(input, context) {
     return sentryListOrganizationIntegrations(input, context.accessToken, context.fetcher);
   },
@@ -86,41 +84,30 @@ export async function validateSentryCredential(
   grantedScopes: string[];
   metadata: Record<string, unknown>;
 }> {
-  const { payload: organizations } = await requestSentryJson(
-    accessToken,
-    sentryOrganizationsUrl,
-    fetcher,
-    {},
-    "validate",
-  );
-  if (!Array.isArray(organizations) || organizations.length === 0) {
-    throw new ProviderRequestError(502, "sentry organizations response did not include an authorized organization");
+  const { payload } = await requestSentryJson(accessToken, sentryApiBaseUrl, fetcher, {}, "validate");
+  const payloadRecord = asRecord(payload);
+  const user = asRecord(payloadRecord?.user);
+  if (!user) {
+    throw new ProviderRequestError(502, "sentry current user payload is invalid");
   }
-
-  const organization = asRecord(organizations[0]);
-  if (!organization) {
-    throw new ProviderRequestError(502, "sentry organization payload is invalid");
-  }
-  const links = asOptionalRecord(organization.links);
-  const organizationId = pickString(organization.id, organization.slug);
-  const organizationName = pickString(organization.name, organization.slug, organization.id);
-
-  if (!organizationId || !organizationName) {
-    throw new ProviderRequestError(502, "sentry organization payload is invalid");
+  const userId = pickString(user.id, user.username, user.email);
+  const displayName = pickString(user.name, user.username, user.email, user.id);
+  if (!userId || !displayName) {
+    throw new ProviderRequestError(502, "sentry current user payload is invalid");
   }
 
   return {
     profile: {
-      accountId: organizationId,
-      displayName: organizationName,
+      accountId: userId,
+      displayName,
     },
-    grantedScopes: sentryProviderScopes,
+    grantedScopes: optionalStringArray(asRecord(payloadRecord?.auth)?.scopes) ?? [],
     metadata: compactObject({
-      organizationId,
-      slug: optionalString(organization.slug),
-      name: optionalString(organization.name),
-      organizationUrl: optionalString(links?.organizationUrl),
-      regionUrl: optionalString(links?.regionUrl),
+      validationEndpoint: "/",
+      userId,
+      username: optionalRawString(user.username),
+      email: optionalRawString(user.email),
+      name: optionalRawString(user.name),
     }),
   };
 }
@@ -480,8 +467,8 @@ async function sentryGetReleaseHealthStats(input: Record<string, unknown>, acces
   return {
     groups: normalizeReleaseHealthGroups(body.groups),
     intervals: stringArray(body.intervals),
-    start: nullableString(body.start),
-    end: nullableString(body.end),
+    start: rawStringOrNull(body.start),
+    end: rawStringOrNull(body.end),
   };
 }
 
@@ -728,20 +715,20 @@ function normalizeOrganizationIntegration(value: unknown) {
   const body = expectRecord(value, "sentry integration payload is invalid");
 
   return {
-    id: optionalString(body.id) ?? "",
-    name: optionalString(body.name) ?? "",
-    icon: nullableString(body.icon),
-    domainName: nullableString(body.domainName),
-    accountType: nullableString(body.accountType),
+    id: optionalRawString(body.id) ?? "",
+    name: optionalRawString(body.name) ?? "",
+    icon: rawStringOrNull(body.icon),
+    domainName: rawStringOrNull(body.domainName),
+    accountType: rawStringOrNull(body.accountType),
     scopes: nullableStringArray(body.scopes),
-    status: nullableString(body.status),
+    status: rawStringOrNull(body.status),
     provider: normalizeIntegrationProvider(body.provider),
-    configOrganization: arrayValue(body.configOrganization),
+    configOrganization: looseArray(body.configOrganization),
     configData: asRecord(body.configData ?? body.config_data) ?? {},
-    externalId: nullableString(body.externalId),
+    externalId: rawStringOrNull(body.externalId),
     organizationId: nullableInteger(body.organizationId),
-    organizationIntegrationStatus: nullableString(body.organizationIntegrationStatus),
-    gracePeriodEnd: nullableString(body.gracePeriodEnd),
+    organizationIntegrationStatus: rawStringOrNull(body.organizationIntegrationStatus),
+    gracePeriodEnd: rawStringOrNull(body.gracePeriodEnd),
   };
 }
 
@@ -749,9 +736,9 @@ function normalizeIntegrationProvider(value: unknown) {
   const body = expectRecord(value, "sentry integration provider payload is invalid");
 
   return {
-    key: optionalString(body.key) ?? "",
-    slug: optionalString(body.slug) ?? "",
-    name: optionalString(body.name) ?? "",
+    key: optionalRawString(body.key) ?? "",
+    slug: optionalRawString(body.slug) ?? "",
+    name: optionalRawString(body.name) ?? "",
     canAdd: booleanValue(body.canAdd),
     canDisable: booleanValue(body.canDisable),
     features: stringArray(body.features),
@@ -777,13 +764,13 @@ function normalizeIntegrationProviderMetadata(value: unknown) {
   }
 
   return {
-    noun: nullableString(body.noun),
-    author: nullableString(body.author),
-    description: nullableString(body.description),
-    issueUrl: nullableString(body.issueUrl ?? body.issue_url),
-    sourceUrl: nullableString(body.sourceUrl ?? body.source_url),
+    noun: rawStringOrNull(body.noun),
+    author: rawStringOrNull(body.author),
+    description: rawStringOrNull(body.description),
+    issueUrl: rawStringOrNull(body.issueUrl ?? body.issue_url),
+    sourceUrl: rawStringOrNull(body.sourceUrl ?? body.source_url),
     aspects: asRecord(body.aspects) ?? null,
-    features: arrayValue(body.features),
+    features: looseArray(body.features),
   };
 }
 
@@ -794,7 +781,7 @@ function normalizeSetupDialog(value: unknown) {
   }
 
   return {
-    url: nullableString(body.url),
+    url: rawStringOrNull(body.url),
     width: nullableInteger(body.width),
     height: nullableInteger(body.height),
   };
@@ -804,24 +791,24 @@ function normalizeSentryApp(value: unknown) {
   const body = expectRecord(value, "sentry app payload is invalid");
 
   return {
-    name: optionalString(body.name) ?? "",
-    slug: optionalString(body.slug) ?? "",
-    uuid: optionalString(body.uuid) ?? "",
+    name: optionalRawString(body.name) ?? "",
+    slug: optionalRawString(body.slug) ?? "",
+    uuid: optionalRawString(body.uuid) ?? "",
     owner: normalizeSentryAppOwner(body.owner),
-    author: nullableString(body.author),
+    author: rawStringOrNull(body.author),
     events: stringArray(body.events),
     schema: body.schema ?? null,
     scopes: stringArray(body.scopes),
-    status: optionalString(body.status) ?? "",
+    status: optionalRawString(body.status) ?? "",
     avatars: normalizeSentryAppAvatars(body.avatars),
-    clientId: nullableString(body.clientId),
+    clientId: rawStringOrNull(body.clientId),
     metadata: body.metadata ?? null,
-    overview: nullableString(body.overview),
+    overview: rawStringOrNull(body.overview),
     popularity: nullableInteger(body.popularity),
-    webhookUrl: nullableString(body.webhookUrl),
-    featureData: arrayValue(body.featureData),
+    webhookUrl: rawStringOrNull(body.webhookUrl),
+    featureData: looseArray(body.featureData),
     isAlertable: booleanValue(body.isAlertable),
-    redirectUrl: nullableString(body.redirectUrl),
+    redirectUrl: rawStringOrNull(body.redirectUrl),
     hasClientSecret: isNonEmptyString(body.clientSecret),
     verifyInstall: booleanValue(body.verifyInstall),
     allowedOrigins: stringArray(body.allowedOrigins),
@@ -836,7 +823,7 @@ function normalizeSentryAppOwner(value: unknown) {
 
   return {
     id: nullableInteger(body.id),
-    slug: nullableString(body.slug),
+    slug: rawStringOrNull(body.slug),
   };
 }
 
@@ -853,11 +840,11 @@ function normalizeSentryAppAvatars(value: unknown) {
 
     return [
       {
-        avatarType: optionalString(body.avatarType) ?? "",
-        avatarUuid: optionalString(body.avatarUuid) ?? "",
-        avatarUrl: optionalString(body.avatarUrl) ?? "",
+        avatarType: optionalRawString(body.avatarType) ?? "",
+        avatarUuid: optionalRawString(body.avatarUuid) ?? "",
+        avatarUrl: optionalRawString(body.avatarUrl) ?? "",
         color: booleanValue(body.color),
-        photoType: optionalString(body.photoType) ?? "",
+        photoType: optionalRawString(body.photoType) ?? "",
       },
     ];
   });
@@ -867,12 +854,12 @@ function normalizeSentryProject(value: unknown) {
   const body = expectRecord(value, "sentry project payload is invalid");
 
   return {
-    id: optionalString(body.id) ?? "",
-    slug: optionalString(body.slug) ?? "",
-    name: optionalString(body.name) ?? "",
-    platform: nullableString(body.platform),
-    status: nullableString(body.status),
-    dateCreated: nullableString(body.dateCreated),
+    id: optionalRawString(body.id) ?? "",
+    slug: optionalRawString(body.slug) ?? "",
+    name: optionalRawString(body.name) ?? "",
+    platform: rawStringOrNull(body.platform),
+    status: rawStringOrNull(body.status),
+    dateCreated: rawStringOrNull(body.dateCreated),
     isBookmarked: booleanValue(body.isBookmarked),
     isMember: booleanValue(body.isMember),
     hasAccess: booleanValue(body.hasAccess),
@@ -890,9 +877,9 @@ function normalizeSentryTeam(value: unknown) {
   }
 
   return {
-    id: nullableString(body.id),
-    slug: nullableString(body.slug),
-    name: nullableString(body.name),
+    id: rawStringOrNull(body.id),
+    slug: rawStringOrNull(body.slug),
+    name: rawStringOrNull(body.name),
   };
 }
 
@@ -914,10 +901,10 @@ function normalizeSentryProjectSummary(value: unknown) {
   }
 
   return {
-    id: optionalString(body.id) ?? "",
-    slug: optionalString(body.slug) ?? "",
-    name: optionalString(body.name) ?? "",
-    platform: nullableString(body.platform),
+    id: optionalRawString(body.id) ?? "",
+    slug: optionalRawString(body.slug) ?? "",
+    name: optionalRawString(body.name) ?? "",
+    platform: rawStringOrNull(body.platform),
   };
 }
 
@@ -925,18 +912,18 @@ function normalizeSentryIssue(value: unknown) {
   const body = expectRecord(value, "sentry issue payload is invalid");
 
   return {
-    id: optionalString(body.id) ?? "",
-    shortId: nullableString(body.shortId),
-    title: nullableString(body.title),
-    culprit: nullableString(body.culprit),
-    level: nullableString(body.level),
-    status: nullableString(body.status),
-    count: nullableString(body.count),
+    id: optionalRawString(body.id) ?? "",
+    shortId: rawStringOrNull(body.shortId),
+    title: rawStringOrNull(body.title),
+    culprit: rawStringOrNull(body.culprit),
+    level: rawStringOrNull(body.level),
+    status: rawStringOrNull(body.status),
+    count: rawStringOrNull(body.count),
     userCount: nullableInteger(body.userCount),
-    firstSeen: nullableString(body.firstSeen),
-    lastSeen: nullableString(body.lastSeen),
-    permalink: nullableString(body.permalink),
-    logger: nullableString(body.logger),
+    firstSeen: rawStringOrNull(body.firstSeen),
+    lastSeen: rawStringOrNull(body.lastSeen),
+    permalink: rawStringOrNull(body.permalink),
+    logger: rawStringOrNull(body.logger),
     isBookmarked: booleanValue(body.isBookmarked),
     isSubscribed: booleanValue(body.isSubscribed),
     hasSeen: booleanValue(body.hasSeen),
@@ -957,11 +944,11 @@ function normalizeSentryIssueActor(value: unknown) {
   }
 
   return {
-    id: nullableString(body.id),
-    type: nullableString(body.type),
-    name: nullableString(body.name),
-    email: nullableString(body.email),
-    username: nullableString(body.username),
+    id: rawStringOrNull(body.id),
+    type: rawStringOrNull(body.type),
+    name: rawStringOrNull(body.name),
+    email: rawStringOrNull(body.email),
+    username: rawStringOrNull(body.username),
   };
 }
 
@@ -972,8 +959,8 @@ function normalizeSentryIssueStatusDetails(value: unknown) {
   }
 
   return {
-    inRelease: nullableString(body.inRelease ?? body.in_release),
-    inCommit: nullableString(body.inCommit ?? body.in_commit),
+    inRelease: rawStringOrNull(body.inRelease ?? body.in_release),
+    inCommit: rawStringOrNull(body.inCommit ?? body.in_commit),
     inNextRelease:
       typeof (body.inNextRelease ?? body.in_next_release) === "boolean"
         ? (body.inNextRelease ?? body.in_next_release)
@@ -995,8 +982,8 @@ function normalizeSentryIssueTags(value: unknown) {
     return [
       {
         key: body.key,
-        name: nullableString(body.name),
-        value: nullableString(body.value),
+        name: rawStringOrNull(body.name),
+        value: rawStringOrNull(body.value),
       },
     ];
   });
@@ -1006,13 +993,13 @@ function normalizeSentryIssueEvent(value: unknown) {
   const body = expectRecord(value, "sentry issue event payload is invalid");
 
   return {
-    id: optionalString(body.id) ?? optionalString(body.eventID) ?? "",
-    eventId: nullableString(body.eventID ?? body.eventId),
-    issueId: nullableString(body.groupID ?? body.groupId),
-    title: nullableString(body.title),
-    message: nullableString(body.message),
-    platform: nullableString(body.platform),
-    dateCreated: nullableString(body.dateCreated),
+    id: optionalRawString(body.id) ?? optionalRawString(body.eventID) ?? "",
+    eventId: rawStringOrNull(body.eventID ?? body.eventId),
+    issueId: rawStringOrNull(body.groupID ?? body.groupId),
+    title: rawStringOrNull(body.title),
+    message: rawStringOrNull(body.message),
+    platform: rawStringOrNull(body.platform),
+    dateCreated: rawStringOrNull(body.dateCreated),
     user: normalizeSentryEventUser(body.user),
     tags: normalizeSentryEventTags(body.tags),
   };
@@ -1025,11 +1012,11 @@ function normalizeSentryEventUser(value: unknown) {
   }
 
   return {
-    id: nullableString(body.id),
-    email: nullableString(body.email),
-    username: nullableString(body.username),
-    ipAddress: nullableString(body.ipAddress ?? body.ip_address ?? body.ip),
-    name: nullableString(body.name),
+    id: rawStringOrNull(body.id),
+    email: rawStringOrNull(body.email),
+    username: rawStringOrNull(body.username),
+    ipAddress: rawStringOrNull(body.ipAddress ?? body.ip_address ?? body.ip),
+    name: rawStringOrNull(body.name),
   };
 }
 
@@ -1070,13 +1057,13 @@ function normalizeSentryRelease(value: unknown) {
   const body = expectRecord(value, "sentry release payload is invalid");
 
   return {
-    version: optionalString(body.version) ?? "",
-    shortVersion: nullableString(body.shortVersion),
-    status: nullableString(body.status),
-    dateCreated: nullableString(body.dateCreated),
-    dateReleased: nullableString(body.dateReleased),
-    ref: nullableString(body.ref),
-    url: nullableString(body.url),
+    version: optionalRawString(body.version) ?? "",
+    shortVersion: rawStringOrNull(body.shortVersion),
+    status: rawStringOrNull(body.status),
+    dateCreated: rawStringOrNull(body.dateCreated),
+    dateReleased: rawStringOrNull(body.dateReleased),
+    ref: rawStringOrNull(body.ref),
+    url: rawStringOrNull(body.url),
     newGroups: nullableInteger(body.newGroups),
     projects: normalizeSentryReleaseProjects(body.projects),
     lastCommit: body.lastCommit ?? body.last_commit ?? null,
@@ -1100,8 +1087,8 @@ function normalizeSentryReleaseProjects(value: unknown) {
     return [
       {
         id: nullableInteger(body.id),
-        slug: nullableString(body.slug),
-        name: nullableString(body.name),
+        slug: rawStringOrNull(body.slug),
+        name: rawStringOrNull(body.name),
       },
     ];
   });
@@ -1132,12 +1119,12 @@ function normalizeSentryReplay(value: unknown) {
   const body = expectRecord(value, "sentry replay payload is invalid");
 
   return {
-    id: optionalString(body.id) ?? "",
+    id: optionalRawString(body.id) ?? "",
     projectId: nullableInteger(body.projectId ?? body.project_id),
-    environment: nullableString(body.environment),
-    platform: nullableString(body.platform),
-    startedAt: nullableString(body.startedAt ?? body.started_at),
-    finishedAt: nullableString(body.finishedAt ?? body.finished_at),
+    environment: rawStringOrNull(body.environment),
+    platform: rawStringOrNull(body.platform),
+    startedAt: rawStringOrNull(body.startedAt ?? body.started_at),
+    finishedAt: rawStringOrNull(body.finishedAt ?? body.finished_at),
     duration: nullableInteger(body.duration),
     countErrors: nullableInteger(body.countErrors ?? body.count_errors),
     countRageClicks: nullableInteger(body.countRageClicks ?? body.count_rage_clicks),
@@ -1158,10 +1145,10 @@ function normalizeSentryReplayUser(value: unknown) {
   }
 
   return {
-    id: nullableString(body.id),
-    email: nullableString(body.email),
-    username: nullableString(body.username),
-    ip: nullableString(body.ip ?? body.ipAddress ?? body.ip_address),
+    id: rawStringOrNull(body.id),
+    email: rawStringOrNull(body.email),
+    username: rawStringOrNull(body.username),
+    ip: rawStringOrNull(body.ip ?? body.ipAddress ?? body.ip_address),
   };
 }
 
@@ -1172,8 +1159,8 @@ function normalizeSentryNamedValue(value: unknown) {
   }
 
   return {
-    name: nullableString(body.name),
-    version: nullableString(body.version),
+    name: rawStringOrNull(body.name),
+    version: rawStringOrNull(body.version),
   };
 }
 
@@ -1188,7 +1175,7 @@ function normalizeSentryReplayReleases(value: unknown) {
     }
 
     const body = asRecord(item);
-    const version = body ? optionalString(body.version) : undefined;
+    const version = body ? optionalRawString(body.version) : undefined;
     return version ? [version] : [];
   });
 }
@@ -1197,15 +1184,15 @@ function normalizeSentryAlert(value: unknown) {
   const body = expectRecord(value, "sentry alert payload is invalid");
 
   return {
-    id: optionalString(body.id) ?? "",
-    name: optionalString(body.name) ?? "",
-    organizationId: nullableString(body.organizationId ?? body.organization_id),
+    id: optionalRawString(body.id) ?? "",
+    name: optionalRawString(body.name) ?? "",
+    organizationId: rawStringOrNull(body.organizationId ?? body.organization_id),
     enabled: booleanValue(body.enabled),
     createdBy: normalizeCreatedBy(body.createdBy),
-    dateCreated: nullableString(body.dateCreated),
-    dateUpdated: nullableString(body.dateUpdated),
-    environment: nullableString(body.environment),
-    lastTriggered: nullableString(body.lastTriggered),
+    dateCreated: rawStringOrNull(body.dateCreated),
+    dateUpdated: rawStringOrNull(body.dateUpdated),
+    environment: rawStringOrNull(body.environment),
+    lastTriggered: rawStringOrNull(body.lastTriggered),
     detectorIds: stringArray(body.detectorIds),
     config: asRecord(body.config) ?? {},
     triggers: normalizeSentryAlertTrigger(body.triggers),
@@ -1223,7 +1210,7 @@ function normalizeCreatedBy(value: unknown) {
     return null;
   }
 
-  return nullableString(body.id ?? body.email ?? body.username);
+  return rawStringOrNull(body.id ?? body.email ?? body.username);
 }
 
 function normalizeSentryAlertTrigger(value: unknown) {
@@ -1233,11 +1220,11 @@ function normalizeSentryAlertTrigger(value: unknown) {
   }
 
   return {
-    id: nullableString(body.id),
-    logicType: nullableString(body.logicType),
+    id: rawStringOrNull(body.id),
+    logicType: rawStringOrNull(body.logicType),
     actions: body.actions ?? null,
     conditions: body.conditions ?? null,
-    organizationId: nullableString(body.organizationId ?? body.organization_id),
+    organizationId: rawStringOrNull(body.organizationId ?? body.organization_id),
   };
 }
 
@@ -1254,11 +1241,11 @@ function normalizeSentryAlertActionFilters(value: unknown) {
 
     return [
       {
-        id: nullableString(body.id),
+        id: rawStringOrNull(body.id),
         actions: body.actions ?? null,
-        logicType: nullableString(body.logicType),
+        logicType: rawStringOrNull(body.logicType),
         conditions: body.conditions ?? null,
-        organizationId: nullableString(body.organizationId ?? body.organization_id),
+        organizationId: rawStringOrNull(body.organizationId ?? body.organization_id),
       },
     ];
   });
@@ -1333,7 +1320,7 @@ function extractSentryErrorMessage(payload: unknown): string | null {
 
 function readNestedString(body: Record<string, unknown>, key: string, nestedKey: string) {
   const nested = asOptionalRecord(body[key]);
-  return optionalString(nested?.[nestedKey]);
+  return optionalRawString(nested?.[nestedKey]);
 }
 
 function expectRecord(value: unknown, message: string) {
@@ -1355,12 +1342,8 @@ function asOptionalRecord(value: unknown) {
   return asRecord(value);
 }
 
-function optionalString(value: unknown) {
-  return typeof value === "string" ? value : undefined;
-}
-
 function asOptionalString(value: unknown) {
-  return optionalString(value);
+  return optionalRawString(value);
 }
 
 function asOptionalStringArray(value: unknown) {
@@ -1390,10 +1373,6 @@ function asOptionalIntegerArray(value: unknown) {
   });
 }
 
-function nullableString(value: unknown) {
-  return typeof value === "string" ? value : null;
-}
-
 function pickString(...values: unknown[]) {
   for (const value of values) {
     if (typeof value === "string" && value.trim()) {
@@ -1415,10 +1394,6 @@ function nullableStringArray(value: unknown) {
     return null;
   }
   return stringArray(value);
-}
-
-function arrayValue(value: unknown) {
-  return Array.isArray(value) ? value : [];
 }
 
 function nullableInteger(value: unknown) {

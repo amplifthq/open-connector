@@ -1,9 +1,15 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ZipcodebaseActionName } from "./actions.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerInputError,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "zipcodebase";
 const zipcodebaseApiBaseUrl = "https://app.zipcodebase.com/api/v1";
@@ -13,7 +19,7 @@ type ZipcodebaseQueryValue = string | number | undefined;
 type ZipcodebaseActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type ZipcodebaseActionHandler = (input: Record<string, unknown>, context: ZipcodebaseActionContext) => Promise<unknown>;
 
-export const zipcodebaseActionHandlers: Record<ZipcodebaseActionName, ZipcodebaseActionHandler> = {
+export const zipcodebaseActionHandlers: ProviderActionHandlers<"zipcodebase", ZipcodebaseActionHandler> = {
   get_status(_input, context) {
     return requestZipcodebaseJson("/status", {}, context, "execute");
   },
@@ -32,9 +38,9 @@ export const zipcodebaseActionHandlers: Record<ZipcodebaseActionName, Zipcodebas
     return requestZipcodebaseJson(
       "/distance",
       {
-        code: requiredString(input.code, "code", badInput),
+        code: requiredString(input.code, "code", providerInputError),
         compare: readStringList(input.compare, "compare").join(","),
-        country: requiredString(input.country, "country", badInput),
+        country: requiredString(input.country, "country", providerInputError),
         unit: optionalString(input.unit),
       },
       context,
@@ -45,9 +51,9 @@ export const zipcodebaseActionHandlers: Record<ZipcodebaseActionName, Zipcodebas
     return requestZipcodebaseJson(
       "/radius",
       {
-        code: requiredString(input.code, "code", badInput),
+        code: requiredString(input.code, "code", providerInputError),
         radius: requiredNumber(input.radius, "radius"),
-        country: requiredString(input.country, "country", badInput),
+        country: requiredString(input.country, "country", providerInputError),
         unit: optionalString(input.unit),
       },
       context,
@@ -60,7 +66,7 @@ export const zipcodebaseActionHandlers: Record<ZipcodebaseActionName, Zipcodebas
       {
         codes: readStringList(input.codes, "codes").join(","),
         distance: requiredNumber(input.distance, "distance"),
-        country: requiredString(input.country, "country", badInput),
+        country: requiredString(input.country, "country", providerInputError),
         unit: optionalString(input.unit),
       },
       context,
@@ -71,8 +77,8 @@ export const zipcodebaseActionHandlers: Record<ZipcodebaseActionName, Zipcodebas
     return requestZipcodebaseJson(
       "/code/city",
       {
-        city: requiredString(input.city, "city", badInput),
-        country: requiredString(input.country, "country", badInput),
+        city: requiredString(input.city, "city", providerInputError),
+        country: requiredString(input.country, "country", providerInputError),
         state_name: optionalString(input.state_name),
       },
       context,
@@ -83,8 +89,8 @@ export const zipcodebaseActionHandlers: Record<ZipcodebaseActionName, Zipcodebas
     return requestZipcodebaseJson(
       "/code/state",
       {
-        state_name: requiredString(input.state_name, "state_name", badInput),
-        country: requiredString(input.country, "country", badInput),
+        state_name: requiredString(input.state_name, "state_name", providerInputError),
+        country: requiredString(input.country, "country", providerInputError),
       },
       context,
       "execute",
@@ -93,6 +99,15 @@ export const zipcodebaseActionHandlers: Record<ZipcodebaseActionName, Zipcodebas
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, zipcodebaseActionHandlers);
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: zipcodebaseApiBaseUrl,
+  auth: { type: "api_key_header", name: "apikey" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -185,11 +200,7 @@ function requiredNumber(value: unknown, fieldName: string): number {
   if (parsed !== undefined) {
     return parsed;
   }
-  throw badInput(`${fieldName} must be a number`);
-}
-
-function badInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
+  throw providerInputError(`${fieldName} must be a number`);
 }
 
 async function readZipcodebasePayload(response: Response): Promise<unknown> {

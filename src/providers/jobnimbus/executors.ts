@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { JobnimbusActionName } from "./actions.ts";
 
 import { createHash } from "node:crypto";
 import {
@@ -11,9 +11,14 @@ import {
   optionalString,
   pickOptionalString,
   requiredRecord,
-  requiredString,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+  requiredInputString,
+} from "../provider-runtime.ts";
 
 const service = "jobnimbus";
 const jobnimbusApiBaseUrl = "https://app.jobnimbus.com/api1";
@@ -41,7 +46,7 @@ interface JobnimbusRequestInput {
   body?: Record<string, unknown>;
 }
 
-export const jobnimbusActionHandlers: Record<JobnimbusActionName, JobnimbusActionHandler> = {
+export const jobnimbusActionHandlers: ProviderActionHandlers<"jobnimbus", JobnimbusActionHandler> = {
   async list_contacts(input, context) {
     const payload = await requestJobnimbus({
       path: "/contacts",
@@ -57,7 +62,7 @@ export const jobnimbusActionHandlers: Record<JobnimbusActionName, JobnimbusActio
     };
   },
   async get_contact(input, context) {
-    const contactId = readRequiredId(input.contactId, "contactId");
+    const contactId = requiredInputString(input.contactId, "contactId");
     const payload = await requestJobnimbus({
       path: `/contacts/${encodeURIComponent(contactId)}`,
       method: "GET",
@@ -85,7 +90,7 @@ export const jobnimbusActionHandlers: Record<JobnimbusActionName, JobnimbusActio
     };
   },
   async update_contact(input, context) {
-    const contactId = readRequiredId(input.contactId, "contactId");
+    const contactId = requiredInputString(input.contactId, "contactId");
     const payload = await requestJobnimbus({
       path: `/contacts/${encodeURIComponent(contactId)}`,
       method: "PUT",
@@ -114,7 +119,7 @@ export const jobnimbusActionHandlers: Record<JobnimbusActionName, JobnimbusActio
     };
   },
   async get_job(input, context) {
-    const jobId = readRequiredId(input.jobId, "jobId");
+    const jobId = requiredInputString(input.jobId, "jobId");
     const payload = await requestJobnimbus({
       path: `/jobs/${encodeURIComponent(jobId)}`,
       method: "GET",
@@ -142,7 +147,7 @@ export const jobnimbusActionHandlers: Record<JobnimbusActionName, JobnimbusActio
     };
   },
   async update_job(input, context) {
-    const jobId = readRequiredId(input.jobId, "jobId");
+    const jobId = requiredInputString(input.jobId, "jobId");
     const payload = await requestJobnimbus({
       path: `/jobs/${encodeURIComponent(jobId)}`,
       method: "PUT",
@@ -159,6 +164,16 @@ export const jobnimbusActionHandlers: Record<JobnimbusActionName, JobnimbusActio
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, jobnimbusActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: jobnimbusApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -250,10 +265,6 @@ function joinStringList(value: unknown, fieldName: string): string | undefined {
     .filter((item) => item !== "");
 
   return parts.length > 0 ? parts.join(",") : undefined;
-}
-
-function readRequiredId(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function readOptionalId(payload: Record<string, unknown>): string | undefined {

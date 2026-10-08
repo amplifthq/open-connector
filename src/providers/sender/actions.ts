@@ -5,22 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "sender";
 
-export type SenderActionName =
-  | "list_subscribers"
-  | "get_subscriber"
-  | "create_subscriber"
-  | "update_subscriber"
-  | "add_subscribers_to_group"
-  | "remove_subscribers_from_group"
-  | "list_groups"
-  | "get_group"
-  | "list_fields"
-  | "create_field"
-  | "list_campaigns"
-  | "get_campaign"
-  | "list_workflows"
-  | "get_workflow";
-
 const pageField = s.positiveInteger("Page number for Sender pagination.");
 const limitField = s.positiveInteger("Number of records to return per page.");
 const workflowLimitField = s.integer("Number of workflows to return per page (1-100).", {
@@ -250,6 +234,7 @@ const subscriberIdentifierInputSchema = s.object(
 export const senderActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_subscribers",
+    operationType: "read",
     description: "List Sender subscribers with pagination.",
     inputSchema: s.object("Input for listing Sender subscribers.", paginationFields, {
       optional: ["page", "limit"],
@@ -258,6 +243,7 @@ export const senderActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_subscriber",
+    operationType: "read",
     description: "Get one Sender subscriber by email address, phone number, or ID.",
     inputSchema: subscriberIdentifierInputSchema,
     outputSchema: s.object("A Sender subscriber detail response.", {
@@ -266,30 +252,35 @@ export const senderActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_subscriber",
+    operationType: "write",
     description: "Create a Sender subscriber with optional groups and custom fields.",
     inputSchema: createSubscriberInputSchema,
     outputSchema: subscriberMutationOutputSchema,
   }),
   defineProviderAction(service, {
     name: "update_subscriber",
+    operationType: "write",
     description: "Update a Sender subscriber by email address, phone number, or ID.",
     inputSchema: updateSubscriberInputSchema,
     outputSchema: subscriberMutationOutputSchema,
   }),
   defineProviderAction(service, {
     name: "add_subscribers_to_group",
+    operationType: "write",
     description: "Add subscribers or a Sender conditions selection to a group.",
     inputSchema: groupMembershipInputSchema("Input for adding subscribers to a Sender group.", true),
     outputSchema: groupMembershipOutputSchema,
   }),
   defineProviderAction(service, {
     name: "remove_subscribers_from_group",
+    operationType: "destructive",
     description: "Remove subscribers or a Sender conditions selection from a group.",
     inputSchema: groupMembershipInputSchema("Input for removing subscribers from a Sender group.", false),
     outputSchema: groupMembershipOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_groups",
+    operationType: "read",
     description: "List Sender groups with pagination.",
     inputSchema: s.object("Input for listing Sender groups.", paginationFields, {
       optional: ["page", "limit"],
@@ -298,6 +289,7 @@ export const senderActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_group",
+    operationType: "read",
     description: "Get one Sender group by ID.",
     inputSchema: idInputSchema("Input for getting one Sender group.", "The Sender group ID."),
     outputSchema: s.object("A Sender group detail response.", {
@@ -306,6 +298,7 @@ export const senderActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_fields",
+    operationType: "read",
     description: "List Sender custom subscriber fields with pagination.",
     inputSchema: s.object("Input for listing Sender custom fields.", paginationFields, {
       optional: ["page", "limit"],
@@ -314,6 +307,7 @@ export const senderActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_field",
+    operationType: "write",
     description: "Create a Sender custom subscriber field.",
     inputSchema: s.object(
       "Input for creating a Sender custom field.",
@@ -335,6 +329,7 @@ export const senderActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_campaigns",
+    operationType: "read",
     description: "List Sender campaigns with pagination and an optional status filter.",
     inputSchema: s.object(
       "Input for listing Sender campaigns.",
@@ -348,6 +343,7 @@ export const senderActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_campaign",
+    operationType: "read",
     description: "Get one Sender campaign by ID.",
     inputSchema: idInputSchema("Input for getting one Sender campaign.", "The Sender campaign ID."),
     outputSchema: s.object("A Sender campaign detail response.", {
@@ -356,6 +352,7 @@ export const senderActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_workflows",
+    operationType: "read",
     description: "List Sender automation workflows with pagination and filters.",
     inputSchema: s.object(
       "Input for listing Sender workflows.",
@@ -371,6 +368,7 @@ export const senderActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_workflow",
+    operationType: "read",
     description: "Get one Sender automation workflow by ID.",
     inputSchema: idInputSchema("Input for getting one Sender workflow.", "The Sender workflow ID."),
     outputSchema: s.object("A Sender workflow detail response.", {

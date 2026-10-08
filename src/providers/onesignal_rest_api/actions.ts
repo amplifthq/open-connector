@@ -219,27 +219,24 @@ const listMessagesOutputSchema = s.object(
   },
 );
 
-export type OnesignalRestApiActionName =
-  | "create_push_notification"
-  | "list_messages"
-  | "get_message"
-  | "cancel_message";
-
 export const onesignalRestApiActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "create_push_notification",
+    operationType: "write",
     description: "Create a push notification for the connected OneSignal app using one official targeting method.",
     inputSchema: createPushNotificationInputSchema,
     outputSchema: createPushNotificationOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_messages",
+    operationType: "read",
     description: "List messages from the connected OneSignal app.",
     inputSchema: listMessagesInputSchema,
     outputSchema: listMessagesOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_message",
+    operationType: "read",
     description: "Retrieve one OneSignal message by id from the connected app.",
     inputSchema: s.requiredObject("Input parameters for retrieving one OneSignal message.", {
       message_id: messageIdSchema,
@@ -248,6 +245,7 @@ export const onesignalRestApiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "cancel_message",
+    operationType: "destructive",
     description: "Cancel one scheduled OneSignal message by id.",
     inputSchema: s.requiredObject("Input parameters for canceling one OneSignal message.", {
       message_id: messageIdSchema,

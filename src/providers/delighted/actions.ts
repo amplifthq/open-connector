@@ -81,19 +81,10 @@ const pageWindow = {
   until: timestamp,
 };
 
-export type DelightedActionName =
-  | "create_or_update_person"
-  | "list_people"
-  | "list_unsubscribed_people"
-  | "list_bounced_people"
-  | "unsubscribe_person"
-  | "delete_person"
-  | "list_survey_responses"
-  | "get_metrics";
-
 export const delightedActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "create_or_update_person",
+    operationType: "write",
     description: "Create or update a Delighted person and optionally schedule a survey request.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -131,6 +122,7 @@ export const delightedActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_people",
+    operationType: "read",
     description: "List people in the connected Delighted account.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -157,6 +149,7 @@ export const delightedActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_unsubscribed_people",
+    operationType: "read",
     description: "List unsubscribed people in the connected Delighted account.",
     requiredScopes: [],
     inputSchema: s.object("Input payload for listing unsubscribed Delighted people.", pageWindow, {
@@ -169,6 +162,7 @@ export const delightedActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_bounced_people",
+    operationType: "read",
     description: "List bounced people in the connected Delighted account.",
     requiredScopes: [],
     inputSchema: s.object("Input payload for listing bounced Delighted people.", pageWindow, {
@@ -181,6 +175,7 @@ export const delightedActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "unsubscribe_person",
+    operationType: "destructive",
     description: "Add a person to the Delighted unsubscribe list.",
     requiredScopes: [],
     inputSchema: s.object("Input payload for adding a person to the Delighted unsubscribe list.", {
@@ -192,6 +187,7 @@ export const delightedActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_person",
+    operationType: "destructive",
     description: "Delete a Delighted person and all related survey history.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -205,6 +201,7 @@ export const delightedActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_survey_responses",
+    operationType: "read",
     description: "List survey responses collected in the connected Delighted account.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -250,6 +247,7 @@ export const delightedActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_metrics",
+    operationType: "read",
     description: "Retrieve Net Promoter Score and related metrics from Delighted.",
     requiredScopes: [],
     inputSchema: s.object(

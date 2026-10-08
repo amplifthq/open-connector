@@ -1,19 +1,11 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { ClickMeetingActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  createProviderTimeout,
-  isAbortLikeError,
-  providerUserAgent,
-  ProviderRequestError,
-  setSearchParams,
-} from "../provider-runtime.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest, setSearchParams } from "../provider-runtime.ts";
 
 export const clickMeetingApiBaseUrl = "https://api.clickmeeting.com/v1";
-
-const clickMeetingDefaultRequestTimeoutMs = 30_000;
 
 type ClickMeetingPhase = "validate" | "execute";
 type ClickMeetingActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
@@ -31,7 +23,7 @@ interface ClickMeetingRequestContext {
   signal?: AbortSignal;
 }
 
-export const clickMeetingActionHandlers: Record<ClickMeetingActionName, ClickMeetingActionHandler> = {
+export const clickMeetingActionHandlers: ProviderActionHandlers<"clickmeeting", ClickMeetingActionHandler> = {
   async ping(_input, context) {
     const payload = await requestClickMeetingJson(
       {
@@ -352,14 +344,12 @@ async function requestClickMeetingJson(
   context: ClickMeetingRequestContext,
   phase: ClickMeetingPhase,
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, clickMeetingDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: context.signal, label: "ClickMeeting" }, async (signal) => {
     const response = await context.fetcher(buildClickMeetingUrl(input.path, input.query), {
       method: input.method,
       headers: buildClickMeetingHeaders(context.apiKey, input.body),
       body: input.body,
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readClickMeetingPayload(response);
 
@@ -368,22 +358,7 @@ async function requestClickMeetingJson(
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "ClickMeeting request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `ClickMeeting request failed: ${error.message}` : "ClickMeeting request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildClickMeetingUrl(path: string, query: Record<string, string | undefined> = {}): URL {

@@ -250,26 +250,10 @@ const timeEntryMutationInputSchema = s.actionInput(
   "Input parameters for mutating a Harvest time entry by ID.",
 );
 
-export type HarvestActionName =
-  | "get_current_user"
-  | "list_clients"
-  | "get_client"
-  | "list_projects"
-  | "get_project"
-  | "list_tasks"
-  | "get_task"
-  | "list_project_task_assignments"
-  | "list_time_entries"
-  | "get_time_entry"
-  | "create_time_entry"
-  | "update_time_entry"
-  | "restart_time_entry"
-  | "stop_time_entry"
-  | "delete_time_entry";
-
 export const harvestActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Get the current authenticated Harvest user.",
     inputSchema: s.actionInput({}, [], "The input payload for this action."),
     outputSchema: s.actionOutput({ user: userSchema }, "The authenticated Harvest user response."),
@@ -277,6 +261,7 @@ export const harvestActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_clients",
+    operationType: "read",
     description: "List clients available in the connected Harvest account.",
     inputSchema: clientsListInputSchema,
     outputSchema: s.actionOutput(
@@ -290,6 +275,7 @@ export const harvestActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_client",
+    operationType: "read",
     description: "Get a single Harvest client by ID.",
     inputSchema: s.actionInput({ clientId: clientIdField }, ["clientId"], "Input parameters for retrieving a client."),
     outputSchema: s.actionOutput({ client: clientSchema }, "A single Harvest client response."),
@@ -297,6 +283,7 @@ export const harvestActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_projects",
+    operationType: "read",
     description: "List projects available in the connected Harvest account.",
     inputSchema: projectsListInputSchema,
     outputSchema: s.actionOutput(
@@ -310,6 +297,7 @@ export const harvestActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_project",
+    operationType: "read",
     description: "Get a single Harvest project by ID.",
     inputSchema: s.actionInput(
       { projectId: projectIdField },
@@ -321,6 +309,7 @@ export const harvestActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tasks",
+    operationType: "read",
     description: "List tasks available in the connected Harvest account.",
     inputSchema: tasksListInputSchema,
     outputSchema: s.actionOutput(
@@ -334,12 +323,14 @@ export const harvestActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_task",
+    operationType: "read",
     description: "Get a single Harvest task by ID.",
     inputSchema: s.actionInput({ taskId: taskIdField }, ["taskId"], "Input parameters for retrieving a task."),
     outputSchema: s.actionOutput({ task: taskSchema }, "A single Harvest task response."),
   }),
   defineProviderAction(service, {
     name: "list_project_task_assignments",
+    operationType: "read",
     description: "List task assignments for a specific Harvest project.",
     inputSchema: taskAssignmentsListInputSchema,
     outputSchema: s.actionOutput(
@@ -353,6 +344,7 @@ export const harvestActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_time_entries",
+    operationType: "read",
     description: "List Harvest time entries with optional resource and date filters.",
     inputSchema: listTimeEntriesInputSchema,
     outputSchema: s.actionOutput(
@@ -366,6 +358,7 @@ export const harvestActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_time_entry",
+    operationType: "read",
     description: "Get a single Harvest time entry by ID.",
     inputSchema: timeEntryMutationInputSchema,
     outputSchema: s.actionOutput({ time_entry: timeEntrySchema }, "A single Harvest time entry response."),
@@ -373,6 +366,7 @@ export const harvestActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_time_entry",
+    operationType: "write",
     description: "Create a new Harvest time entry.",
     inputSchema: createTimeEntryInputSchema,
     outputSchema: s.actionOutput({ time_entry: timeEntrySchema }, "A single Harvest time entry response."),
@@ -380,6 +374,7 @@ export const harvestActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_time_entry",
+    operationType: "write",
     description: "Update an existing Harvest time entry.",
     inputSchema: updateTimeEntryInputSchema,
     outputSchema: s.actionOutput({ time_entry: timeEntrySchema }, "A single Harvest time entry response."),
@@ -387,6 +382,7 @@ export const harvestActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "restart_time_entry",
+    operationType: "write",
     description: "Restart a stopped Harvest time entry.",
     inputSchema: timeEntryMutationInputSchema,
     outputSchema: s.actionOutput({ time_entry: timeEntrySchema }, "A single Harvest time entry response."),
@@ -394,12 +390,14 @@ export const harvestActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "stop_time_entry",
+    operationType: "destructive",
     description: "Stop a running Harvest time entry.",
     inputSchema: timeEntryMutationInputSchema,
     outputSchema: s.actionOutput({ time_entry: timeEntrySchema }, "A single Harvest time entry response."),
   }),
   defineProviderAction(service, {
     name: "delete_time_entry",
+    operationType: "destructive",
     description: "Delete a Harvest time entry by ID.",
     inputSchema: timeEntryMutationInputSchema,
     outputSchema: s.actionOutput(

@@ -1,5 +1,6 @@
 import type { FeishuJsonRequest, FeishuQueryValue } from "./client.ts";
 
+import { compactObject, optionalRawString } from "../../../core/cast.ts";
 import { ProviderRequestError } from "../../provider-runtime.ts";
 
 interface FeishuBaseAdvancedActionHandler {
@@ -296,7 +297,7 @@ async function listAllWorkflows(request: FeishuJsonRequest, input: Record<string
       }),
     });
     items.push(...firstObjectItems(data, ["items", "workflows"]));
-    const nextToken = optionalString(data.page_token) ?? "";
+    const nextToken = optionalRawString(data.page_token) ?? "";
     if (data.has_more !== true || nextToken.length === 0) {
       return {
         items,
@@ -326,7 +327,7 @@ async function changeAdvancedPermissions(request: FeishuJsonRequest, input: Reco
 function rolePayload(data: Record<string, unknown>): unknown {
   if (typeof data.code === "number") {
     if (data.code !== 0) {
-      throw new ProviderRequestError(502, optionalString(data.message) ?? "Feishu Base role operation failed");
+      throw new ProviderRequestError(502, optionalRawString(data.message) ?? "Feishu Base role operation failed");
     }
     return data.data ?? {};
   }
@@ -341,7 +342,7 @@ function normalizedList(data: Record<string, unknown>, items: readonly Record<st
   return {
     items,
     total: nonNegativeInteger(data.total) ?? nonNegativeInteger(data.count) ?? items.length,
-    pageToken: optionalString(data.page_token) ?? "",
+    pageToken: optionalRawString(data.page_token) ?? "",
     hasMore: data.has_more === true,
   };
 }
@@ -400,16 +401,6 @@ function uniqueStrings(value: unknown, fieldName: string) {
   return [...new Set(items)];
 }
 
-function compactObject(value: Record<string, unknown>) {
-  const result: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (item !== undefined) {
-      result[key] = item;
-    }
-  }
-  return result;
-}
-
 function compactQuery(value: Record<string, unknown> | undefined) {
   if (!value) {
     return undefined;
@@ -442,10 +433,6 @@ function requireString(value: unknown, fieldName: string) {
     return value;
   }
   throw new ProviderRequestError(400, `${fieldName} must be a non-empty string`);
-}
-
-function optionalString(value: unknown) {
-  return typeof value === "string" ? value : undefined;
 }
 
 function nonNegativeInteger(value: unknown) {

@@ -1,12 +1,19 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { FellowActionName } from "./actions.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   defineProviderExecutors,
+  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 const service = "fellow";
@@ -25,7 +32,7 @@ interface FellowActionContext {
 
 type FellowActionHandler = (input: Record<string, unknown>, context: FellowActionContext) => Promise<unknown>;
 
-export const fellowActionHandlers: Record<FellowActionName, FellowActionHandler> = {
+export const fellowActionHandlers: ProviderActionHandlers<"fellow", FellowActionHandler> = {
   get_current_user(_input, context) {
     return requestFellowJson({
       context,
@@ -130,6 +137,18 @@ export const executors: ProviderExecutors = defineProviderExecutors<FellowAction
       phase: "execute",
       signal: context.signal,
     };
+  },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  async baseUrl(context) {
+    const credential = await requireApiKeyCredential(context, service);
+    return resolveFellowBaseUrl(credential.values, credential.metadata);
+  },
+  auth: { type: "api_key_header", name: "X-API-KEY" },
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
   },
 });
 
@@ -372,8 +391,4 @@ function readRecordField(payload: unknown, key: string, context: string): Record
     throw new ProviderRequestError(502, `${context} is invalid`, payload);
   }
   return child;
-}
-
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }

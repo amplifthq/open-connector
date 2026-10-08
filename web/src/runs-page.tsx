@@ -1,5 +1,5 @@
 import type { RunLog, RunLogPage } from "./model";
-import type { FormEvent, ReactNode } from "react";
+import type { ReactNode, SubmitEvent } from "react";
 
 import { useTranslate } from "@embra/i18n/react";
 import { ChevronDown, ChevronUp, Copy, Loader2, Search } from "lucide-react";
@@ -111,7 +111,7 @@ export function RunsPage(props: RunsPageProps): ReactNode {
     setSearchParams(next);
   }
 
-  function submitActionFilter(event: FormEvent): void {
+  function submitActionFilter(event: SubmitEvent<HTMLFormElement>): void {
     event.preventDefault();
     updateFilter("actionId", actionDraft.trim());
   }

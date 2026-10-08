@@ -36,6 +36,20 @@ const objectSchema = s.object("An S3 object summary.", {
   owner: s.nullable(ownerSchema),
 });
 
+const downloadedObjectSchema = s.requiredObject("A downloaded S3 object stored in local transit storage.", {
+  objectKey: objectKeyField,
+  name: s.nonEmptyString("The filename used for the local transit file."),
+  mimeType: s.nonEmptyString("The downloaded object MIME type."),
+  sizeBytes: s.nonNegativeInteger("The downloaded object size in bytes."),
+  file: s.requiredObject("The downloaded object in local transit file storage.", {
+    fileId: s.nonEmptyString("The local transit file identifier."),
+    downloadUrl: s.url("The local transit URL for downloading the stored object."),
+    sizeBytes: s.nonNegativeInteger("The stored transit file size in bytes."),
+    name: s.nonEmptyString("The stored transit file name."),
+    mimeType: s.nonEmptyString("The stored transit file MIME type."),
+  }),
+});
+
 const objectMetadataSchema = s.object("Structured S3 object metadata.", {
   bucket: s.string("The bucket that stores the object."),
   objectKey: s.string("The object key."),
@@ -95,6 +109,7 @@ putObjectInputSchema.oneOf = [
 export const awsActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_buckets",
+    operationType: "read",
     description: "List Amazon S3 buckets visible to the connected AWS credential.",
     inputSchema: s.object(
       "The input payload for this action.",
@@ -115,6 +130,7 @@ export const awsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_objects",
+    operationType: "read",
     description: "List objects in an S3 bucket with the ListObjectsV2 API.",
     inputSchema: s.object(
       "The input payload for this action.",
@@ -145,6 +161,7 @@ export const awsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "head_object",
+    operationType: "read",
     description: "Fetch structured metadata for one S3 object.",
     inputSchema: s.object(
       "The input payload for this action.",
@@ -161,7 +178,25 @@ export const awsActions: ActionDefinition[] = [
     }),
   }),
   defineProviderAction(service, {
+    name: "download_object",
+    operationType: "read",
+    description: "Download one S3 object into local transit file storage.",
+    inputSchema: s.object(
+      "The input payload for downloading one S3 object.",
+      {
+        bucket: bucketNameField,
+        objectKey: s.nonEmptyString("The complete S3 object key. Slashes are preserved as key delimiters."),
+        region: regionField,
+        versionId: s.string("The optional object version ID."),
+        fileName: s.nonEmptyString("An optional filename override for the local transit file."),
+      },
+      { optional: ["bucket", "region", "versionId", "fileName"] },
+    ),
+    outputSchema: downloadedObjectSchema,
+  }),
+  defineProviderAction(service, {
     name: "put_object",
+    operationType: "destructive",
     description: "Upload one object to S3 from a public URL, plain text, or base64-encoded content.",
     inputSchema: putObjectInputSchema,
     outputSchema: s.object("The output payload for this action.", {
@@ -173,6 +208,7 @@ export const awsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_object",
+    operationType: "destructive",
     description: "Delete one S3 object.",
     inputSchema: s.object(
       "The input payload for this action.",
@@ -192,6 +228,7 @@ export const awsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "generate_presigned_url",
+    operationType: "read",
     description: "Generate a pre-signed S3 URL for reading, uploading, or deleting one object.",
     inputSchema: s.object(
       "The input payload for this action.",

@@ -101,8 +101,14 @@ export class NativeHttpRunner {
         return failure(400, "connection_input_invalid", "GET requests cannot include a body.");
       }
       const execution = await this.options.connections.resolveForExecution(input.service, input.connectionName);
+      if (execution.kind !== "local")
+        return failure(
+          501,
+          "connection_transport_unavailable",
+          "Native HTTP reads require a local connection. Use this connection's Plugin actions.",
+        );
       const context: ExecutionContext = {
-        ...execution,
+        getCredential: execution.getCredential,
         runtimeConfig: this.options.runtimeConfig,
         signal: input.request.signal,
       };

@@ -1,5 +1,5 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { TwochatActionName } from "./actions.ts";
 
 import { compactObject } from "../../core/cast.ts";
 import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
@@ -7,7 +7,6 @@ import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "
 export const twochatApiBaseUrl = "https://api.p.2chat.io";
 
 const twochatValidationPath = "/open/info";
-const twochatRequestTimeoutMs = 30_000;
 
 type TwochatRequestPhase = "validate" | "execute";
 type TwochatQueryValue = string | number | boolean | undefined;
@@ -30,7 +29,7 @@ interface TwochatResponse {
   rawText: string;
 }
 
-export const twochatActionHandlers: Record<TwochatActionName, TwochatActionHandler> = {
+export const twochatActionHandlers: ProviderActionHandlers<"twochat", TwochatActionHandler> = {
   test_api_key(_input, context) {
     return getTwochatInfo(context.apiKey, context.fetcher, "execute", context.signal);
   },
@@ -160,7 +159,7 @@ async function requestTwochatJson(input: TwochatRequestInput): Promise<unknown> 
 }
 
 async function requestTwochat(input: TwochatRequestInput): Promise<TwochatResponse> {
-  const timeout = createProviderTimeout(input.signal, twochatRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   const url = new URL(input.path, `${twochatApiBaseUrl}/`);
   for (const [key, value] of Object.entries(input.query ?? {})) {
     if (value !== undefined) {

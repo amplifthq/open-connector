@@ -5,17 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "glyphic";
 
-export type GlyphicActionName =
-  | "list_calls"
-  | "get_call"
-  | "get_call_media"
-  | "get_call_snippets"
-  | "list_call_tags"
-  | "list_playbooks"
-  | "get_playbook"
-  | "list_playbook_versions"
-  | "get_playbook_version";
-
 const nonEmptyString = (description: string) => s.nonEmptyString(description);
 const objectIdString = (description: string) =>
   s.string({
@@ -141,6 +130,7 @@ const paginatedOutputFields = {
 export const glyphicActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_calls",
+    operationType: "read",
     description: "List public Glyphic calls with optional participant, time, title, tag, and cursor filters.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -180,6 +170,7 @@ export const glyphicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_call",
+    operationType: "read",
     description: "Retrieve one Glyphic call by ID, including transcript, summary, media, and insights.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for retrieving a Glyphic call.", {
@@ -192,6 +183,7 @@ export const glyphicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_call_media",
+    operationType: "read",
     description: "Retrieve presigned media URL metadata for a Glyphic call.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for retrieving Glyphic call media.", {
@@ -204,6 +196,7 @@ export const glyphicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_call_snippets",
+    operationType: "read",
     description: "Retrieve snippets for a Glyphic call, including time ranges and transcript turns.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for retrieving Glyphic call snippets.", {
@@ -216,6 +209,7 @@ export const glyphicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_call_tags",
+    operationType: "read",
     description: "List all Glyphic call tags for the organization.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for listing Glyphic call tags.", {}),
@@ -226,6 +220,7 @@ export const glyphicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_playbooks",
+    operationType: "read",
     description: "List Glyphic playbooks with cursor pagination.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for listing Glyphic playbooks.", paginatedInputFields, {
@@ -239,6 +234,7 @@ export const glyphicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_playbook",
+    operationType: "read",
     description: "Retrieve a Glyphic playbook by ID, including the latest version content.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for retrieving a Glyphic playbook.", {
@@ -251,6 +247,7 @@ export const glyphicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_playbook_versions",
+    operationType: "read",
     description: "List versions for a Glyphic playbook.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for listing Glyphic playbook versions.", {
@@ -263,6 +260,7 @@ export const glyphicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_playbook_version",
+    operationType: "read",
     description: "Retrieve a specific Glyphic playbook version by playbook ID and version ID.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for retrieving a Glyphic playbook version.", {

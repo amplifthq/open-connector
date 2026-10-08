@@ -1,7 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { RawgActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject } from "../../core/cast.ts";
+import { compactObject, optionalRawString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 type RawgActionContext = {
@@ -49,13 +49,13 @@ export async function validateRawgCredential(
       validationEndpoint: "/platforms",
       apiBaseUrl: rawgApiBaseUrl,
       firstPlatformId: asOptionalNumber(firstPlatform?.id),
-      firstPlatformName: asOptionalString(firstPlatform?.name),
+      firstPlatformName: optionalRawString(firstPlatform?.name),
       pageSize: 1,
     }),
   };
 }
 
-export const rawgActionHandlers: Record<RawgActionName, RawgActionHandler> = {
+export const rawgActionHandlers: ProviderActionHandlers<"rawg", RawgActionHandler> = {
   list_games(input, context) {
     return listResource("/games", buildListGamesQuery(input), "games", context);
   },
@@ -63,7 +63,7 @@ export const rawgActionHandlers: Record<RawgActionName, RawgActionHandler> = {
     return getResource(`/games/${encodeURIComponent(String(readRequiredGameId(input.gameId)))}`, "game", context);
   },
   list_platforms(input, context) {
-    return listResource("/platforms", buildPagedQuery(input, readOptionalString(input.ordering)), "platforms", context);
+    return listResource("/platforms", buildPagedQuery(input, optionalRawString(input.ordering)), "platforms", context);
   },
   get_platform(input, context) {
     return getResource(
@@ -73,13 +73,13 @@ export const rawgActionHandlers: Record<RawgActionName, RawgActionHandler> = {
     );
   },
   list_genres(input, context) {
-    return listResource("/genres", buildPagedQuery(input, readOptionalString(input.ordering)), "genres", context);
+    return listResource("/genres", buildPagedQuery(input, optionalRawString(input.ordering)), "genres", context);
   },
   get_genre(input, context) {
     return getResource(`/genres/${readRequiredPositiveInteger(input.genreId, "genreId")}`, "genre", context);
   },
   list_stores(input, context) {
-    return listResource("/stores", buildPagedQuery(input, readOptionalString(input.ordering)), "stores", context);
+    return listResource("/stores", buildPagedQuery(input, optionalRawString(input.ordering)), "stores", context);
   },
   get_store(input, context) {
     return getResource(`/stores/${readRequiredPositiveInteger(input.storeId, "storeId")}`, "store", context);
@@ -133,38 +133,21 @@ export const rawgActionHandlers: Record<RawgActionName, RawgActionHandler> = {
   },
 };
 
-const rawgHandlers: Record<RawgActionName, RawgActionHandler> = rawgActionHandlers;
-
-export async function executeRawgAction(
-  input: { apiKey: string; actionName: RawgActionName; input: Record<string, unknown> },
-  fetcher: typeof fetch,
-): Promise<unknown> {
-  const handler = rawgHandlers[input.actionName];
-  if (!handler) {
-    throw new ProviderRequestError(400, `unknown rawg action: ${input.actionName}`);
-  }
-
-  return handler(input.input, {
-    apiKey: input.apiKey,
-    fetcher,
-  });
-}
-
 function buildListGamesQuery(input: Record<string, unknown>) {
   return compactObject({
-    search: readOptionalString(input.search),
+    search: optionalRawString(input.search),
     page: stringifyOptionalNumber(input.page),
     page_size: stringifyOptionalNumber(input.pageSize),
-    platforms: readOptionalString(input.platforms),
-    genres: readOptionalString(input.genres),
-    stores: readOptionalString(input.stores),
-    developers: readOptionalString(input.developers),
-    publishers: readOptionalString(input.publishers),
-    tags: readOptionalString(input.tags),
-    dates: readOptionalString(input.dates),
-    ordering: readOptionalString(input.ordering),
-    metacritic: readOptionalString(input.metacritic),
-    parent_platforms: readOptionalString(input.parentPlatforms),
+    platforms: optionalRawString(input.platforms),
+    genres: optionalRawString(input.genres),
+    stores: optionalRawString(input.stores),
+    developers: optionalRawString(input.developers),
+    publishers: optionalRawString(input.publishers),
+    tags: optionalRawString(input.tags),
+    dates: optionalRawString(input.dates),
+    ordering: optionalRawString(input.ordering),
+    metacritic: optionalRawString(input.metacritic),
+    parent_platforms: optionalRawString(input.parentPlatforms),
     search_exact: stringifyOptionalBoolean(input.searchExact),
     search_precise: stringifyOptionalBoolean(input.searchPrecise),
     exclude_additions: stringifyOptionalBoolean(input.excludeAdditions),
@@ -296,13 +279,13 @@ async function readRawgPayload(
 
 function buildRawgError(status: number, payload: unknown, phase: "validate" | "execute") {
   const payloadObject = asOptionalObject(payload);
-  const message = asOptionalString(payloadObject?.error) ?? defaultErrorMessage(status);
+  const message = optionalRawString(payloadObject?.error) ?? defaultErrorMessage(status);
 
   if (status === 401 || status === 403) {
     if (phase === "validate") {
       return new ProviderRequestError(400, message);
     }
-    return new ProviderRequestError(409, message);
+    return new ProviderRequestError(401, message);
   }
 
   if (status === 429) {
@@ -392,19 +375,11 @@ function stringifyOptionalBoolean(value: unknown) {
   return String(value);
 }
 
-function readOptionalString(value: unknown) {
-  return asOptionalString(value);
-}
-
 function asOptionalObject(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
   }
   return Object.fromEntries(Object.entries(value));
-}
-
-function asOptionalString(value: unknown) {
-  return typeof value === "string" ? value : undefined;
 }
 
 function asOptionalNumber(value: unknown) {

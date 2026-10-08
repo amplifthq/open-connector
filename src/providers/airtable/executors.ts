@@ -1,5 +1,13 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { AirtableActionName } from "./actions.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { IntegrationDefinition } from "../../triggers/common/integration.ts";
+import type { PollDefinition } from "../../triggers/common/poll.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { BearerProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -8,26 +16,29 @@ import {
   optionalInteger,
   optionalRecord,
   optionalString,
-  requiredRecord,
+  optionalStringArray,
 } from "../../core/cast.ts";
 import {
+  defineBearerProviderExecutors,
+  defineProviderProxy,
   ProviderRequestError,
-  defineProviderExecutors,
+  providerResponseError,
   providerUserAgent,
-  requireApiKeyCredential,
+  requiredResponseRecord,
 } from "../provider-runtime.ts";
+import { airtableRecordChanged } from "./trigger-on-record-changed.ts";
 
 type AirtableRequestMode = "validate" | "execute";
 type AirtableActionInput = Record<string, unknown>;
-type AirtableActionHandler = (input: AirtableActionInput, context: AirtableActionContext) => Promise<unknown>;
+type AirtableActionHandler = ProviderRuntimeHandler<BearerProviderContext>;
 
-interface AirtableActionContext {
-  apiKey: string;
-  fetcher: typeof fetch;
+interface AirtableAuth {
+  accessToken: string;
+  tokenType?: string;
 }
 
 interface AirtableRequestOptions {
-  apiKey: string;
+  auth: AirtableAuth;
   path: string;
   fetcher: typeof fetch;
   mode: AirtableRequestMode;
@@ -40,10 +51,11 @@ interface AirtableRequestOptions {
 export const airtableApiBaseUrl = "https://api.airtable.com";
 
 const service = "airtable";
-const airtableValidationPath = "/v0/meta/bases";
+const airtableValidationPath = "/v0/meta/whoami";
+const airtableListBasesPath = "/v0/meta/bases";
 const airtableGetUrlLengthSoftLimit = 15_000;
 
-export const airtableActionHandlers: Record<AirtableActionName, AirtableActionHandler> = {
+export const airtableActionHandlers: ProviderActionHandlers<"airtable", AirtableActionHandler> = {
   list_bases(input, context) {
     return listBases(input, context);
   },
@@ -88,38 +100,34 @@ export const airtableActionHandlers: Record<AirtableActionName, AirtableActionHa
   },
 };
 
-export const executors: ProviderExecutors = defineProviderExecutors<AirtableActionContext>({
+export const executors: ProviderExecutors = defineBearerProviderExecutors(service, airtableActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
   service,
-  handlers: airtableActionHandlers,
-  async createContext(context: ExecutionContext, fetcher: typeof fetch): Promise<AirtableActionContext> {
-    const credential = await requireApiKeyCredential(context, service);
-    return {
-      apiKey: credential.apiKey,
-      fetcher,
-    };
+  baseUrl: airtableApiBaseUrl,
+  auth: { type: "bearer" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
   },
 });
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher }) {
-    return validateAirtableCredential(input.apiKey, fetcher);
+    return validateAirtableCredential({ accessToken: input.apiKey, tokenType: "Bearer" }, fetcher);
+  },
+  async oauth2(input, { fetcher }) {
+    return validateAirtableCredential({ accessToken: input.accessToken, tokenType: input.tokenType }, fetcher);
   },
 };
 
 async function validateAirtableCredential(
-  apiKey: string,
+  auth: AirtableAuth,
   fetcher: typeof fetch,
-): Promise<{
-  profile: {
-    accountId: string;
-    displayName: string;
-  };
-  grantedScopes: string[];
-  metadata: Record<string, unknown>;
-}> {
-  const payload = readObject(
+): Promise<CredentialValidationResult> {
+  const payload = requiredResponseRecord(
     await requestAirtableJson({
-      apiKey,
+      auth,
       path: airtableValidationPath,
       fetcher,
       mode: "validate",
@@ -127,30 +135,31 @@ async function validateAirtableCredential(
     "airtable validation response",
   );
 
-  const bases = readBaseArray(payload.bases);
-  const firstBase = bases[0];
+  const accountId = optionalString(payload.id);
+  if (!accountId) {
+    throw new ProviderRequestError(502, "airtable validation response is missing user id", payload);
+  }
+  const grantedScopes = optionalStringArray(payload.scopes) ?? [];
 
   return {
     profile: {
-      accountId: firstBase ? `airtable:base:${firstBase.id}` : "airtable:token",
-      displayName: optionalString(firstBase?.name) ?? "Airtable API Token",
+      accountId,
+      displayName: optionalString(payload.email) ?? accountId,
     },
-    grantedScopes: [],
+    grantedScopes,
     metadata: compactObject({
       apiBaseUrl: `${airtableApiBaseUrl}/v0`,
       validationEndpoint: airtableValidationPath,
-      accessibleBaseCount: bases.length,
-      firstBaseId: optionalString(firstBase?.id),
-      firstBaseName: optionalString(firstBase?.name),
+      currentUser: payload,
     }),
   };
 }
 
-async function listBases(input: AirtableActionInput, context: AirtableActionContext) {
-  const payload = readObject(
+async function listBases(input: AirtableActionInput, context: BearerProviderContext) {
+  const payload = requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
-      path: airtableValidationPath,
+      auth: context,
+      path: airtableListBasesPath,
       query: buildListBasesQuery(input),
       fetcher: context.fetcher,
       mode: "execute",
@@ -164,10 +173,10 @@ async function listBases(input: AirtableActionInput, context: AirtableActionCont
   };
 }
 
-async function getBaseCollaborators(input: AirtableActionInput, context: AirtableActionContext) {
-  const payload = readObject(
+async function getBaseCollaborators(input: AirtableActionInput, context: BearerProviderContext) {
+  const payload = requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
+      auth: context,
       path: `/v0/meta/bases/${encodeURIComponent(requireString(input.baseId, "baseId"))}`,
       query: buildBaseCollaboratorsQuery(input),
       fetcher: context.fetcher,
@@ -182,10 +191,10 @@ async function getBaseCollaborators(input: AirtableActionInput, context: Airtabl
   };
 }
 
-async function getBaseSchema(input: AirtableActionInput, context: AirtableActionContext) {
-  const payload = readObject(
+async function getBaseSchema(input: AirtableActionInput, context: BearerProviderContext) {
+  const payload = requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
+      auth: context,
       path: `/v0/meta/bases/${encodeURIComponent(requireString(input.baseId, "baseId"))}/tables`,
       query: buildBaseSchemaQuery(input),
       fetcher: context.fetcher,
@@ -200,10 +209,10 @@ async function getBaseSchema(input: AirtableActionInput, context: AirtableAction
   };
 }
 
-async function createBase(input: AirtableActionInput, context: AirtableActionContext) {
-  return readObject(
+async function createBase(input: AirtableActionInput, context: BearerProviderContext) {
+  return requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
+      auth: context,
       path: "/v0/meta/bases",
       method: "POST",
       body: {
@@ -218,10 +227,10 @@ async function createBase(input: AirtableActionInput, context: AirtableActionCon
   );
 }
 
-async function deleteBase(input: AirtableActionInput, context: AirtableActionContext) {
-  return readObject(
+async function deleteBase(input: AirtableActionInput, context: BearerProviderContext) {
+  return requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
+      auth: context,
       path: `/v0/meta/bases/${encodeURIComponent(requireString(input.baseId, "baseId"))}`,
       method: "DELETE",
       fetcher: context.fetcher,
@@ -232,10 +241,10 @@ async function deleteBase(input: AirtableActionInput, context: AirtableActionCon
   );
 }
 
-async function createTable(input: AirtableActionInput, context: AirtableActionContext) {
-  return readObject(
+async function createTable(input: AirtableActionInput, context: BearerProviderContext) {
+  return requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
+      auth: context,
       path: `/v0/meta/bases/${encodeURIComponent(requireString(input.baseId, "baseId"))}/tables`,
       method: "POST",
       body: compactObject({
@@ -251,10 +260,10 @@ async function createTable(input: AirtableActionInput, context: AirtableActionCo
   );
 }
 
-async function updateTable(input: AirtableActionInput, context: AirtableActionContext) {
-  return readObject(
+async function updateTable(input: AirtableActionInput, context: BearerProviderContext) {
+  return requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
+      auth: context,
       path: `/v0/meta/bases/${encodeURIComponent(requireString(input.baseId, "baseId"))}/tables/${encodeURIComponent(requireString(input.tableIdOrName, "tableIdOrName"))}`,
       method: "PATCH",
       body: compactObject({
@@ -270,10 +279,10 @@ async function updateTable(input: AirtableActionInput, context: AirtableActionCo
   );
 }
 
-async function createField(input: AirtableActionInput, context: AirtableActionContext) {
-  return readObject(
+async function createField(input: AirtableActionInput, context: BearerProviderContext) {
+  return requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
+      auth: context,
       path: `/v0/meta/bases/${encodeURIComponent(requireString(input.baseId, "baseId"))}/tables/${encodeURIComponent(requireString(input.tableId, "tableId"))}/fields`,
       method: "POST",
       body: readCreateFieldConfig(input, "field"),
@@ -285,10 +294,10 @@ async function createField(input: AirtableActionInput, context: AirtableActionCo
   );
 }
 
-async function updateField(input: AirtableActionInput, context: AirtableActionContext) {
-  return readObject(
+async function updateField(input: AirtableActionInput, context: BearerProviderContext) {
+  return requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
+      auth: context,
       path: `/v0/meta/bases/${encodeURIComponent(requireString(input.baseId, "baseId"))}/tables/${encodeURIComponent(requireString(input.tableId, "tableId"))}/fields/${encodeURIComponent(requireString(input.columnId, "columnId"))}`,
       method: "PATCH",
       body: compactObject({
@@ -304,14 +313,14 @@ async function updateField(input: AirtableActionInput, context: AirtableActionCo
   );
 }
 
-async function listRecords(input: AirtableActionInput, context: AirtableActionContext) {
+async function listRecords(input: AirtableActionInput, context: BearerProviderContext) {
   const path = buildRecordCollectionPath(input);
   const query = buildRecordReadQuery(input);
   const usePostEndpoint = buildAirtableUrl(path, query).toString().length >= airtableGetUrlLengthSoftLimit;
 
-  const payload = readObject(
+  const payload = requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
+      auth: context,
       path: usePostEndpoint ? `${path}/listRecords` : path,
       method: usePostEndpoint ? "POST" : undefined,
       query: usePostEndpoint ? undefined : query,
@@ -329,10 +338,10 @@ async function listRecords(input: AirtableActionInput, context: AirtableActionCo
   };
 }
 
-async function getRecord(input: AirtableActionInput, context: AirtableActionContext) {
-  const payload = readObject(
+async function getRecord(input: AirtableActionInput, context: BearerProviderContext) {
+  const payload = requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
+      auth: context,
       path: `${buildRecordCollectionPath(input)}/${encodeURIComponent(requireString(input.recordId, "recordId"))}`,
       query: buildRecordDetailQuery(input),
       fetcher: context.fetcher,
@@ -347,10 +356,10 @@ async function getRecord(input: AirtableActionInput, context: AirtableActionCont
   };
 }
 
-async function createRecords(input: AirtableActionInput, context: AirtableActionContext) {
-  const payload = readObject(
+async function createRecords(input: AirtableActionInput, context: BearerProviderContext) {
+  const payload = requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
+      auth: context,
       path: buildRecordCollectionPath(input),
       method: "POST",
       body: compactObject({
@@ -370,10 +379,10 @@ async function createRecords(input: AirtableActionInput, context: AirtableAction
   };
 }
 
-async function updateRecords(input: AirtableActionInput, context: AirtableActionContext) {
-  const payload = readObject(
+async function updateRecords(input: AirtableActionInput, context: BearerProviderContext) {
+  const payload = requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
+      auth: context,
       path: buildRecordCollectionPath(input),
       method: "PATCH",
       body: compactObject({
@@ -393,10 +402,10 @@ async function updateRecords(input: AirtableActionInput, context: AirtableAction
   };
 }
 
-async function deleteRecords(input: AirtableActionInput, context: AirtableActionContext) {
-  const payload = readObject(
+async function deleteRecords(input: AirtableActionInput, context: BearerProviderContext) {
+  const payload = requiredResponseRecord(
     await requestAirtableJson({
-      apiKey: context.apiKey,
+      auth: context,
       path: buildRecordCollectionPath(input),
       method: "DELETE",
       query: buildDeleteRecordsQuery(input),
@@ -419,7 +428,7 @@ async function requestAirtableJson(input: AirtableRequestOptions): Promise<unkno
   try {
     response = await input.fetcher(url, {
       method: input.method ?? "GET",
-      headers: airtableHeaders(input.apiKey, input.body === undefined ? undefined : "application/json"),
+      headers: airtableHeaders(input.auth, input.body === undefined ? undefined : "application/json"),
       ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
     });
   } catch (error) {
@@ -448,10 +457,10 @@ function buildAirtableUrl(path: string, query?: ReadonlyArray<readonly [string, 
   return url;
 }
 
-function airtableHeaders(apiKey: string, contentType?: string): Record<string, string> {
+function airtableHeaders(auth: AirtableAuth, contentType?: string): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: "application/json",
-    Authorization: `Bearer ${apiKey}`,
+    Authorization: `${auth.tokenType ?? "Bearer"} ${auth.accessToken}`,
     "User-Agent": providerUserAgent,
   };
   if (contentType) {
@@ -588,7 +597,7 @@ function buildRecordReadQuery(input: Record<string, unknown>): Array<readonly [s
 
   const sort = Array.isArray(input.sort) ? input.sort : [];
   for (const [index, item] of sort.entries()) {
-    const sortItem = readObject(item, `sort[${index}]`);
+    const sortItem = requiredResponseRecord(item, `sort[${index}]`);
     const field = requireString(sortItem.field, `sort[${index}].field`);
     query.push([`sort[${index}][field]`, field]);
 
@@ -612,7 +621,7 @@ function buildListRecordsPostBody(input: Record<string, unknown>): Record<string
     fields: Array.isArray(input.fields) ? input.fields.map((field) => requireString(field, "fields item")) : undefined,
     sort: Array.isArray(input.sort)
       ? input.sort.map((item, index) => {
-          const sortItem = readObject(item, `sort[${index}]`);
+          const sortItem = requiredResponseRecord(item, `sort[${index}]`);
           return compactObject({
             field: requireString(sortItem.field, `sort[${index}].field`),
             direction: optionalString(sortItem.direction),
@@ -686,15 +695,15 @@ function buildRecordCollectionPath(input: Record<string, unknown>): string {
 }
 
 function readBaseArray(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value) ? objectArray(value, "bases", invalidProviderPayload) : [];
+  return Array.isArray(value) ? objectArray(value, "bases", providerResponseError) : [];
 }
 
 function readRecordArray(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value) ? objectArray(value, "records", invalidProviderPayload) : [];
+  return Array.isArray(value) ? objectArray(value, "records", providerResponseError) : [];
 }
 
 function readDeletedRecordArray(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value) ? objectArray(value, "records", invalidProviderPayload) : [];
+  return Array.isArray(value) ? objectArray(value, "records", providerResponseError) : [];
 }
 
 function readTableConfigs(value: unknown): Array<Record<string, unknown>> {
@@ -704,7 +713,7 @@ function readTableConfigs(value: unknown): Array<Record<string, unknown>> {
   }
 
   return tables.map((table, index) => {
-    const tableObject = readObject(table, `tables[${index}]`);
+    const tableObject = requiredResponseRecord(table, `tables[${index}]`);
     return compactObject({
       ...tableObject,
       name: requireString(tableObject.name, `tables[${index}].name`),
@@ -724,7 +733,7 @@ function readFieldConfigs(value: unknown, fieldName: string): Array<Record<strin
 }
 
 function readCreateFieldConfig(value: unknown, fieldName: string): Record<string, unknown> {
-  const field = { ...readObject(value, fieldName) };
+  const field = { ...requiredResponseRecord(value, fieldName) };
   delete field.baseId;
   delete field.tableId;
   delete field.columnId;
@@ -745,7 +754,7 @@ function readCreateRecords(value: unknown): Array<Record<string, unknown>> {
   }
 
   return records.map((record, index) => {
-    const recordObject = readObject(record, `records[${index}]`);
+    const recordObject = requiredResponseRecord(record, `records[${index}]`);
     return {
       fields: readRecordFields(recordObject.fields, `records[${index}].fields`),
     };
@@ -759,7 +768,7 @@ function readUpdateRecords(value: unknown): Array<Record<string, unknown>> {
   }
 
   return records.map((record, index) => {
-    const recordObject = readObject(record, `records[${index}]`);
+    const recordObject = requiredResponseRecord(record, `records[${index}]`);
     return {
       id: requireString(recordObject.id, `records[${index}].id`),
       fields: readRecordFields(recordObject.fields, `records[${index}].fields`),
@@ -775,10 +784,6 @@ function readRecordFields(value: unknown, fieldName: string): Record<string, unk
   return fields;
 }
 
-function readObject(value: unknown, context: string): Record<string, unknown> {
-  return requiredRecord(value, context, invalidProviderPayload);
-}
-
 function requireString(value: unknown, fieldName: string): string {
   const text = optionalString(value);
   if (!text) {
@@ -787,6 +792,4 @@ function requireString(value: unknown, fieldName: string): string {
   return text;
 }
 
-function invalidProviderPayload(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
-}
+export const triggers: readonly (IntegrationDefinition | PollDefinition)[] = [airtableRecordChanged];

@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
@@ -17,7 +18,6 @@ import {
 } from "../provider-runtime.ts";
 
 export const printavoApiBaseUrl = "https://www.printavo.com/api/v2";
-const printavoDefaultRequestTimeoutMs = 30_000;
 
 export interface PrintavoActionContext {
   token: string;
@@ -240,7 +240,7 @@ query PrintavoOrders(
   }
 }`;
 
-export const printavoActionHandlers: Record<string, PrintavoActionHandler> = {
+export const printavoActionHandlers: ProviderActionHandlers<"printavo", PrintavoActionHandler> = {
   identify(_input, context) {
     return executeIdentify(context);
   },
@@ -399,7 +399,7 @@ async function printavoGraphql(
   context: Pick<PrintavoActionContext, "token" | "email" | "fetcher" | "signal">,
   phase: PrintavoRequestPhase,
 ): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(context.signal, printavoDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(printavoApiBaseUrl, {
       method: "POST",

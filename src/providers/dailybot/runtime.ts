@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { DailybotActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -8,23 +8,26 @@ import {
   optionalInteger,
   optionalRecord,
   optionalString,
+  recordOrEmpty,
   requiredString,
 } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
-import { ProviderRequestError } from "../provider-runtime.ts";
+import { providerInputError, ProviderRequestError } from "../provider-runtime.ts";
 
-const dailybotApiBaseUrl = "https://api.dailybot.com";
+export const dailybotApiBaseUrl = "https://api.dailybot.com";
 
 type DailybotPhase = "validate" | "execute";
 type DailybotHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const dailybotActionHandlers: Record<DailybotActionName, DailybotHandler> = {
+export const dailybotActionHandlers: ProviderActionHandlers<"dailybot", DailybotHandler> = {
   async get_me(_input, context) {
-    return { profile: asObject(await dailybotRequest({ path: "/v1/me/", method: "GET", context, phase: "execute" })) };
+    return {
+      profile: recordOrEmpty(await dailybotRequest({ path: "/v1/me/", method: "GET", context, phase: "execute" })),
+    };
   },
   async get_organization(_input, context) {
     return {
-      organization: asObject(
+      organization: recordOrEmpty(
         await dailybotRequest({ path: "/v1/organization/", method: "GET", context, phase: "execute" }),
       ),
     };
@@ -46,9 +49,9 @@ export const dailybotActionHandlers: Record<DailybotActionName, DailybotHandler>
     return { count, users: results };
   },
   async get_user(input, context) {
-    const userUuid = requiredString(input.user_uuid, "user_uuid", badInput);
+    const userUuid = requiredString(input.user_uuid, "user_uuid", providerInputError);
     return {
-      user: asObject(
+      user: recordOrEmpty(
         await dailybotRequest({
           path: `/v1/users/${encodePathSegment(userUuid)}/`,
           method: "GET",
@@ -70,9 +73,9 @@ export const dailybotActionHandlers: Record<DailybotActionName, DailybotHandler>
     return { count, teams: results };
   },
   async get_team(input, context) {
-    const teamId = requiredString(input.team_id, "team_id", badInput);
+    const teamId = requiredString(input.team_id, "team_id", providerInputError);
     return {
-      team: asObject(
+      team: recordOrEmpty(
         await dailybotRequest({
           path: `/v1/teams/${encodePathSegment(teamId)}/`,
           method: "GET",
@@ -83,7 +86,7 @@ export const dailybotActionHandlers: Record<DailybotActionName, DailybotHandler>
     };
   },
   async list_team_members(input, context) {
-    const teamId = requiredString(input.team_id, "team_id", badInput);
+    const teamId = requiredString(input.team_id, "team_id", providerInputError);
     const payload = await dailybotRequest({
       path: `/v1/teams/${encodePathSegment(teamId)}/members/`,
       method: "GET",
@@ -95,14 +98,14 @@ export const dailybotActionHandlers: Record<DailybotActionName, DailybotHandler>
   },
   async send_message(input, context) {
     return {
-      delivery: asObject(
+      delivery: recordOrEmpty(
         await dailybotRequest({
           path: "/v1/messaging/send-message/",
           method: "POST",
           body: compactObject({
-            target_type: requiredString(input.target_type, "target_type", badInput),
-            target_uuid: requiredString(input.target_uuid, "target_uuid", badInput),
-            message: requiredString(input.message, "message", badInput),
+            target_type: requiredString(input.target_type, "target_type", providerInputError),
+            target_uuid: requiredString(input.target_uuid, "target_uuid", providerInputError),
+            message: requiredString(input.message, "message", providerInputError),
             platform: optionalString(input.platform),
           }),
           context,
@@ -113,14 +116,14 @@ export const dailybotActionHandlers: Record<DailybotActionName, DailybotHandler>
   },
   async send_email(input, context) {
     return {
-      delivery: asObject(
+      delivery: recordOrEmpty(
         await dailybotRequest({
           path: "/v1/messaging/send-email/",
           method: "POST",
           body: {
-            user_uuid: requiredString(input.user_uuid, "user_uuid", badInput),
-            subject: requiredString(input.subject, "subject", badInput),
-            body: requiredString(input.body, "body", badInput),
+            user_uuid: requiredString(input.user_uuid, "user_uuid", providerInputError),
+            subject: requiredString(input.subject, "subject", providerInputError),
+            body: requiredString(input.body, "body", providerInputError),
           },
           context,
           phase: "execute",
@@ -130,12 +133,12 @@ export const dailybotActionHandlers: Record<DailybotActionName, DailybotHandler>
   },
   async open_conversation(input, context) {
     return {
-      conversation: asObject(
+      conversation: recordOrEmpty(
         await dailybotRequest({
           path: "/v1/messaging/open-conversation/",
           method: "POST",
           body: compactObject({
-            user_uuid: requiredString(input.user_uuid, "user_uuid", badInput),
+            user_uuid: requiredString(input.user_uuid, "user_uuid", providerInputError),
             initial_message: optionalString(input.initial_message),
           }),
           context,
@@ -152,7 +155,7 @@ export async function validateDailybotCredential(
   signal?: AbortSignal,
 ): Promise<CredentialValidationResult> {
   const context: ApiKeyProviderContext = { apiKey, fetcher, signal };
-  const profile = asObject(await dailybotRequest({ path: "/v1/me/", method: "GET", context, phase: "validate" }));
+  const profile = recordOrEmpty(await dailybotRequest({ path: "/v1/me/", method: "GET", context, phase: "validate" }));
   const organization = optionalRecord(profile.organization);
   const accountId = optionalString(profile.email) ?? optionalString(profile.id) ?? "dailybot:token";
   return {
@@ -234,22 +237,14 @@ function extractDailybotMessage(payload: unknown): string | undefined {
 }
 
 function readListPayload(payload: unknown): { count: number; results: Array<Record<string, unknown>> } {
-  const record = asObject(payload);
+  const record = recordOrEmpty(payload);
   return {
     count: optionalInteger(record.count) ?? 0,
-    results: Array.isArray(record.results) ? record.results.map(asObject) : [],
+    results: Array.isArray(record.results) ? record.results.map(recordOrEmpty) : [],
   };
 }
 
 function buildDisplayName(firstName: unknown, lastName: unknown): string | undefined {
   const parts = [optionalString(firstName), optionalString(lastName)].filter(Boolean);
   return parts.length > 0 ? parts.join(" ") : undefined;
-}
-
-function asObject(value: unknown): Record<string, unknown> {
-  return optionalRecord(value) ?? {};
-}
-
-function badInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

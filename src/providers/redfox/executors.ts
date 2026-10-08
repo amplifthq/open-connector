@@ -1,10 +1,11 @@
 import type { CredentialValidationResult, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ApiKeyProviderContext, ProviderActionHandlers, ProviderActionSources } from "../provider-runtime.ts";
 
-import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
+import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
+  mapProviderActionSources,
   ProviderRequestError,
   providerUserAgent,
 } from "../provider-runtime.ts";
@@ -23,27 +24,33 @@ interface RedfoxEndpoint {
   path: string;
   buildBody(input: Record<string, unknown>): RedfoxBody;
   successCodes?: readonly number[];
+  responseMode?: "wrapped" | "direct";
 }
 
-const redfoxEndpoints: Record<string, RedfoxEndpoint> = {
-  search_douyin_works: { path: "/story/api/dyData/searchArticle", buildBody: buildSearchBody },
-  search_douyin_users: { path: "/story/api/dyData/searchUser", buildBody: buildSearchBody },
+const redfoxEndpoints: ProviderActionSources<"redfox", RedfoxEndpoint> = {
+  search_douyin_works: {
+    path: "/story/api/dyData/searchArticle",
+    buildBody: buildSearchBody,
+  },
+  search_douyin_users: {
+    path: "/story/api/dyData/searchUser",
+    buildBody: buildSearchBody,
+  },
   get_douyin_work: {
     path: "/story/api/dyData/queryWork",
     buildBody(input) {
-      return requireAtLeastOne(
-        {
-          workId: readOptionalString(input.workId),
-          workUrl: readOptionalString(input.workUrl),
-        },
-        "workId or workUrl is required",
-      );
+      return {
+        workId: readOptionalString(input.workId),
+        workUrl: readOptionalString(input.workUrl),
+      };
     },
   },
   get_douyin_user: {
     path: "/story/api/dyData/queryUser",
     buildBody(input) {
-      return { accountId: readRequiredString(input.accountId, "accountId") };
+      return {
+        accountId: readRequiredString(input.accountId, "accountId"),
+      };
     },
   },
   list_douyin_user_works: {
@@ -52,7 +59,7 @@ const redfoxEndpoints: Record<string, RedfoxEndpoint> = {
       const accountId = readOptionalString(input.accountId);
       const authorUrl = readOptionalString(input.authorUrl);
       const secUserId = readOptionalString(input.secUserId);
-      requireAtLeastOne({ accountId, authorUrl, secUserId }, "accountId, authorUrl, or secUserId is required");
+
       return {
         accountId,
         authorUrl,
@@ -62,19 +69,34 @@ const redfoxEndpoints: Record<string, RedfoxEndpoint> = {
       };
     },
   },
-  search_douyin_ai_creations: { path: "/story/api/parseWork/queryDyAiMsgs", buildBody: buildAiCreationSearchBody },
-  search_xiaohongshu_works: { path: "/story/api/xhsUser/searchArticle", buildBody: buildSearchBody },
-  search_xiaohongshu_users: { path: "/story/api/xhsUser/searchUser", buildBody: buildSearchBody },
+  search_douyin_ai_creations: {
+    path: "/story/api/parseWork/queryDyAiMsgs",
+    buildBody: buildAiCreationSearchBody,
+  },
+  search_xiaohongshu_works: {
+    path: "/story/api/xhs/search/keywordSearchWork",
+    responseMode: "direct",
+    buildBody(input) {
+      return {
+        keyword: readRequiredString(input.keyword, "keyword"),
+        noteTime: readOptionalString(input.noteTime),
+        sort: readOptionalString(input.sort),
+        page: readOptionalPositiveInteger(input.page, "page"),
+        noteType: readOptionalString(input.noteType),
+      };
+    },
+  },
+  search_xiaohongshu_users: {
+    path: "/story/api/xhsUser/searchUser",
+    buildBody: buildSearchBody,
+  },
   get_xiaohongshu_work: {
     path: "/story/api/xhsUser/queryWorkDetail",
     buildBody(input) {
-      return requireAtLeastOne(
-        {
-          workId: readOptionalString(input.workId),
-          workLink: readOptionalString(input.workLink),
-        },
-        "workId or workLink is required",
-      );
+      return {
+        workId: readOptionalString(input.workId),
+        workLink: readOptionalString(input.workLink),
+      };
     },
   },
   get_xiaohongshu_user: {
@@ -99,18 +121,28 @@ const redfoxEndpoints: Record<string, RedfoxEndpoint> = {
       };
     },
   },
-  search_wechat_articles: { path: "/story/api/gzhData/searchArticle", buildBody: buildSearchBody },
-  search_wechat_accounts: { path: "/story/api/gzhData/searchUser", buildBody: buildSearchBody },
+  search_wechat_articles: {
+    path: "/story/api/gzhData/searchArticle",
+    buildBody: buildSearchBody,
+  },
+  search_wechat_accounts: {
+    path: "/story/api/gzhData/searchUser",
+    buildBody: buildSearchBody,
+  },
   get_wechat_article: {
     path: "/story/api/gzhData/queryWork",
     buildBody(input) {
-      return { workUuid: readRequiredString(input.workUuid, "workUuid") };
+      return {
+        workUuid: readRequiredString(input.workUuid, "workUuid"),
+      };
     },
   },
   get_wechat_article_by_url: {
     path: "/story/api/gzhData/queryArticleDetail",
     buildBody(input) {
-      return { url: readRequiredString(input.url, "url") };
+      return {
+        url: readRequiredString(input.url, "url"),
+      };
     },
   },
   get_wechat_account: {
@@ -147,6 +179,172 @@ const redfoxEndpoints: Record<string, RedfoxEndpoint> = {
       };
     },
   },
+  search_bilibili_works: {
+    path: "/story/api/bili/data/workSearch",
+    buildBody(input) {
+      return {
+        keyword: readRequiredString(input.keyword, "keyword"),
+        exactMatch: optionalBoolean(input.exactMatch),
+        page: readRequiredString(input.page, "page"),
+        pageSize: readOptionalPositiveInteger(input.pageSize, "pageSize"),
+        order: readOptionalString(input.order),
+      };
+    },
+  },
+  search_bilibili_users: {
+    path: "/story/api/bili/data/accountSearch",
+    buildBody(input) {
+      return {
+        keyword: readRequiredString(input.keyword, "keyword"),
+        page: readRequiredString(input.page, "page"),
+        pageSize: readOptionalPositiveInteger(input.pageSize, "pageSize"),
+        order: readOptionalString(input.order),
+      };
+    },
+  },
+  get_bilibili_work: {
+    path: "/story/api/bili/data/workDetail",
+    buildBody(input) {
+      return {
+        bvId: readOptionalString(input.bvId),
+        workUrl: readOptionalString(input.workUrl),
+      };
+    },
+  },
+  get_bilibili_user: {
+    path: "/story/api/bili/data/accountDetail",
+    buildBody(input) {
+      return { mid: readRequiredString(input.mid, "mid") };
+    },
+  },
+  list_bilibili_user_works: {
+    path: "/story/api/bili/data/accountWorkList",
+    buildBody(input) {
+      const mid = readOptionalString(input.mid);
+      const accountUrl = readOptionalString(input.accountUrl);
+      return {
+        mid,
+        accountUrl,
+        page: readOptionalPositiveInteger(input.page, "page"),
+        pageSize: readOptionalPositiveInteger(input.pageSize, "pageSize"),
+        order: readOptionalString(input.order),
+      };
+    },
+  },
+  search_wechat_channel_works: {
+    path: "/story/api/sphAllData/searchWork",
+    buildBody(input) {
+      return {
+        keyword: readRequiredString(input.keyword, "keyword"),
+        sort: readOptionalString(input.sort),
+        page: readOptionalPositiveInteger(input.page, "page"),
+        size: readOptionalPositiveInteger(input.size, "size"),
+        exactMatch: optionalBoolean(input.exactMatch),
+      };
+    },
+  },
+  search_wechat_channel_users: {
+    path: "/story/api/sphAllData/searchUser",
+    buildBody(input) {
+      return buildAccountNameSearchBody(input);
+    },
+  },
+  get_wechat_channel_work: {
+    path: "/story/api/sphAllData/queryWorkDetail",
+    buildBody(input) {
+      return { videoId: readRequiredString(input.videoId, "videoId") };
+    },
+  },
+  list_wechat_channel_user_works: {
+    path: "/story/api/sphAllData/queryWorkList",
+    buildBody(input) {
+      return {
+        nickname: readRequiredString(input.nickname, "nickname"),
+        page: readOptionalPositiveInteger(input.page, "page"),
+        size: readOptionalPositiveInteger(input.size, "size"),
+      };
+    },
+  },
+  search_kuaishou_works: {
+    path: "/story/api/ksAllData/searchWork",
+    buildBody(input) {
+      return {
+        keyword: readRequiredString(input.keyword, "keyword"),
+        page: readOptionalPositiveInteger(input.page, "page"),
+        size: readOptionalPositiveInteger(input.size, "size"),
+        sort: readOptionalString(input.sort),
+      };
+    },
+  },
+  search_kuaishou_users: {
+    path: "/story/api/ksAllData/searchUser",
+    buildBody: buildAccountNameSearchBody,
+  },
+  get_kuaishou_work: {
+    path: "/story/api/ksAllData/queryWorkDetail",
+    buildBody(input) {
+      return { photoId: readRequiredString(input.photoId, "photoId") };
+    },
+  },
+  list_kuaishou_user_works: {
+    path: "/story/api/ksAllData/queryWorkList",
+    buildBody(input) {
+      const kwaiId = readOptionalString(input.kwaiId);
+      const threeXId = readOptionalString(input.threeXId);
+      return {
+        kwaiId,
+        threeXId,
+        page: readOptionalPositiveInteger(input.page, "page"),
+        size: readOptionalPositiveInteger(input.size, "size"),
+      };
+    },
+  },
+  search_toutiao_works: {
+    path: "/story/api/toutiao/searchWork",
+    buildBody(input) {
+      return {
+        keyword: readRequiredString(input.keyword, "keyword"),
+        offset: readRequiredString(input.offset, "offset"),
+      };
+    },
+  },
+  search_toutiao_users: {
+    path: "/story/api/toutiao/searchAccount",
+    responseMode: "direct",
+    buildBody(input) {
+      return {
+        name: readRequiredString(input.name, "name"),
+        offset: readOptionalString(input.offset),
+        searchId: readOptionalString(input.searchId),
+      };
+    },
+  },
+  get_toutiao_work: {
+    path: "/story/api/toutiao/workDetail",
+    buildBody(input) {
+      return { opusId: readRequiredString(input.opusId, "opusId") };
+    },
+  },
+  list_toutiao_work_comments: {
+    path: "/story/api/toutiao/workComment",
+    responseMode: "direct",
+    buildBody(input) {
+      return {
+        opusId: readRequiredString(input.opusId, "opusId"),
+        offset: readOptionalString(input.offset),
+      };
+    },
+  },
+  list_toutiao_user_works: {
+    path: "/story/api/toutiao/userWorkList",
+    buildBody(input) {
+      return {
+        category: readRequiredString(input.category, "category"),
+        token: readRequiredString(input.token, "token"),
+        offset: readRequiredString(input.offset, "offset"),
+      };
+    },
+  },
   search_tiktok_users: {
     path: "/story/api/deepSearch/tk/searchUser",
     successCodes: redfoxTiktokSuccessCodes,
@@ -159,20 +357,21 @@ const redfoxEndpoints: Record<string, RedfoxEndpoint> = {
   },
 };
 
-export const redfoxActionHandlers: Record<string, RedfoxActionHandler> = Object.fromEntries(
-  Object.entries(redfoxEndpoints).map(([actionName, endpoint]) => [
-    actionName,
-    (input: Record<string, unknown>, context: ApiKeyProviderContext) =>
+export const redfoxActionHandlers: ProviderActionHandlers<"redfox", RedfoxActionHandler> = mapProviderActionSources(
+  service,
+  redfoxEndpoints,
+  (_actionName, endpoint): RedfoxActionHandler =>
+    (input, context) =>
       requestRedfoxJson({
         apiKey: context.apiKey,
         path: endpoint.path,
         body: endpoint.buildBody(input),
         successCodes: endpoint.successCodes,
+        responseMode: endpoint.responseMode,
         context,
         mode: "execute",
       }),
-  ]),
-) as Record<string, RedfoxActionHandler>;
+);
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, redfoxActionHandlers);
 
@@ -208,6 +407,7 @@ async function requestRedfoxJson(input: {
   path: string;
   body: RedfoxBody;
   successCodes?: readonly number[];
+  responseMode?: "wrapped" | "direct";
   context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
   mode: RedfoxRequestMode;
 }): Promise<unknown> {
@@ -236,12 +436,20 @@ async function requestRedfoxJson(input: {
     throw createRedfoxHttpError(response.status, payload, input.mode);
   }
 
+  if (input.responseMode === "direct" && !hasRedfoxBusinessCode(payload))
+    return { code: 2000, msg: "成功", data: payload };
+
   const normalized = normalizeRedfoxPayload(payload);
   if (!isRedfoxSuccessCode(normalized.code, input.successCodes)) {
     throw createRedfoxBusinessError(normalized, input.mode);
   }
 
   return normalized;
+}
+
+function hasRedfoxBusinessCode(payload: unknown): boolean {
+  const record = optionalRecord(payload);
+  return record != null && "code" in record;
 }
 
 function isRedfoxSuccessCode(code: number, successCodes = redfoxDefaultSuccessCodes): boolean {
@@ -352,11 +560,12 @@ function buildAiCreationSearchBody(input: Record<string, unknown>): RedfoxBody {
   };
 }
 
-function requireAtLeastOne<T extends RedfoxBody>(body: T, message: string): T {
-  if (Object.values(body).some((value) => value !== undefined)) {
-    return body;
-  }
-  throw new ProviderRequestError(400, message);
+function buildAccountNameSearchBody(input: Record<string, unknown>): RedfoxBody {
+  return {
+    accountName: readRequiredString(input.accountName, "accountName"),
+    page: readOptionalPositiveInteger(input.page, "page"),
+    pageSize: readOptionalPositiveInteger(input.pageSize, "pageSize"),
+  };
 }
 
 function readRequiredString(value: unknown, fieldName: string): string {

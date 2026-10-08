@@ -1,18 +1,19 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { SuperchatActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
+  requiredResponseRecord,
 } from "../provider-runtime.ts";
 
 const superchatApiBaseUrl = "https://api.superchat.com";
 const superchatApiVersionPath = "/v1.0";
-const superchatRequestTimeoutMs = 30_000;
 
 type SuperchatPhase = "validate" | "execute";
 type SuperchatMethod = "GET" | "POST" | "PATCH";
@@ -30,10 +31,10 @@ interface SuperchatRequestInput {
 
 type SuperchatActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
-export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActionHandler> = {
+export const superchatActionHandlers: ProviderActionHandlers<"superchat", SuperchatActionHandler> = {
   async get_me(_input, context) {
     return {
-      profile: requiredRecord(
+      profile: requiredResponseRecord(
         await requestSuperchatJson({
           path: "/me",
           apiKey: context.apiKey,
@@ -46,7 +47,7 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
     };
   },
   async list_channels(input, context) {
-    const payload = requiredRecord(
+    const payload = requiredResponseRecord(
       await requestSuperchatJson({
         path: "/channels",
         apiKey: context.apiKey,
@@ -60,9 +61,9 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
     return { channels: readResults(payload), pagination: readPagination(payload, "list_channels") };
   },
   async get_channel(input, context) {
-    const channelId = requiredString(input.channel_id, "channel_id", inputError);
+    const channelId = requiredString(input.channel_id, "channel_id", providerInputError);
     return {
-      channel: requiredRecord(
+      channel: requiredResponseRecord(
         await requestSuperchatJson({
           path: `/channels/${encodeURIComponent(channelId)}`,
           apiKey: context.apiKey,
@@ -76,7 +77,7 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
   },
   async create_contact(input, context) {
     return {
-      contact: requiredRecord(
+      contact: requiredResponseRecord(
         await requestSuperchatJson({
           path: "/contacts",
           method: "POST",
@@ -91,9 +92,9 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
     };
   },
   async get_contact(input, context) {
-    const contactId = requiredString(input.contact_id, "contact_id", inputError);
+    const contactId = requiredString(input.contact_id, "contact_id", providerInputError);
     return {
-      contact: requiredRecord(
+      contact: requiredResponseRecord(
         await requestSuperchatJson({
           path: `/contacts/${encodeURIComponent(contactId)}`,
           apiKey: context.apiKey,
@@ -106,7 +107,7 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
     };
   },
   async list_contacts(input, context) {
-    const payload = requiredRecord(
+    const payload = requiredResponseRecord(
       await requestSuperchatJson({
         path: "/contacts",
         apiKey: context.apiKey,
@@ -120,8 +121,8 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
     return { contacts: readResults(payload), pagination: readPagination(payload, "list_contacts") };
   },
   async search_contacts(input, context) {
-    const field = requiredString(input.field, "field", inputError);
-    const payload = requiredRecord(
+    const field = requiredString(input.field, "field", providerInputError);
+    const payload = requiredResponseRecord(
       await requestSuperchatJson({
         path: "/contacts/search",
         method: "POST",
@@ -135,9 +136,11 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
               compactObject({
                 field,
                 identifier:
-                  field === "custom_attribute" ? requiredString(input.identifier, "identifier", inputError) : undefined,
+                  field === "custom_attribute"
+                    ? requiredString(input.identifier, "identifier", providerInputError)
+                    : undefined,
                 operator: "=",
-                value: requiredString(input.value, "value", inputError),
+                value: requiredString(input.value, "value", providerInputError),
               }),
             ],
           },
@@ -148,9 +151,9 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
     return { contacts: readResults(payload), pagination: readPagination(payload, "search_contacts") };
   },
   async update_contact(input, context) {
-    const contactId = requiredString(input.contact_id, "contact_id", inputError);
+    const contactId = requiredString(input.contact_id, "contact_id", providerInputError);
     return {
-      contact: requiredRecord(
+      contact: requiredResponseRecord(
         await requestSuperchatJson({
           path: `/contacts/${encodeURIComponent(contactId)}`,
           method: "PATCH",
@@ -166,7 +169,7 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
   },
   async send_text_message(input, context) {
     return {
-      message: requiredRecord(
+      message: requiredResponseRecord(
         await requestSuperchatJson({
           path: "/messages",
           method: "POST",
@@ -175,9 +178,9 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
           signal: context.signal,
           phase: "execute",
           body: {
-            to: [{ identifier: requiredString(input.identifier, "identifier", inputError) }],
+            to: [{ identifier: requiredString(input.identifier, "identifier", providerInputError) }],
             from: buildSender(input),
-            content: { type: "text", body: requiredString(input.body, "body", inputError) },
+            content: { type: "text", body: requiredString(input.body, "body", providerInputError) },
           },
         }),
         "Superchat message response",
@@ -186,7 +189,7 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
   },
   async send_email_message(input, context) {
     return {
-      message: requiredRecord(
+      message: requiredResponseRecord(
         await requestSuperchatJson({
           path: "/messages",
           method: "POST",
@@ -195,12 +198,12 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
           signal: context.signal,
           phase: "execute",
           body: compactObject({
-            to: [{ identifier: requiredString(input.identifier, "identifier", inputError) }],
+            to: [{ identifier: requiredString(input.identifier, "identifier", providerInputError) }],
             from: buildSender(input),
             content: compactObject({
               type: "email",
               subject: optionalString(input.subject),
-              text: requiredString(input.text, "text", inputError),
+              text: requiredString(input.text, "text", providerInputError),
               html: optionalString(input.html),
             }),
             in_reply_to: optionalString(input.in_reply_to),
@@ -212,7 +215,7 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
   },
   async send_whatsapp_template_message(input, context) {
     return {
-      message: requiredRecord(
+      message: requiredResponseRecord(
         await requestSuperchatJson({
           path: "/messages",
           method: "POST",
@@ -221,11 +224,11 @@ export const superchatActionHandlers: Record<SuperchatActionName, SuperchatActio
           signal: context.signal,
           phase: "execute",
           body: {
-            to: [{ identifier: requiredString(input.identifier, "identifier", inputError) }],
+            to: [{ identifier: requiredString(input.identifier, "identifier", providerInputError) }],
             from: buildSender(input),
             content: {
               type: "whats_app_template",
-              template_id: requiredString(input.template_id, "template_id", inputError),
+              template_id: requiredString(input.template_id, "template_id", providerInputError),
               variables: Array.isArray(input.variables) ? input.variables : [],
             },
           },
@@ -241,7 +244,7 @@ export async function validateSuperchatCredential(
   fetcher: typeof fetch,
   signal?: AbortSignal,
 ): Promise<CredentialValidationResult> {
-  const payload = requiredRecord(
+  const payload = requiredResponseRecord(
     await requestSuperchatJson({
       path: "/me",
       apiKey: input.apiKey,
@@ -301,13 +304,13 @@ function buildWritableContactBody(input: Record<string, unknown>): Record<string
 
 function buildSender(input: Record<string, unknown>): Record<string, unknown> {
   return compactObject({
-    channel_id: requiredString(input.channel_id, "channel_id", inputError),
+    channel_id: requiredString(input.channel_id, "channel_id", providerInputError),
     name: optionalString(input.from_name),
   });
 }
 
 async function requestSuperchatJson(input: SuperchatRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, superchatRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   const url = new URL(`${superchatApiVersionPath}${input.path}`, superchatApiBaseUrl);
   for (const [key, value] of Object.entries(input.query ?? {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));
@@ -378,14 +381,4 @@ function readSuperchatErrorMessage(payload: unknown): string | undefined {
   const title = optionalString(first?.title);
   const detail = optionalString(first?.detail);
   return title && detail ? `${title}: ${detail}` : (title ?? detail);
-}
-
-function requiredRecord(value: unknown, label: string): Record<string, unknown> {
-  const record = optionalRecord(value);
-  if (!record) throw new ProviderRequestError(502, `${label} must be an object`);
-  return record;
-}
-
-function inputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

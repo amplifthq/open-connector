@@ -1,7 +1,7 @@
 import type { FeishuJsonRequest } from "./client.ts";
 
-import { optionalRecord, optionalString } from "../../../core/cast.ts";
-import { ProviderRequestError } from "../../provider-runtime.ts";
+import { optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../../core/cast.ts";
+import { providerInputError, ProviderRequestError } from "../../provider-runtime.ts";
 
 interface FeishuDriveActionHandler {
   (input: Record<string, unknown>): Promise<unknown>;
@@ -142,7 +142,7 @@ async function listDriveFiles(input: Record<string, unknown>, request: FeishuJso
 async function createDriveFolder(input: Record<string, unknown>, request: FeishuJsonRequest) {
   const name = requireString(input.name, "name");
   if (new TextEncoder().encode(name).byteLength > 256) {
-    throw invalidInput("name must not exceed 256 UTF-8 bytes");
+    throw providerInputError("name must not exceed 256 UTF-8 bytes");
   }
   const data = await request({
     method: "POST",
@@ -161,7 +161,7 @@ async function copyDriveFile(input: Record<string, unknown>, request: FeishuJson
   const fileToken = requireString(input.fileToken, "fileToken");
   const type = requireString(input.type, "type");
   if (type === "folder") {
-    throw invalidInput("Feishu does not support copying folders with the Drive copy API");
+    throw providerInputError("Feishu does not support copying folders with the Drive copy API");
   }
   const data = await request({
     method: "POST",
@@ -318,9 +318,21 @@ async function listDrivePermissions(input: Record<string, unknown>, request: Fei
       perm_type: optionalString(input.permType),
     },
   });
-  return {
-    members: Array.isArray(data.members) ? data.members : [],
-  };
+  // Feishu answers `GET /drive/v1/permissions/:token/members` with the
+  // collaborators under `data.items`, not `data.members`. Reading the output
+  // name as if it were the wire key missed every time, and the `: []` below
+  // turned the miss into a successful empty list — so every ACL read reported
+  // that nobody has access, with `success: true`.
+  //
+  // Every other list endpoint in this file already names the wire key
+  // explicitly (`normalizePage(data, "files")`, `normalizePage(data,
+  // "items")`); this one assumed it matched the field it returns, and was the
+  // only place that did.
+  //
+  // `members` is still read after `items`, so a wire that ever answers under
+  // that name keeps working rather than breaking in the other direction.
+  const rows = Array.isArray(data.items) ? data.items : Array.isArray(data.members) ? data.members : [];
+  return { members: rows };
 }
 
 async function addDrivePermission(input: Record<string, unknown>, request: FeishuJsonRequest) {
@@ -395,7 +407,7 @@ function permissionPath(input: Record<string, unknown>) {
 function memberKind(memberType: string, explicit: string | undefined) {
   if (memberType === "wikispaceid") {
     if (!explicit) {
-      throw invalidInput("memberKind is required when memberType is wikispaceid");
+      throw providerInputError("memberKind is required when memberType is wikispaceid");
     }
     return explicit;
   } else if (memberType === "openchat") {
@@ -426,11 +438,11 @@ function firstObject(value: unknown) {
 
 function requireObjectArray(value: unknown, fieldName: string) {
   if (!Array.isArray(value) || value.length === 0) {
-    throw invalidInput(`${fieldName} must contain at least one item`);
+    throw providerInputError(`${fieldName} must contain at least one item`);
   }
   const objects = value.map(optionalRecord);
   if (objects.some((item) => item == null)) {
-    throw invalidInput(`${fieldName} must contain only objects`);
+    throw providerInputError(`${fieldName} must contain only objects`);
   }
   return objects;
 }
@@ -438,26 +450,14 @@ function requireObjectArray(value: unknown, fieldName: string) {
 function requireString(value: unknown, fieldName: string) {
   const stringValue = optionalString(value);
   if (!stringValue) {
-    throw invalidInput(`${fieldName} is required`);
+    throw providerInputError(`${fieldName} is required`);
   }
   return stringValue;
 }
 
 function requireBoolean(value: unknown, fieldName: string) {
   if (typeof value !== "boolean") {
-    throw invalidInput(`${fieldName} is required`);
+    throw providerInputError(`${fieldName} is required`);
   }
   return value;
-}
-
-function optionalNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function optionalBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
-}
-
-function invalidInput(message: string) {
-  return new ProviderRequestError(400, message);
 }

@@ -4,14 +4,16 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { GitHubActionContext } from "./runtime-shared.ts";
+import type { IntegrationDefinition } from "../../triggers/common/integration.ts";
+import type { PollDefinition } from "../../triggers/common/poll.ts";
+import type { GitHubActionContext, GitHubActionHandler } from "./runtime-shared.ts";
 
 import {
+  combineProviderActionHandlers,
   defineProviderExecutors,
   defineProviderProxy,
-  providerFetch,
   requireBearerCredential,
-  toProviderProxyError,
+  providerFetch,
 } from "../provider-runtime.ts";
 import { resolveGitHubAppInstallation } from "./app-auth.ts";
 import { activityActionHandlers } from "./runtime-activity.ts";
@@ -21,6 +23,8 @@ import { releaseActionHandlers } from "./runtime-release.ts";
 import { repositoryActionHandlers } from "./runtime-repository.ts";
 import { searchActionHandlers } from "./runtime-search.ts";
 import { githubApiBaseUrl, githubApiVersion, githubDefaultAcceptHeader, githubRequestJson } from "./runtime-shared.ts";
+import { githubRepoEvent } from "./trigger-on-repo-event.ts";
+import { githubPullRequestListener } from "./trigger-watch-pull-request.ts";
 
 const service = "github";
 
@@ -42,8 +46,8 @@ export async function nativeHttpAuth(context: ExecutionContext): Promise<Headers
 
 export const executors: ProviderExecutors = defineProviderExecutors<GitHubActionContext>({
   service,
-  handlers: Object.assign(
-    {},
+  handlers: combineProviderActionHandlers<"github", GitHubActionHandler>(
+    service,
     activityActionHandlers,
     repositoryActionHandlers,
     issueActionHandlers,
@@ -63,55 +67,45 @@ export const executors: ProviderExecutors = defineProviderExecutors<GitHubAction
         accessToken: installation.accessToken,
         fetcher,
         installation: installation.installation,
+        transitFiles: context.transitFiles,
+        signal: context.signal,
       };
     }
     const credential = await requireBearerCredential(context, service);
     return {
       accessToken: credential.accessToken,
       fetcher,
+      transitFiles: context.transitFiles,
+      signal: context.signal,
     };
   },
 });
 
-const bearerProxy = defineProviderProxy({
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
   service,
   baseUrl: githubApiBaseUrl,
-  auth: { type: "bearer" },
+  auth: {
+    type: "bearer_resolver",
+    async resolve({ context, fetcher, signal }) {
+      const credential = await context.getCredential(service);
+      if (credential?.authType !== "custom_credential") {
+        return requireBearerCredential(context, service);
+      }
+      const installation = await resolveGitHubAppInstallation({
+        fetcher,
+        installationId: credential.values.installationId ?? "",
+        runtimeConfig: context.runtimeConfig,
+        signal,
+      });
+      return { accessToken: installation.accessToken, tokenType: "Bearer" };
+    },
+  },
   skipDnsValidation: true,
   customizeRequest({ headers }) {
     headers.set("accept", githubDefaultAcceptHeader);
     headers.set("x-github-api-version", githubApiVersion);
   },
 });
-
-export const proxy: ProviderProxyExecutor = async (input, context) => {
-  const credential = await context.getCredential(service);
-  if (credential?.authType !== "custom_credential") {
-    return bearerProxy(input, context);
-  }
-  try {
-    const installation = await resolveGitHubAppInstallation({
-      fetcher: providerFetch,
-      installationId: credential.values.installationId ?? "",
-      runtimeConfig: context.runtimeConfig,
-    });
-    return bearerProxy(input, {
-      ...context,
-      async getCredential(requestedService) {
-        if (requestedService !== service) return context.getCredential(requestedService);
-        return {
-          authType: "oauth2",
-          accessToken: installation.accessToken,
-          tokenType: "Bearer",
-          profile: credential.profile,
-          metadata: credential.metadata,
-        };
-      },
-    });
-  } catch (error) {
-    return toProviderProxyError(error, "GitHub App installation access failed");
-  }
-};
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher }) {
@@ -163,3 +157,8 @@ async function validateGitHubToken(accessToken: string, fetcher: typeof fetch) {
     },
   };
 }
+
+export const triggers: readonly (IntegrationDefinition | PollDefinition)[] = [
+  githubRepoEvent,
+  githubPullRequestListener,
+];

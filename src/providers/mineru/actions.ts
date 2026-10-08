@@ -15,6 +15,24 @@ const extraFormatSchema = s.stringEnum("An additional export format requested fo
   "html",
   "latex",
 ]);
+const languageSchema = s.stringEnum("The document language pack used by pipeline and vlm models.", [
+  "ch",
+  "ch_server",
+  "en",
+  "japan",
+  "korean",
+  "chinese_cht",
+  "ta",
+  "te",
+  "ka",
+  "el",
+  "th",
+  "latin",
+  "arabic",
+  "cyrillic",
+  "east_slavic",
+  "devanagari",
+]);
 const dataIdSchema = s.string({
   minLength: 1,
   maxLength: 128,
@@ -55,7 +73,7 @@ const commonSingleExtractInputProperties: Record<string, JsonSchema> = {
   is_ocr: s.boolean("Whether to enable OCR. Only applies to pipeline and vlm models."),
   enable_formula: s.boolean("Whether to enable formula recognition for pipeline and vlm models."),
   enable_table: s.boolean("Whether to enable table recognition for pipeline and vlm models."),
-  language: s.nonEmptyString("The document language code used by pipeline and vlm models."),
+  language: languageSchema,
   data_id: dataIdSchema,
   extra_formats: s.array("Additional result formats to export besides Markdown and JSON.", extraFormatSchema, {
     minItems: 1,
@@ -80,6 +98,7 @@ const batchFileInputSchema = s.object(
 export const mineruActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "create_extract_task",
+    operationType: "write",
     description: "Create a MinerU precise extraction task from a document URL.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -115,6 +134,7 @@ export const mineruActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_extract_task",
+    operationType: "read",
     description: "Get the current status and result URLs for a MinerU extraction task.",
     requiredScopes: [],
     inputSchema: s.requiredObject("Input payload for looking up a MinerU extraction task.", {
@@ -124,6 +144,7 @@ export const mineruActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_extract_batch",
+    operationType: "write",
     description: "Create a MinerU precise extraction batch from document URLs.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -135,7 +156,7 @@ export const mineruActions: ActionDefinition[] = [
         }),
         enable_formula: s.boolean("Whether to enable formula recognition for pipeline and vlm models."),
         enable_table: s.boolean("Whether to enable table recognition for pipeline and vlm models."),
-        language: s.nonEmptyString("The document language code used by pipeline and vlm models."),
+        language: languageSchema,
         extra_formats: s.array("Additional result formats to export besides Markdown and JSON.", extraFormatSchema, {
           minItems: 1,
         }),
@@ -168,6 +189,7 @@ export const mineruActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_extract_batch_results",
+    operationType: "read",
     description: "Get the current status and result URLs for a MinerU extraction batch.",
     requiredScopes: [],
     inputSchema: s.requiredObject("Input payload for looking up MinerU batch extraction results.", {

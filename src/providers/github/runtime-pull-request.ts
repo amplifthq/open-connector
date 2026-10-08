@@ -1,4 +1,5 @@
-import type { GitHubActionHandler } from "./runtime-shared.ts";
+import type { ProviderActionHandlerSubset } from "../provider-runtime.ts";
+import type { GitHubActionContext, GitHubActionHandler } from "./runtime-shared.ts";
 
 import {
   optionalBoolean,
@@ -7,19 +8,22 @@ import {
   optionalRecord,
   optionalString,
 } from "../../core/cast.ts";
+import { readBoundedResponseBytes } from "../../core/request.ts";
+import { ProviderRequestError } from "../provider-runtime.ts";
 import {
   buildGitHubUrl,
   compactObject,
   githubHeaders,
   githubRequestJson,
   githubRequestNoContent,
+  githubRequestTextTail,
   mapReviewComment,
   normalizeGitHubError,
   normalizeRequestedReviewersResponse,
   readJsonResponse,
 } from "./runtime-shared.ts";
 
-export const pullRequestActionHandlers: Record<string, GitHubActionHandler> = {
+export const pullRequestActionHandlers: ProviderActionHandlerSubset<"github", GitHubActionHandler> = {
   list_pull_requests(input, { accessToken, fetcher }) {
     return listPullRequests(input, accessToken, fetcher);
   },
@@ -296,6 +300,10 @@ export const pullRequestActionHandlers: Record<string, GitHubActionHandler> = {
     return listWorkflowRunJobs(input, accessToken, fetcher);
   },
 
+  get_workflow_job_logs(input, { accessToken, fetcher, signal }) {
+    return getWorkflowJobLogs(input, accessToken, fetcher, signal);
+  },
+
   rerun_workflow(input, { accessToken, fetcher }) {
     return rerunWorkflow(input, accessToken, fetcher);
   },
@@ -310,6 +318,9 @@ export const pullRequestActionHandlers: Record<string, GitHubActionHandler> = {
 
   list_workflow_run_artifacts(input, { accessToken, fetcher }) {
     return listWorkflowRunArtifacts(input, accessToken, fetcher);
+  },
+  download_workflow_artifact(input: Record<string, unknown>, context: GitHubActionContext) {
+    return downloadWorkflowArtifact(input, context);
   },
 };
 
@@ -672,6 +683,30 @@ async function listWorkflowRunJobs(input: Record<string, unknown>, accessToken: 
   };
 }
 
+const workflowJobLogTailMaxBytes = 256 * 1024;
+
+async function getWorkflowJobLogs(
+  input: Record<string, unknown>,
+  accessToken: string,
+  fetcher: typeof fetch,
+  signal?: AbortSignal,
+) {
+  const result = await githubRequestTextTail({
+    path: `/repos/${encodeURIComponent(String(input.owner))}/${encodeURIComponent(String(input.repo))}/actions/jobs/${String(input.jobId)}/logs`,
+    accessToken,
+    fetcher,
+    maxBytes: workflowJobLogTailMaxBytes,
+    signal,
+  });
+
+  return {
+    logs: result.text,
+    sizeBytes: result.sizeBytes,
+    returnedBytes: result.returnedBytes,
+    truncated: result.truncated,
+  };
+}
+
 async function rerunWorkflow(input: Record<string, unknown>, accessToken: string, fetcher: typeof fetch) {
   await githubRequestNoContent({
     method: "POST",
@@ -727,4 +762,29 @@ async function listWorkflowRunArtifacts(input: Record<string, unknown>, accessTo
     total_count: Number(response.total_count ?? 0),
     artifacts: Array.isArray(response.artifacts) ? (response.artifacts as Record<string, unknown>[]) : [],
   };
+}
+
+async function downloadWorkflowArtifact(
+  input: Record<string, unknown>,
+  context: GitHubActionContext,
+): Promise<unknown> {
+  if (!context.transitFiles) throw new ProviderRequestError(400, "Transit file storage is not enabled.");
+  const artifactId = Number(input.artifactId);
+  const response = await context.fetcher(
+    buildGitHubUrl(
+      `/repos/${encodeURIComponent(String(input.owner))}/${encodeURIComponent(String(input.repo))}/actions/artifacts/${artifactId}/zip`,
+    ),
+    { headers: githubHeaders(context.accessToken, false), signal: context.signal },
+  );
+  if (!response.ok)
+    throw normalizeGitHubError(response, await readJsonResponse(response), "github artifact download failed");
+  const name = optionalString(input.fileName) ?? `github-artifact-${artifactId}.zip`;
+  const mimeType = response.headers.get("content-type") ?? "application/zip";
+  const bytes = await readBoundedResponseBytes(response, {
+    maxBytes: context.transitFiles.maxBytes,
+    fieldName: "GitHub workflow artifact",
+    createError: (message) => new ProviderRequestError(413, message),
+  });
+  const file = await context.transitFiles.create(new File([Uint8Array.from(bytes)], name, { type: mimeType }));
+  return { file };
 }

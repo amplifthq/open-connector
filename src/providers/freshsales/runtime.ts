@@ -1,5 +1,5 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { FreshsalesActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, positiveInteger } from "../../core/cast.ts";
 import {
@@ -11,7 +11,6 @@ import {
 
 const freshsalesValidationPath = "/api/contacts/filters";
 const freshsalesDefaultPageSize = 25;
-const freshsalesDefaultRequestTimeoutMs = 30_000;
 
 type FreshsalesRequestPhase = "validate" | "execute";
 type FreshsalesMethod = "GET" | "POST" | "PUT" | "DELETE";
@@ -35,7 +34,10 @@ interface FreshsalesRequestInput {
   signal?: AbortSignal;
 }
 
-export const freshsalesActionHandlers: Record<FreshsalesActionName, ProviderRuntimeHandler<FreshsalesActionContext>> = {
+export const freshsalesActionHandlers: ProviderActionHandlers<
+  "freshsales",
+  ProviderRuntimeHandler<FreshsalesActionContext>
+> = {
   async list_contact_filters(_input, context) {
     const payload = await requestFreshsalesJson({
       ...context,
@@ -182,7 +184,7 @@ export function resolveFreshsalesBaseUrl(values: Record<string, string>, metadat
 }
 
 async function requestFreshsalesJson(input: FreshsalesRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, freshsalesDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const response = await input.fetcher(buildFreshsalesUrl(input), {
       method: input.method,

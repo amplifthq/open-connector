@@ -60,20 +60,10 @@ const leadIdInputSchema = s.requiredObject("Input containing one noCRM.io lead i
   leadId: identifierField("The identifier of the target noCRM.io lead."),
 });
 
-export type NocrmIoActionName =
-  | "list_teams"
-  | "create_lead"
-  | "duplicate_lead"
-  | "change_lead_status_to_standby"
-  | "change_lead_status_to_cancelled"
-  | "assign_lead_to_user"
-  | "add_tag_to_lead"
-  | "append_to_lead_description"
-  | "delete_lead";
-
 export const nocrmIoActions: readonly ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_teams",
+    operationType: "read",
     description: "List the teams available in the connected noCRM.io account.",
     inputSchema: s.object({}, { description: "This action does not require any input." }),
     outputSchema: s.requiredObject("The output payload containing noCRM.io teams.", {
@@ -82,6 +72,7 @@ export const nocrmIoActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_lead",
+    operationType: "write",
     description: "Create a lead in noCRM.io with the provided title and description.",
     inputSchema: s.object(
       "Input parameters for creating a noCRM.io lead.",
@@ -99,6 +90,7 @@ export const nocrmIoActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "duplicate_lead",
+    operationType: "write",
     description: "Duplicate an existing noCRM.io lead into another step.",
     inputSchema: s.requiredObject("Input parameters for duplicating a noCRM.io lead.", {
       leadId: identifierField("The identifier of the lead to duplicate."),
@@ -108,6 +100,7 @@ export const nocrmIoActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "change_lead_status_to_standby",
+    operationType: "destructive",
     description: "Change a noCRM.io lead to standby and schedule its next reminder.",
     inputSchema: s.object(
       "Input parameters for changing a noCRM.io lead to standby.",
@@ -122,12 +115,14 @@ export const nocrmIoActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "change_lead_status_to_cancelled",
+    operationType: "destructive",
     description: "Change a noCRM.io lead status to cancelled.",
     inputSchema: leadIdInputSchema,
     outputSchema: leadOutputSchema,
   }),
   defineProviderAction(service, {
     name: "assign_lead_to_user",
+    operationType: "write",
     description: "Assign a noCRM.io lead to a specific user.",
     inputSchema: s.requiredObject("Input parameters for assigning a noCRM.io lead.", {
       leadId: identifierField("The identifier of the lead to assign."),
@@ -137,6 +132,7 @@ export const nocrmIoActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "add_tag_to_lead",
+    operationType: "write",
     description: "Add one or more tags to a noCRM.io lead.",
     inputSchema: s.requiredObject("Input parameters for adding tags to a noCRM.io lead.", {
       leadId: identifierField("The identifier of the lead that should receive the tag."),
@@ -146,6 +142,7 @@ export const nocrmIoActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "append_to_lead_description",
+    operationType: "write",
     description: "Append text to the description of a noCRM.io lead.",
     inputSchema: s.requiredObject("Input parameters for appending text to a noCRM.io lead description.", {
       leadId: identifierField("The identifier of the lead whose description should be updated."),
@@ -155,6 +152,7 @@ export const nocrmIoActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_lead",
+    operationType: "destructive",
     description: "Delete a noCRM.io lead.",
     inputSchema: leadIdInputSchema,
     outputSchema: s.requiredObject("The output payload for deleting a noCRM.io lead.", {

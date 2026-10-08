@@ -5,13 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "serphouse";
 
-export type SerphouseActionName =
-  | "account_info"
-  | "list_domains"
-  | "list_languages"
-  | "search_locations"
-  | "search_web";
-
 const statusField = s.string("SERPHouse response status.");
 const messageField = s.string("SERPHouse response message.");
 const emptyInputSchema = s.object({}, { description: "No input is required." });
@@ -42,12 +35,14 @@ const searchWebOutputSchema = s.object("SERPHouse synchronous web SERP response.
 export const serphouseActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "account_info",
+    operationType: "read",
     description: "Retrieve account and credit usage information for the connected SERPHouse key.",
     inputSchema: emptyInputSchema,
     outputSchema: accountInfoOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_domains",
+    operationType: "read",
     description: "List search engine domains supported by SERPHouse SERP requests.",
     inputSchema: emptyInputSchema,
     outputSchema: s.object("SERPHouse supported domain list response.", {
@@ -61,6 +56,7 @@ export const serphouseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_languages",
+    operationType: "read",
     description: "List SERPHouse language codes for one supported search engine type.",
     inputSchema: s.object(
       "Input parameters for listing SERPHouse languages.",
@@ -77,6 +73,7 @@ export const serphouseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_locations",
+    operationType: "read",
     description: "Search SERPHouse locations for geo-targeted SERP requests.",
     inputSchema: s.object(
       "Input parameters for searching SERPHouse locations.",
@@ -103,6 +100,7 @@ export const serphouseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_web",
+    operationType: "read",
     description: "Run a synchronous SERPHouse web SERP request and return structured JSON results.",
     inputSchema: searchWebInputSchema(),
     outputSchema: searchWebOutputSchema,

@@ -1,11 +1,17 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { LeigaActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -13,7 +19,6 @@ import {
 
 const service = "leiga";
 const leigaApiBaseUrl = "https://app.leiga.com/openapi/api";
-const leigaDefaultRequestTimeoutMs = 30_000;
 
 type LeigaPhase = "validate" | "execute";
 type LeigaActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -26,7 +31,7 @@ interface LeigaRequestInput {
   phase: LeigaPhase;
 }
 
-export const leigaActionHandlers: Record<LeigaActionName, LeigaActionHandler> = {
+export const leigaActionHandlers: ProviderActionHandlers<"leiga", LeigaActionHandler> = {
   async list_projects(input, context) {
     const payload = await requestLeigaJson({
       context,
@@ -137,6 +142,16 @@ export const leigaActionHandlers: Record<LeigaActionName, LeigaActionHandler> = 
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, leigaActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: leigaApiBaseUrl,
+  auth: { type: "api_key_header", name: "accessToken" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     return validateLeigaCredential({
@@ -177,7 +192,7 @@ async function validateLeigaCredential(context: ApiKeyProviderContext): Promise<
 async function requestLeigaJson(
   input: LeigaRequestInput & { context: ApiKeyProviderContext },
 ): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(input.context.signal, leigaDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
 
   try {
     const response = await input.context.fetcher(buildLeigaUrl(input.path, input.query ?? {}), {

@@ -5,16 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "lattice";
 
-export type LatticeActionName =
-  | "get_current_user"
-  | "list_users"
-  | "get_user"
-  | "list_departments"
-  | "get_department"
-  | "list_tags"
-  | "list_goals"
-  | "get_goal";
-
 const rawSchema = s.unknownObject("The raw Lattice API response payload.");
 const latticeUserSchema = s.unknownObject("A Lattice user object.");
 const latticeDepartmentSchema = s.unknownObject("A Lattice department object.");
@@ -93,12 +83,14 @@ const goalsOutputSchema = s.object("The normalized Lattice goal list response.",
 export const latticeActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Get the Lattice user associated with the configured API key.",
     inputSchema: s.object("No input parameters are required for the Lattice current user.", {}),
     outputSchema: currentUserOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List Lattice users with optional cursor pagination and status filtering.",
     inputSchema: s.object(
       "Input parameters for listing Lattice users.",
@@ -118,12 +110,14 @@ export const latticeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Get a Lattice user by ID.",
     inputSchema: userIdInputSchema,
     outputSchema: userOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_departments",
+    operationType: "read",
     description: "List Lattice departments with optional cursor pagination.",
     inputSchema: s.object("Input parameters for listing Lattice departments.", paginationInputFields, {
       optional: ["limit", "startingAfter"],
@@ -132,12 +126,14 @@ export const latticeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_department",
+    operationType: "read",
     description: "Get a Lattice department by ID.",
     inputSchema: departmentIdInputSchema,
     outputSchema: departmentOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_tags",
+    operationType: "read",
     description: "List Lattice tags with optional cursor pagination.",
     inputSchema: s.object("Input parameters for listing Lattice tags.", paginationInputFields, {
       optional: ["limit", "startingAfter"],
@@ -146,6 +142,7 @@ export const latticeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_goals",
+    operationType: "read",
     description: "List Lattice goals with optional cursor pagination and state filtering.",
     inputSchema: s.object(
       "Input parameters for listing Lattice goals.",
@@ -159,6 +156,7 @@ export const latticeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_goal",
+    operationType: "read",
     description: "Get a Lattice goal by ID.",
     inputSchema: goalIdInputSchema,
     outputSchema: goalOutputSchema,

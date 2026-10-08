@@ -5,25 +5,9 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "dub" as const;
 
-export type DubActionName =
-  | "create_link"
-  | "list_links"
-  | "retrieve_link"
-  | "update_link"
-  | "delete_link"
-  | "count_links"
-  | "list_tags"
-  | "create_tag"
-  | "update_tag"
-  | "delete_tag"
-  | "list_folders"
-  | "create_folder"
-  | "update_folder"
-  | "delete_folder"
-  | "retrieve_analytics";
-
 interface DubActionInput<TName extends string> {
   name: TName;
+  operationType: ActionDefinition["operationType"];
   description: string;
   inputSchema: JsonSchema;
   outputSchema: JsonSchema;
@@ -525,6 +509,7 @@ function defineDubAction<TName extends string>(input: DubActionInput<TName>) {
 export const dubActions: readonly ActionDefinition[] = [
   defineDubAction({
     name: "create_link",
+    operationType: "write",
     description: "Create a short link in the authenticated Dub workspace.",
     inputSchema: s.object("Input parameters for creating a Dub link.", linkInputFields, {
       optional: linkInputOptional,
@@ -533,18 +518,21 @@ export const dubActions: readonly ActionDefinition[] = [
   }),
   defineDubAction({
     name: "list_links",
+    operationType: "read",
     description: "List short links in the authenticated Dub workspace.",
     inputSchema: listLinksInputSchema,
     outputSchema: listLinksOutputSchema,
   }),
   defineDubAction({
     name: "retrieve_link",
+    operationType: "read",
     description: "Retrieve a Dub short link by ID or by supported lookup fields.",
     inputSchema: retrieveLinkInputSchema,
     outputSchema: linkOutputSchema,
   }),
   defineDubAction({
     name: "update_link",
+    operationType: "write",
     description: "Update a short link in the authenticated Dub workspace.",
     inputSchema: s.object("Input parameters for updating a Dub link.", updateLinkInputFields, {
       optional: updateLinkInputOptional,
@@ -553,66 +541,77 @@ export const dubActions: readonly ActionDefinition[] = [
   }),
   defineDubAction({
     name: "delete_link",
+    operationType: "destructive",
     description: "Delete a short link from the authenticated Dub workspace.",
     inputSchema: deleteLinkInputSchema,
     outputSchema: deleteLinkOutputSchema,
   }),
   defineDubAction({
     name: "count_links",
+    operationType: "read",
     description: "Retrieve the number of matching links in the authenticated Dub workspace.",
     inputSchema: countLinksInputSchema,
     outputSchema: countLinksOutputSchema,
   }),
   defineDubAction({
     name: "list_tags",
+    operationType: "read",
     description: "List tags in the authenticated Dub workspace.",
     inputSchema: listTagsInputSchema,
     outputSchema: listTagsOutputSchema,
   }),
   defineDubAction({
     name: "create_tag",
+    operationType: "write",
     description: "Create a tag in the authenticated Dub workspace.",
     inputSchema: createTagInputSchema,
     outputSchema: tagOutputSchema,
   }),
   defineDubAction({
     name: "update_tag",
+    operationType: "write",
     description: "Update a tag in the authenticated Dub workspace.",
     inputSchema: updateTagInputSchema,
     outputSchema: tagOutputSchema,
   }),
   defineDubAction({
     name: "delete_tag",
+    operationType: "destructive",
     description: "Delete a tag from the authenticated Dub workspace.",
     inputSchema: deleteTagInputSchema,
     outputSchema: deleteLinkOutputSchema,
   }),
   defineDubAction({
     name: "list_folders",
+    operationType: "read",
     description: "List folders in the authenticated Dub workspace.",
     inputSchema: listFoldersInputSchema,
     outputSchema: listFoldersOutputSchema,
   }),
   defineDubAction({
     name: "create_folder",
+    operationType: "write",
     description: "Create a folder in the authenticated Dub workspace.",
     inputSchema: createFolderInputSchema,
     outputSchema: folderOutputSchema,
   }),
   defineDubAction({
     name: "update_folder",
+    operationType: "write",
     description: "Update a folder in the authenticated Dub workspace.",
     inputSchema: updateFolderInputSchema,
     outputSchema: folderOutputSchema,
   }),
   defineDubAction({
     name: "delete_folder",
+    operationType: "destructive",
     description: "Delete a folder from the authenticated Dub workspace.",
     inputSchema: deleteFolderInputSchema,
     outputSchema: deleteLinkOutputSchema,
   }),
   defineDubAction({
     name: "retrieve_analytics",
+    operationType: "read",
     description: "Retrieve analytics for a Dub link, domain, or workspace.",
     inputSchema: analyticsInputSchema,
     outputSchema: analyticsOutputSchema,

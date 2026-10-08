@@ -1,119 +1,183 @@
-import type { ProviderExecutors } from "../../core/types.ts";
-import type { OAuthProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { OAuthProviderContext, ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
-import { defineOAuthProviderExecutors, ProviderRequestError } from "../provider-runtime.ts";
+import { compactObject, optionalNumber, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
+import {
+  defineOAuthProviderExecutors,
+  defineProviderProxy,
+  providerInputError,
+  ProviderRequestError,
+  requiredInputString,
+} from "../provider-runtime.ts";
 
 const service = "canva";
 const canvaApiBaseUrl = "https://api.canva.com/rest";
 
 type CanvaActionHandler = (input: Record<string, unknown>, context: OAuthProviderContext) => Promise<unknown>;
 
-export const canvaActionHandlers: Record<string, CanvaActionHandler> = {
-  get_current_user(_input, context) {
-    return getCurrentUser(context);
-  },
-  list_designs(input, context) {
-    return listDesigns(input, context);
-  },
-  get_design(input, context) {
-    return getDesign(input, context);
-  },
-  create_design(input, context) {
-    return createDesign(input, context);
-  },
-  list_folder_items(input, context) {
-    return listFolderItems(input, context);
-  },
-  create_folder(input, context) {
-    return createFolder(input, context);
-  },
-  move_folder_item(input, context) {
-    return moveFolderItem(input, context);
-  },
-  get_asset(input, context) {
-    return getAsset(input, context);
-  },
-  get_design_export_formats(input, context) {
-    return getDesignExportFormats(input, context);
-  },
-  create_design_export_job(input, context) {
-    return createDesignExportJob(input, context);
-  },
-  get_design_export_job(input, context) {
-    return getDesignExportJob(input, context);
-  },
-  create_url_asset_upload_job(input, context) {
-    return createUrlAssetUploadJob(input, context);
-  },
-  get_url_asset_upload_job(input, context) {
-    return getUrlAssetUploadJob(input, context);
-  },
-};
+interface CanvaUserIdentity {
+  userId?: string;
+  teamId?: string;
+}
 
-export const executors: ProviderExecutors = defineOAuthProviderExecutors(service, canvaActionHandlers);
+/** Build Canva executors for one regional OAuth service and API base URL. */
+export function createCanvaExecutors(service: string, apiBaseUrl: string): ProviderExecutors {
+  return defineOAuthProviderExecutors(service, createCanvaActionHandlers(apiBaseUrl));
+}
 
-async function getCurrentUser(context: OAuthProviderContext) {
-  const account = await canvaJsonRequest("GET", "/v1/users/me", context);
-  const profile = await canvaJsonRequest("GET", "/v1/users/me/profile", context);
+export const executors: ProviderExecutors = createCanvaExecutors(service, canvaApiBaseUrl);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: canvaApiBaseUrl,
+  auth: { type: "oauth_bearer" },
+  skipDnsValidation: true,
+});
+
+/** Build Canva credential validators for one regional OAuth API base URL. */
+export function createCanvaCredentialValidators(apiBaseUrl: string): CredentialValidators {
+  return {
+    async oauth2(input, { fetcher, signal }) {
+      const account = await canvaJsonRequest(
+        "GET",
+        "/v1/users/me",
+        {
+          accessToken: input.accessToken,
+          tokenType: input.tokenType,
+          fetcher,
+          signal,
+        },
+        apiBaseUrl,
+      );
+      const identity = readCanvaUserIdentity(account);
+      if (!identity.userId) {
+        throw new ProviderRequestError(502, "canva current user response is missing user id");
+      }
+      return {
+        profile: {
+          accountId: identity.userId,
+          displayName: identity.userId,
+        },
+        grantedScopes: readCanvaGrantedScopes(input.metadata.scope),
+        metadata: compactObject({
+          apiBaseUrl,
+          validationEndpoint: "/v1/users/me",
+          userId: identity.userId,
+          teamId: identity.teamId,
+        }),
+      };
+    },
+  };
+}
+
+export const credentialValidators: CredentialValidators = createCanvaCredentialValidators(canvaApiBaseUrl);
+
+function createCanvaActionHandlers(apiBaseUrl: string): ProviderActionHandlers<"canva", CanvaActionHandler> {
+  return {
+    get_current_user(_input, context) {
+      return getCurrentUser(context, apiBaseUrl);
+    },
+    list_designs(input, context) {
+      return listDesigns(input, context, apiBaseUrl);
+    },
+    get_design(input, context) {
+      return getDesign(input, context, apiBaseUrl);
+    },
+    create_design(input, context) {
+      return createDesign(input, context, apiBaseUrl);
+    },
+    list_folder_items(input, context) {
+      return listFolderItems(input, context, apiBaseUrl);
+    },
+    create_folder(input, context) {
+      return createFolder(input, context, apiBaseUrl);
+    },
+    move_folder_item(input, context) {
+      return moveFolderItem(input, context, apiBaseUrl);
+    },
+    get_asset(input, context) {
+      return getAsset(input, context, apiBaseUrl);
+    },
+    get_design_export_formats(input, context) {
+      return getDesignExportFormats(input, context, apiBaseUrl);
+    },
+    create_design_export_job(input, context) {
+      return createDesignExportJob(input, context, apiBaseUrl);
+    },
+    get_design_export_job(input, context) {
+      return getDesignExportJob(input, context, apiBaseUrl);
+    },
+    create_url_asset_upload_job(input, context) {
+      return createUrlAssetUploadJob(input, context, apiBaseUrl);
+    },
+    get_url_asset_upload_job(input, context) {
+      return getUrlAssetUploadJob(input, context, apiBaseUrl);
+    },
+  };
+}
+
+async function getCurrentUser(context: OAuthProviderContext, apiBaseUrl: string) {
+  const account = await canvaJsonRequest("GET", "/v1/users/me", context, apiBaseUrl);
+  const profile = await canvaJsonRequest("GET", "/v1/users/me/profile", context, apiBaseUrl);
   return normalizeCurrentUser(account, profile);
 }
 
-async function listDesigns(input: Record<string, unknown>, context: OAuthProviderContext) {
-  const url = new URL(`${canvaApiBaseUrl}/v1/designs`);
+async function listDesigns(input: Record<string, unknown>, context: OAuthProviderContext, apiBaseUrl: string) {
+  const url = new URL(`${apiBaseUrl}/v1/designs`);
   appendQuery(url, "query", optionalString(input.query));
   appendQuery(url, "continuation", optionalString(input.continuation));
   appendQuery(url, "ownership", optionalString(input.ownership));
   appendQuery(url, "sort_by", optionalString(input.sortBy));
   appendQuery(url, "limit", optionalIntegerString(input.limit));
-  const payload = await canvaJsonRequest("GET", url.toString(), context);
+  const payload = await canvaJsonRequest("GET", url.toString(), context, apiBaseUrl);
   return {
     designs: readObjectArray(payload.items).map(mapCanvaDesign),
     continuation: optionalString(payload.continuation) ?? null,
   };
 }
 
-async function getDesign(input: Record<string, unknown>, context: OAuthProviderContext) {
-  const designId = requireCanvaString(input.designId, "canva designId");
-  const payload = await canvaJsonRequest("GET", `/v1/designs/${encodeURIComponent(designId)}`, context);
-  return { design: mapCanvaDesign(requiredRecord(payload.design, "design", requestError)) };
+async function getDesign(input: Record<string, unknown>, context: OAuthProviderContext, apiBaseUrl: string) {
+  const designId = requiredInputString(input.designId, "canva designId");
+  const payload = await canvaJsonRequest("GET", `/v1/designs/${encodeURIComponent(designId)}`, context, apiBaseUrl);
+  return { design: mapCanvaDesign(requiredRecord(payload.design, "design", providerInputError)) };
 }
 
-async function createDesign(input: Record<string, unknown>, context: OAuthProviderContext) {
-  const payload = await canvaJsonRequest("POST", "/v1/designs", context, mapCreateDesignBody(input));
-  return { design: mapCanvaDesign(requiredRecord(payload.design, "design", requestError)) };
+async function createDesign(input: Record<string, unknown>, context: OAuthProviderContext, apiBaseUrl: string) {
+  const payload = await canvaJsonRequest("POST", "/v1/designs", context, apiBaseUrl, mapCreateDesignBody(input));
+  return { design: mapCanvaDesign(requiredRecord(payload.design, "design", providerInputError)) };
 }
 
-async function listFolderItems(input: Record<string, unknown>, context: OAuthProviderContext) {
-  const folderId = requireCanvaString(input.folderId, "canva folderId");
-  const url = new URL(`${canvaApiBaseUrl}/v1/folders/${encodeURIComponent(folderId)}/items`);
+async function listFolderItems(input: Record<string, unknown>, context: OAuthProviderContext, apiBaseUrl: string) {
+  const folderId = requiredInputString(input.folderId, "canva folderId");
+  const url = new URL(`${apiBaseUrl}/v1/folders/${encodeURIComponent(folderId)}/items`);
   appendQuery(url, "continuation", optionalString(input.continuation));
   appendQuery(url, "limit", optionalIntegerString(input.limit));
   appendQuery(url, "item_types", optionalStringList(input.itemTypes));
   appendQuery(url, "sort_by", optionalString(input.sortBy));
   appendQuery(url, "pin_status", optionalString(input.pinStatus));
-  const payload = await canvaJsonRequest("GET", url.toString(), context);
+  const payload = await canvaJsonRequest("GET", url.toString(), context, apiBaseUrl);
   return {
     items: readObjectArray(payload.items).map(mapFolderItem),
     continuation: optionalString(payload.continuation) ?? null,
   };
 }
 
-async function createFolder(input: Record<string, unknown>, context: OAuthProviderContext) {
-  const payload = await canvaJsonRequest("POST", "/v1/folders", context, {
-    name: requireCanvaString(input.name, "canva folder name"),
-    parent_folder_id: requireCanvaString(input.parentFolderId, "canva parentFolderId"),
+async function createFolder(input: Record<string, unknown>, context: OAuthProviderContext, apiBaseUrl: string) {
+  const payload = await canvaJsonRequest("POST", "/v1/folders", context, apiBaseUrl, {
+    name: requiredInputString(input.name, "canva folder name"),
+    parent_folder_id: requiredInputString(input.parentFolderId, "canva parentFolderId"),
   });
-  return { folder: mapCanvaFolder(requiredRecord(payload.folder, "folder", requestError)) };
+  return { folder: mapCanvaFolder(requiredRecord(payload.folder, "folder", providerInputError)) };
 }
 
-async function moveFolderItem(input: Record<string, unknown>, context: OAuthProviderContext) {
-  const itemId = requireCanvaString(input.itemId, "canva itemId");
-  const toFolderId = requireCanvaString(input.toFolderId, "canva toFolderId");
+async function moveFolderItem(input: Record<string, unknown>, context: OAuthProviderContext, apiBaseUrl: string) {
+  const itemId = requiredInputString(input.itemId, "canva itemId");
+  const toFolderId = requiredInputString(input.toFolderId, "canva toFolderId");
   await canvaJsonRequest(
     "POST",
     "/v1/folders/move",
     context,
+    apiBaseUrl,
     {
       item_id: itemId,
       to_folder_id: toFolderId,
@@ -123,54 +187,77 @@ async function moveFolderItem(input: Record<string, unknown>, context: OAuthProv
   return { moved: true, itemId, toFolderId };
 }
 
-async function getAsset(input: Record<string, unknown>, context: OAuthProviderContext) {
-  const assetId = requireCanvaString(input.assetId, "canva assetId");
-  const payload = await canvaJsonRequest("GET", `/v1/assets/${encodeURIComponent(assetId)}`, context);
-  return { asset: mapCanvaAsset(requiredRecord(payload.asset, "asset", requestError)) };
+async function getAsset(input: Record<string, unknown>, context: OAuthProviderContext, apiBaseUrl: string) {
+  const assetId = requiredInputString(input.assetId, "canva assetId");
+  const payload = await canvaJsonRequest("GET", `/v1/assets/${encodeURIComponent(assetId)}`, context, apiBaseUrl);
+  return { asset: mapCanvaAsset(requiredRecord(payload.asset, "asset", providerInputError)) };
 }
 
-async function getDesignExportFormats(input: Record<string, unknown>, context: OAuthProviderContext) {
-  const designId = requireCanvaString(input.designId, "canva designId");
-  const payload = await canvaJsonRequest("GET", `/v1/designs/${encodeURIComponent(designId)}/export-formats`, context);
+async function getDesignExportFormats(
+  input: Record<string, unknown>,
+  context: OAuthProviderContext,
+  apiBaseUrl: string,
+) {
+  const designId = requiredInputString(input.designId, "canva designId");
+  const payload = await canvaJsonRequest(
+    "GET",
+    `/v1/designs/${encodeURIComponent(designId)}/export-formats`,
+    context,
+    apiBaseUrl,
+  );
   return { formats: readObjectArray(payload.formats) };
 }
 
-async function createDesignExportJob(input: Record<string, unknown>, context: OAuthProviderContext) {
-  const payload = await canvaJsonRequest("POST", "/v1/exports", context, {
-    design_id: requireCanvaString(input.designId, "canva designId"),
-    format: mapExportFormat(requiredRecord(input.format, "format", requestError)),
+async function createDesignExportJob(
+  input: Record<string, unknown>,
+  context: OAuthProviderContext,
+  apiBaseUrl: string,
+) {
+  const payload = await canvaJsonRequest("POST", "/v1/exports", context, apiBaseUrl, {
+    design_id: requiredInputString(input.designId, "canva designId"),
+    format: mapExportFormat(requiredRecord(input.format, "format", providerInputError)),
   });
-  return { job: mapExportJob(requiredRecord(payload.job, "job", requestError)) };
+  return { job: mapExportJob(requiredRecord(payload.job, "job", providerInputError)) };
 }
 
-async function getDesignExportJob(input: Record<string, unknown>, context: OAuthProviderContext) {
-  const exportId = requireCanvaString(input.exportId, "canva exportId");
-  const payload = await canvaJsonRequest("GET", `/v1/exports/${encodeURIComponent(exportId)}`, context);
-  return { job: mapExportJob(requiredRecord(payload.job, "job", requestError)) };
+async function getDesignExportJob(input: Record<string, unknown>, context: OAuthProviderContext, apiBaseUrl: string) {
+  const exportId = requiredInputString(input.exportId, "canva exportId");
+  const payload = await canvaJsonRequest("GET", `/v1/exports/${encodeURIComponent(exportId)}`, context, apiBaseUrl);
+  return { job: mapExportJob(requiredRecord(payload.job, "job", providerInputError)) };
 }
 
-async function createUrlAssetUploadJob(input: Record<string, unknown>, context: OAuthProviderContext) {
-  const payload = await canvaJsonRequest("POST", "/v1/url-asset-uploads", context, {
-    name: requireCanvaString(input.name, "canva asset name"),
-    url: requireCanvaString(input.url, "canva asset url"),
+async function createUrlAssetUploadJob(
+  input: Record<string, unknown>,
+  context: OAuthProviderContext,
+  apiBaseUrl: string,
+) {
+  const payload = await canvaJsonRequest("POST", "/v1/url-asset-uploads", context, apiBaseUrl, {
+    name: requiredInputString(input.name, "canva asset name"),
+    url: requiredInputString(input.url, "canva asset url"),
   });
-  return { job: mapAssetUploadJob(requiredRecord(payload.job, "job", requestError)) };
+  return { job: mapAssetUploadJob(requiredRecord(payload.job, "job", providerInputError)) };
 }
 
-async function getUrlAssetUploadJob(input: Record<string, unknown>, context: OAuthProviderContext) {
-  const jobId = requireCanvaString(input.jobId, "canva asset upload jobId");
-  const payload = await canvaJsonRequest("GET", `/v1/url-asset-uploads/${encodeURIComponent(jobId)}`, context);
-  return { job: mapAssetUploadJob(requiredRecord(payload.job, "job", requestError)) };
+async function getUrlAssetUploadJob(input: Record<string, unknown>, context: OAuthProviderContext, apiBaseUrl: string) {
+  const jobId = requiredInputString(input.jobId, "canva asset upload jobId");
+  const payload = await canvaJsonRequest(
+    "GET",
+    `/v1/url-asset-uploads/${encodeURIComponent(jobId)}`,
+    context,
+    apiBaseUrl,
+  );
+  return { job: mapAssetUploadJob(requiredRecord(payload.job, "job", providerInputError)) };
 }
 
 async function canvaJsonRequest(
   method: "GET" | "POST",
   pathOrUrl: string,
   context: OAuthProviderContext,
+  apiBaseUrl: string,
   body?: Record<string, unknown>,
   allowNoContent = false,
 ) {
-  const url = pathOrUrl.startsWith("https://") ? pathOrUrl : `${canvaApiBaseUrl}${pathOrUrl}`;
+  const url = pathOrUrl.startsWith("https://") ? pathOrUrl : `${apiBaseUrl}${pathOrUrl}`;
   const response = await context.fetcher(url, {
     method,
     headers: {
@@ -188,7 +275,7 @@ async function canvaJsonRequest(
 
 async function readJsonRecord(response: Response) {
   try {
-    return requiredRecord(await response.json(), "canva response", requestError);
+    return requiredRecord(await response.json(), "canva response", providerInputError);
   } catch (error) {
     if (error instanceof ProviderRequestError) throw error;
     throw new ProviderRequestError(502, "canva response is not valid JSON");
@@ -209,18 +296,30 @@ function normalizeHttpError(status: number, payload: Record<string, unknown>, fa
 }
 
 function normalizeCurrentUser(accountPayload: Record<string, unknown>, profilePayload: Record<string, unknown>) {
-  const teamUser = optionalRecord(accountPayload.team_user) ?? optionalRecord(accountPayload.user) ?? {};
+  const identity = readCanvaUserIdentity(accountPayload);
   const profile = optionalRecord(profilePayload.profile) ?? {};
-  const userId =
-    optionalString(teamUser.user_id) ??
-    optionalString(teamUser.userId) ??
-    optionalString(teamUser.id) ??
-    requireCanvaString(accountPayload.id, "canva user id");
   return {
-    userId,
-    teamId: optionalString(teamUser.team_id) ?? optionalString(teamUser.teamId) ?? null,
+    userId: identity.userId ?? requiredInputString(accountPayload.id, "canva user id"),
+    teamId: identity.teamId ?? null,
     displayName: optionalString(profile.display_name) ?? optionalString(profile.displayName) ?? null,
   };
+}
+
+function readCanvaUserIdentity(accountPayload: Record<string, unknown>): CanvaUserIdentity {
+  const teamUser = optionalRecord(accountPayload.team_user) ?? optionalRecord(accountPayload.user) ?? {};
+  return {
+    userId:
+      optionalString(teamUser.user_id) ??
+      optionalString(teamUser.userId) ??
+      optionalString(teamUser.id) ??
+      optionalString(accountPayload.id),
+    teamId: optionalString(teamUser.team_id) ?? optionalString(teamUser.teamId),
+  };
+}
+
+function readCanvaGrantedScopes(value: unknown): string[] {
+  const scope = optionalString(value);
+  return scope ? [...new Set(scope.split(/[\s,]+/u).filter(Boolean))] : [];
 }
 
 function mapCanvaDesign(payload: Record<string, unknown>) {
@@ -228,7 +327,7 @@ function mapCanvaDesign(payload: Record<string, unknown>) {
   const thumbnail = optionalRecord(payload.thumbnail) ?? {};
   const owner = optionalRecord(payload.owner) ?? {};
   return {
-    id: requireCanvaString(payload.id, "canva design id"),
+    id: requiredInputString(payload.id, "canva design id"),
     title: optionalString(payload.title) ?? null,
     editUrl: optionalString(urls.edit_url) ?? optionalString(urls.editUrl) ?? null,
     viewUrl: optionalString(urls.view_url) ?? optionalString(urls.viewUrl) ?? null,
@@ -246,7 +345,7 @@ function mapCanvaFolder(payload: Record<string, unknown>) {
   const thumbnail = optionalRecord(payload.thumbnail) ?? {};
   const name = optionalString(payload.name) ?? null;
   return {
-    id: requireCanvaString(payload.id, "canva folder id"),
+    id: requiredInputString(payload.id, "canva folder id"),
     name,
     title: optionalString(payload.title) ?? name,
     url: optionalString(payload.url) ?? null,
@@ -261,8 +360,8 @@ function mapCanvaFolder(payload: Record<string, unknown>) {
 function mapExportJob(payload: Record<string, unknown>) {
   const error = optionalRecord(payload.error) ?? {};
   return {
-    id: requireCanvaString(payload.id, "canva export job id"),
-    status: requireCanvaString(payload.status, "canva export job status"),
+    id: requiredInputString(payload.id, "canva export job id"),
+    status: requiredInputString(payload.status, "canva export job status"),
     urls: readStringArray(payload.urls),
     errorCode: optionalString(error.code) ?? null,
     errorMessage: optionalString(error.message) ?? null,
@@ -273,8 +372,8 @@ function mapAssetUploadJob(payload: Record<string, unknown>) {
   const error = optionalRecord(payload.error) ?? {};
   const asset = optionalRecord(payload.asset);
   return {
-    id: requireCanvaString(payload.id, "canva asset upload job id"),
-    status: requireCanvaString(payload.status, "canva asset upload job status"),
+    id: requiredInputString(payload.id, "canva asset upload job id"),
+    status: requiredInputString(payload.status, "canva asset upload job status"),
     asset: asset ? mapCanvaAsset(asset) : null,
     errorCode: optionalString(error.code) ?? null,
     errorMessage: optionalString(error.message) ?? null,
@@ -286,7 +385,7 @@ function mapCanvaAsset(payload: Record<string, unknown>) {
   const owner = optionalRecord(payload.owner) ?? {};
   const metadata = optionalRecord(payload.metadata);
   return {
-    id: requireCanvaString(payload.id, "canva asset id"),
+    id: requiredInputString(payload.id, "canva asset id"),
     type: optionalString(payload.type) ?? null,
     name: optionalString(payload.name) ?? null,
     tags: readStringArray(payload.tags),
@@ -307,7 +406,7 @@ function mapImportStatus(value: unknown) {
   if (!payload) return null;
   const error = optionalRecord(payload.error) ?? {};
   return {
-    state: requireCanvaString(payload.state, "canva import status state"),
+    state: requiredInputString(payload.state, "canva import status state"),
     errorCode: optionalString(error.code) ?? null,
     errorMessage: optionalString(error.message) ?? null,
   };
@@ -324,17 +423,17 @@ function mapAssetMetadata(payload: Record<string, unknown>) {
 }
 
 function mapFolderItem(payload: Record<string, unknown>) {
-  const type = requireCanvaString(payload.type, "canva folder item type");
+  const type = requiredInputString(payload.type, "canva folder item type");
   if (type === "folder") {
-    const folder = mapCanvaFolder(requiredRecord(payload.folder, "folder", requestError));
+    const folder = mapCanvaFolder(requiredRecord(payload.folder, "folder", providerInputError));
     return { type, ...folder };
   }
   if (type === "design") {
-    const design = requiredRecord(payload.design, "design", requestError);
+    const design = requiredRecord(payload.design, "design", providerInputError);
     const thumbnail = optionalRecord(design.thumbnail) ?? {};
     return {
       type,
-      id: requireCanvaString(design.id, "canva folder design id"),
+      id: requiredInputString(design.id, "canva folder design id"),
       name: null,
       title: optionalString(design.title) ?? null,
       url: optionalString(design.url) ?? null,
@@ -346,12 +445,12 @@ function mapFolderItem(payload: Record<string, unknown>) {
     };
   }
   if (type === "image") {
-    const image = requiredRecord(payload.image, "image", requestError);
+    const image = requiredRecord(payload.image, "image", providerInputError);
     const thumbnail = optionalRecord(image.thumbnail) ?? {};
     const name = optionalString(image.name) ?? null;
     return {
       type,
-      id: requireCanvaString(image.id, "canva folder image id"),
+      id: requiredInputString(image.id, "canva folder image id"),
       name,
       title: name,
       url: null,
@@ -367,7 +466,7 @@ function mapFolderItem(payload: Record<string, unknown>) {
 
 function mapExportFormat(format: Record<string, unknown>) {
   return compactObject({
-    type: requireCanvaString(format.type, "canva export format type"),
+    type: requiredInputString(format.type, "canva export format type"),
     size: optionalString(format.size),
     pages: Array.isArray(format.pages) ? format.pages : undefined,
     export_quality: optionalString(format.exportQuality),
@@ -385,7 +484,7 @@ function mapCreateDesignBody(input: Record<string, unknown>) {
   const type = optionalString(input.type) ?? "type_and_asset";
   if (type === "type_and_asset") {
     const designType = input.designType
-      ? mapDesignType(requiredRecord(input.designType, "designType", requestError))
+      ? mapDesignType(requiredRecord(input.designType, "designType", providerInputError))
       : undefined;
     const assetId = optionalString(input.assetId);
     if (!designType && !assetId)
@@ -400,14 +499,14 @@ function mapCreateDesignBody(input: Record<string, unknown>) {
   if (type === "design") {
     return compactObject({
       type,
-      design_id: requireCanvaString(input.designId, "canva designId"),
+      design_id: requiredInputString(input.designId, "canva designId"),
       page_numbers: Array.isArray(input.pageNumbers) ? input.pageNumbers : undefined,
     });
   }
   if (type === "brand_template") {
     return compactObject({
       type,
-      brand_template_id: requireCanvaString(input.brandTemplateId, "canva brandTemplateId"),
+      brand_template_id: requiredInputString(input.brandTemplateId, "canva brandTemplateId"),
       page_numbers: Array.isArray(input.pageNumbers) ? input.pageNumbers : undefined,
     });
   }
@@ -415,8 +514,8 @@ function mapCreateDesignBody(input: Record<string, unknown>) {
 }
 
 function mapDesignType(input: Record<string, unknown>) {
-  const type = requireCanvaString(input.type, "canva design type");
-  if (type === "preset") return { type, name: requireCanvaString(input.name, "canva preset design type name") };
+  const type = requiredInputString(input.type, "canva design type");
+  if (type === "preset") return { type, name: requiredInputString(input.name, "canva preset design type name") };
   if (type === "custom") return { type, width: input.width, height: input.height };
   throw new ProviderRequestError(400, `unsupported canva design type: ${type}`);
 }
@@ -431,18 +530,6 @@ function optionalStringList(value: unknown) {
 
 function optionalIntegerString(value: unknown) {
   return typeof value === "number" && Number.isInteger(value) ? String(value) : undefined;
-}
-
-function optionalNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function requireCanvaString(value: unknown, fieldName: string) {
-  return requiredString(value, fieldName, requestError);
-}
-
-function requestError(message: string) {
-  return new ProviderRequestError(400, message);
 }
 
 function readObjectArray(value: unknown) {

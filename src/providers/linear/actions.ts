@@ -8,8 +8,8 @@ const service = "linear";
 
 interface LinearActionSource {
   name: LinearActionName;
+  readonly operationType: ActionDefinition["operationType"];
   description: string;
-  effect: ActionDefinition["effect"];
   requiredScopes: string[];
   inputSchema: JsonSchema;
   outputSchema: JsonSchema;
@@ -312,6 +312,13 @@ const actions: LinearActionSource[] = [
       first,
       project_id: stringId,
       assignee_id: stringId,
+      updated_after: s.dateTime(
+        "Only issues updated at or after this ISO 8601 date-time, such as 2026-01-27T15:30:00Z.",
+      ),
+      include_archived: s.boolean({ description: "Include archived issues." }),
+      order_by: s.stringEnum(["createdAt", "updatedAt"], {
+        description: "Field Linear orders the results by. Linear defaults to createdAt.",
+      }),
     }),
     object({ issues: s.array(objectSchema), page_info: pageInfo }),
   ),
@@ -357,7 +364,7 @@ const actions: LinearActionSource[] = [
   ),
   action(
     "remove_issue_label",
-    "write",
+    "destructive",
     "Removes a label from the specified Linear issue.",
     [linearWriteScope],
     input({ issue_id: stringId, label_id: stringId }, ["issue_id", "label_id"]),
@@ -421,7 +428,7 @@ const actions: LinearActionSource[] = [
   ),
   action(
     "update_linear_project",
-    "write",
+    "destructive",
     "Update an existing Linear project.",
     [linearWriteScope],
     input({ project_id: stringId, ...projectUpdateFields() }, ["project_id"]),
@@ -468,8 +475,8 @@ export type LinearActionName =
 export const linearActions: ActionDefinition[] = actions.map((source) =>
   defineProviderAction(service, {
     name: source.name,
+    operationType: source.operationType,
     description: source.description,
-    effect: source.effect,
     requiredScopes: source.requiredScopes,
     inputSchema: source.inputSchema,
     outputSchema: source.outputSchema,
@@ -478,13 +485,13 @@ export const linearActions: ActionDefinition[] = actions.map((source) =>
 
 function action(
   name: LinearActionName,
-  effect: ActionDefinition["effect"],
+  operationType: ActionDefinition["operationType"],
   description: string,
   requiredScopes: string[],
   inputSchema: JsonSchema,
   outputSchema: JsonSchema,
 ): LinearActionSource {
-  return { name, description, effect, requiredScopes, inputSchema, outputSchema };
+  return { name, operationType, description, requiredScopes, inputSchema, outputSchema };
 }
 
 function input(properties: Record<string, JsonSchema>, required: string[] = []): JsonSchema {

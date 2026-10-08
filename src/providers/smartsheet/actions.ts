@@ -135,11 +135,10 @@ const writeResultSchema = s.object("A normalized Smartsheet write result.", {
   raw: s.looseObject("The raw write response returned by Smartsheet."),
 });
 
-export type SmartsheetActionName = "list_sheets" | "get_sheet" | "add_rows" | "update_rows" | "delete_rows";
-
 export const smartsheetActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_sheets",
+    operationType: "read",
     description: "List sheets available to the authenticated Smartsheet access token.",
     inputSchema: s.object(
       "The input payload for listing Smartsheet sheets.",
@@ -158,6 +157,7 @@ export const smartsheetActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_sheet",
+    operationType: "read",
     description: "Get a Smartsheet sheet with columns and rows.",
     inputSchema: s.object(
       "The input payload for getting a Smartsheet sheet.",
@@ -194,6 +194,7 @@ export const smartsheetActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "add_rows",
+    operationType: "write",
     description: "Add one or more rows to a Smartsheet sheet.",
     inputSchema: s.object(
       "The input payload for adding Smartsheet rows.",
@@ -209,6 +210,7 @@ export const smartsheetActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_rows",
+    operationType: "write",
     description: "Update one or more rows in a Smartsheet sheet.",
     inputSchema: s.object(
       "The input payload for updating Smartsheet rows.",
@@ -224,6 +226,7 @@ export const smartsheetActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_rows",
+    operationType: "destructive",
     description: "Delete one or more rows from a Smartsheet sheet.",
     inputSchema: s.object(
       "The input payload for deleting Smartsheet rows.",

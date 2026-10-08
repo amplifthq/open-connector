@@ -4,13 +4,14 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { FreshdeskActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   defineProviderProxy,
   defineProviderExecutors,
+  isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
@@ -37,7 +38,7 @@ interface FreshdeskRequestInput {
 
 type FreshdeskActionHandler = (input: Record<string, unknown>, context: FreshdeskActionContext) => Promise<unknown>;
 
-export const freshdeskActionHandlers: Record<FreshdeskActionName, FreshdeskActionHandler> = {
+export const freshdeskActionHandlers: ProviderActionHandlers<"freshdesk", FreshdeskActionHandler> = {
   async get_account(_input, context) {
     return {
       account: await requestFreshdeskJson({
@@ -370,10 +371,6 @@ function isFreshdeskSubdomain(value: string): boolean {
 
 function buildFreshdeskAuthorizationHeader(apiKey: string): string {
   return `Basic ${Buffer.from(`${apiKey}:X`).toString("base64")}`;
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && "name" in error && error.name === "AbortError";
 }
 
 function trimTrailingSlash(value: string): string {

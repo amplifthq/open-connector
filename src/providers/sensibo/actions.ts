@@ -137,11 +137,10 @@ const acStateHistoryEntrySchema = s.object(
   { optional: ["status", "reason", "changedProperties", "time"] },
 );
 
-export type SensiboActionName = "list_devices" | "get_device" | "get_ac_states" | "set_ac_state";
-
 export const sensiboActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_devices",
+    operationType: "read",
     description: "List Sensibo devices linked to the authenticated user.",
     inputSchema: s.actionInput(
       {
@@ -159,6 +158,7 @@ export const sensiboActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_device",
+    operationType: "read",
     description: "Get detailed information for one Sensibo device.",
     inputSchema: s.actionInput(
       {
@@ -177,6 +177,7 @@ export const sensiboActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_ac_states",
+    operationType: "read",
     description: "Get current and previous AC states for one Sensibo device.",
     inputSchema: s.actionInput(
       {
@@ -195,6 +196,7 @@ export const sensiboActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "set_ac_state",
+    operationType: "write",
     description: "Set the full AC state for one Sensibo device.",
     inputSchema: s.actionInput(
       {

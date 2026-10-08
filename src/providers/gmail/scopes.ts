@@ -12,4 +12,14 @@ export const gmailSendScopes: string[] = [gmailSendScope];
 export const gmailLabelScopes: string[] = [gmailLabelsScope];
 export const gmailSettingsBasicScopes: string[] = [gmailSettingsBasicScope];
 
+/** Preserve the existing read-only service-account and default user grants. */
 export const gmailOAuthScopes: string[] = [gmailReadonlyScope];
+export const gmailAuthorizableScopes: string[] = gmailOAuthScopes;
+/** Additional user permissions require an explicit requestedScopes selection. */
+export const gmailOptionalScopes: string[] = [
+  gmailModifyScope,
+  gmailLabelsScope,
+  gmailSettingsBasicScope,
+  gmailComposeScope,
+  gmailSendScope,
+];

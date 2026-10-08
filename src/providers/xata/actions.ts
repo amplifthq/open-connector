@@ -122,18 +122,10 @@ const branchInputSchema = s.object(
   { required: ["organizationID", "projectID", "branchID"] },
 );
 
-export type XataActionName =
-  | "list_organizations"
-  | "get_organization"
-  | "list_projects"
-  | "get_project"
-  | "list_branches"
-  | "get_branch"
-  | "list_available_regions";
-
 export const xataActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_organizations",
+    operationType: "read",
     description: "List Xata organizations available to the authenticated API key.",
     inputSchema: s.object("The input payload for listing Xata organizations.", {}, { required: [] }),
     outputSchema: s.object(
@@ -144,6 +136,7 @@ export const xataActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_organization",
+    operationType: "read",
     description: "Get details for a Xata organization by organizationID.",
     inputSchema: organizationInputSchema,
     outputSchema: s.object(
@@ -154,6 +147,7 @@ export const xataActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_projects",
+    operationType: "read",
     description: "List Xata projects within an organization.",
     inputSchema: organizationInputSchema,
     outputSchema: s.object(
@@ -164,6 +158,7 @@ export const xataActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_project",
+    operationType: "read",
     description: "Get details for a Xata project by organizationID and projectID.",
     inputSchema: projectInputSchema,
     outputSchema: s.object(
@@ -174,6 +169,7 @@ export const xataActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_branches",
+    operationType: "read",
     description: "List Xata branches within a project.",
     inputSchema: projectInputSchema,
     outputSchema: s.object(
@@ -184,6 +180,7 @@ export const xataActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_branch",
+    operationType: "read",
     description: "Get details for a Xata branch by organizationID, projectID, and branchID.",
     inputSchema: branchInputSchema,
     outputSchema: s.object(
@@ -194,6 +191,7 @@ export const xataActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_available_regions",
+    operationType: "read",
     description: "List Xata regions where new branches can be deployed for an organization.",
     inputSchema: organizationInputSchema,
     outputSchema: s.object(

@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { EasypostActionName } from "./actions.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -12,8 +12,6 @@ import {
 } from "../provider-runtime.ts";
 
 export const easypostApiBaseUrl = "https://api.easypost.com/v2";
-
-const easypostDefaultRequestTimeoutMs = 30_000;
 
 type EasypostPhase = "validate" | "execute";
 type EasypostContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
@@ -28,7 +26,7 @@ interface EasypostRequest {
   phase: EasypostPhase;
 }
 
-export const easypostActionHandlers: Record<EasypostActionName, EasypostActionHandler> = {
+export const easypostActionHandlers: ProviderActionHandlers<"easypost", EasypostActionHandler> = {
   async create_address(input, context) {
     const payload = await requestEasypost({
       method: "POST",
@@ -132,7 +130,7 @@ async function requestEasypost(request: EasypostRequest): Promise<unknown> {
     }
   }
 
-  const timeout = createProviderTimeout(request.context.signal, easypostDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(request.context.signal);
   try {
     const response = await request.context.fetcher(url.toString(), {
       method: request.method,

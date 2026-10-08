@@ -4,8 +4,11 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { IntegrationDefinition } from "../../triggers/common/integration.ts";
+import type { PollDefinition } from "../../triggers/common/poll.ts";
 
 import {
+  basicAuthorizationHeader,
   createProviderProxyUrl,
   defineProviderExecutors,
   normalizeProviderProxyHeaders,
@@ -19,6 +22,7 @@ import {
   toProviderProxyError,
 } from "../provider-runtime.ts";
 import { validateZendeskCredential, zendeskActionHandlers } from "./runtime.ts";
+import { zendeskEvent } from "./trigger-on-event.ts";
 
 const service = "zendesk";
 
@@ -110,7 +114,7 @@ function buildProxyAuthorization(credential: Awaited<ReturnType<ExecutionContext
       credential.values.email ?? stringMetadata(credential.metadata.email),
       "Zendesk email is required",
     );
-    return `Basic ${btoa(`${email}/token:${credential.apiKey}`)}`;
+    return basicAuthorizationHeader(`${email}/token:${credential.apiKey}`);
   }
   throw new ProviderRequestError(401, "Configure zendesk credentials first.");
 }
@@ -165,3 +169,5 @@ function normalizeZendeskSubdomain(raw: string): string {
   }
   return subdomain;
 }
+
+export const triggers: readonly (IntegrationDefinition | PollDefinition)[] = [zendeskEvent];

@@ -4,28 +4,20 @@ import type {
   ExecutionContext,
   ProviderExecutors,
   ProviderProxyExecutor,
-  ProxyExecutionResult,
 } from "../../core/types.ts";
-import type { SalesmateActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
-  createProviderProxyUrl,
-  createProviderTimeout,
   defineProviderExecutors,
-  isAbortLikeError,
-  normalizeProviderProxyHeaders,
-  providerFetch,
+  defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
-  readProviderProxyErrorMessage,
-  readProviderProxyResponse,
   requireApiKeyCredential,
-  toProviderProxyError,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 const service = "salesmate";
-const salesmateDefaultRequestTimeoutMs = 30_000;
 
 type SalesmatePhase = "validate" | "execute";
 type SalesmateMethod = "GET" | "POST" | "DELETE";
@@ -45,7 +37,7 @@ interface SalesmateRequestInput {
   phase: SalesmatePhase;
 }
 
-export const salesmateActionHandlers: Record<SalesmateActionName, SalesmateActionHandler> = {
+export const salesmateActionHandlers: ProviderActionHandlers<"salesmate", SalesmateActionHandler> = {
   async create_company(input, context) {
     const payload = await requestSalesmateJson(
       { method: "POST", path: "/apis/company/v4", body: buildBodyWithCustomFields(input), phase: "execute" },
@@ -112,41 +104,23 @@ export const credentialValidators: CredentialValidators = {
   },
 };
 
-export const proxy: ProviderProxyExecutor = async (input, context): Promise<ProxyExecutionResult> => {
-  try {
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: async (context) => {
     const credential = await requireApiKeyCredential(context, service);
-    const linkName = readStoredLinkName(credential.values, credential.metadata);
-    const url = createProviderProxyUrl(salesmateApiBaseUrl(linkName), input.endpoint, input.query);
-    const headers = normalizeProviderProxyHeaders(input.headers);
+    return salesmateApiBaseUrl(readStoredLinkName(credential.values, credential.metadata));
+  },
+  auth: { type: "api_key_header", name: "accessToken" },
+  customizeRequest({ headers, credential }) {
     if (!headers.has("accept")) {
       headers.set("accept", "application/json");
     }
-    headers.set("user-agent", providerUserAgent);
-    headers.set("accessToken", credential.apiKey);
-    headers.set("x-linkname", normalizeSalesmateLinkName(linkName));
-
-    const init: RequestInit = {
-      method: input.method,
-      headers,
-      signal: context.signal,
-    };
-    if (input.body !== undefined) {
-      init.body = typeof input.body === "string" ? input.body : JSON.stringify(input.body);
-      if (!headers.has("content-type") && typeof input.body !== "string") {
-        headers.set("content-type", "application/json");
-      }
+    if (credential?.authType !== "api_key") {
+      return;
     }
-
-    const response = await providerFetch(url, init);
-    if (!response.ok) {
-      const text = await readProviderProxyErrorMessage(response, "");
-      throw new ProviderRequestError(response.status, text || `provider request failed with HTTP ${response.status}`);
-    }
-    return { ok: true, response: await readProviderProxyResponse(response) };
-  } catch (error) {
-    return toProviderProxyError(error, "provider request failed");
-  }
-};
+    headers.set("x-linkname", readStoredLinkName(credential.values, credential.metadata));
+  },
+});
 
 async function validateSalesmateCredential(
   apiKey: string,
@@ -190,30 +164,19 @@ async function requestSalesmateJson(
   input: SalesmateRequestInput,
   context: SalesmateRequestContext,
 ): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(context.signal, salesmateDefaultRequestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: context.signal, label: "Salesmate" }, async (signal) => {
     const response = await context.fetcher(buildSalesmateUrl(input, context.linkName), {
       method: input.method,
       headers: buildSalesmateHeaders(context, Boolean(input.body)),
       body: input.body ? JSON.stringify(compactObject(input.body)) : undefined,
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readSalesmatePayload(response);
     if (!response.ok) throw createSalesmateError(response.status, payload, input.phase);
     const payloadObject = optionalRecord(payload);
     if (!payloadObject) throw new ProviderRequestError(502, "Salesmate returned an invalid payload");
     return payloadObject;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) throw error;
-    if (timeout.didTimeout() || isAbortLikeError(error))
-      throw new ProviderRequestError(504, "Salesmate request timed out");
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Salesmate request failed: ${error.message}` : "Salesmate request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildSalesmateUrl(input: SalesmateRequestInput, linkName: string): URL {

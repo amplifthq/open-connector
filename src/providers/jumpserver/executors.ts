@@ -3,11 +3,18 @@ import type {
   CredentialValidators,
   ExecutionContext,
   ProviderExecutors,
+  ProviderProxyExecutor,
 } from "../../core/types.ts";
 import type { JumpServerMcpContext } from "./runtime.ts";
 
 import { isPrivateNetworkAccessAllowed } from "../../core/request.ts";
-import { createProviderFetch, defineProviderExecutors, requireCustomCredential } from "../provider-runtime.ts";
+import {
+  createProviderFetch,
+  defineProviderExecutors,
+  defineProviderProxy,
+  mapProviderActionNames,
+  requireCustomCredential,
+} from "../provider-runtime.ts";
 import { jumpServerMcpToolNames } from "./actions.ts";
 
 const service = "jumpserver";
@@ -22,11 +29,13 @@ function loadJumpServerRuntime(): Promise<JumpServerRuntime> {
   return runtimeModule;
 }
 
-const handlers: Record<string, JumpServerActionHandler> = {};
-for (const toolName of jumpServerMcpToolNames) {
-  handlers[toolName] = async (input: Record<string, unknown>, context: JumpServerMcpContext): Promise<unknown> =>
-    (await loadJumpServerRuntime()).jumpServerActionHandlers[toolName](input, context);
-}
+const handlers = mapProviderActionNames(
+  service,
+  jumpServerMcpToolNames,
+  (toolName): JumpServerActionHandler =>
+    async (input, context) =>
+      (await loadJumpServerRuntime()).jumpServerActionHandlers[toolName](input, context),
+);
 
 export const executors: ProviderExecutors = defineProviderExecutors<JumpServerMcpContext>({
   service,
@@ -37,6 +46,24 @@ export const executors: ProviderExecutors = defineProviderExecutors<JumpServerMc
   },
   fallbackMessage: "JumpServer MCP request failed",
   allowPrivateNetwork: isPrivateNetworkAccessAllowed,
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  async baseUrl(context) {
+    const credential = await requireCustomCredential(context, service);
+    return (await loadJumpServerRuntime()).normalizeJumpServerMcpEndpoint(credential.metadata.mcpEndpoint).toString();
+  },
+  auth: {
+    type: "custom_credential_header",
+    field: "token",
+    name: "authorization",
+    prefix: "Bearer ",
+  },
+  allowPrivateNetwork: isPrivateNetworkAccessAllowed,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json, text/event-stream");
+  },
 });
 
 export const credentialValidators: CredentialValidators = {

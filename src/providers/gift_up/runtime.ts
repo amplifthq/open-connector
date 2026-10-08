@@ -1,26 +1,19 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { GiftUpActionName } from "./actions.ts";
 
-import {
-  optionalBoolean,
-  optionalInteger,
-  optionalNumber,
-  optionalRecord,
-  optionalString,
-  requiredString,
-} from "../../core/cast.ts";
+import { optionalBoolean, optionalInteger, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import { jsonObject } from "../../core/request.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 export const giftUpApiBaseUrl = "https://api.giftup.app";
 
-const giftUpDefaultRequestTimeoutMs = 30_000;
 const giftUpValidationEndpoint = "/company";
 
 type GiftUpRequestPhase = "validate" | "execute";
@@ -28,7 +21,7 @@ type GiftUpRuntimeContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "
 type GiftUpActionHandler = (input: Record<string, unknown>, context: GiftUpRuntimeContext) => Promise<unknown>;
 type GiftUpQueryValue = string | number | boolean | readonly string[] | undefined;
 
-export const giftUpActionHandlers: Record<GiftUpActionName, GiftUpActionHandler> = {
+export const giftUpActionHandlers: ProviderActionHandlers<"gift_up", GiftUpActionHandler> = {
   get_company(_input, context) {
     return getCompany(context);
   },
@@ -133,14 +126,14 @@ async function listGiftCards(input: Record<string, unknown>, context: GiftUpRunt
     method: "GET",
     path: "/gift-cards",
     query: giftUpQuery({
-      status: readOptionalString(input.status),
-      createdOnOrAfter: readOptionalString(input.createdOnOrAfter),
-      updatedOnOrAfter: readOptionalString(input.updatedOnOrAfter),
-      orderId: readOptionalString(input.orderId),
-      sku: readOptionalString(input.sku),
-      recipientEmail: readOptionalString(input.recipientEmail),
-      purchaserEmail: readOptionalString(input.purchaserEmail),
-      paymentTransactionId: readOptionalString(input.paymentTransactionId),
+      status: optionalString(input.status),
+      createdOnOrAfter: optionalString(input.createdOnOrAfter),
+      updatedOnOrAfter: optionalString(input.updatedOnOrAfter),
+      orderId: optionalString(input.orderId),
+      sku: optionalString(input.sku),
+      recipientEmail: optionalString(input.recipientEmail),
+      purchaserEmail: optionalString(input.purchaserEmail),
+      paymentTransactionId: optionalString(input.paymentTransactionId),
       limit: readOptionalInteger(input.limit),
       offset: readOptionalInteger(input.offset),
     }),
@@ -155,7 +148,7 @@ async function listGiftCards(input: Record<string, unknown>, context: GiftUpRunt
 }
 
 async function getGiftCard(input: Record<string, unknown>, context: GiftUpRuntimeContext): Promise<unknown> {
-  const code = readRequiredString(input.code, "code");
+  const code = requiredInputString(input.code, "code");
   return {
     giftCard: normalizeGiftCard(
       await requestGiftUpJson({
@@ -173,7 +166,7 @@ async function giftCardEvent(
   context: GiftUpRuntimeContext,
   event: "reactivate" | "void",
 ): Promise<unknown> {
-  const code = readRequiredString(input.code, "code");
+  const code = requiredInputString(input.code, "code");
   const payload = await requestGiftUpJson({
     context,
     method: "POST",
@@ -192,7 +185,7 @@ async function giftCardBalanceOperation(
   context: GiftUpRuntimeContext,
   operation: "top-up" | "redeem",
 ): Promise<unknown> {
-  const code = readRequiredString(input.code, "code");
+  const code = requiredInputString(input.code, "code");
   return normalizeTransactionResult(
     await requestGiftUpJson({
       context,
@@ -205,7 +198,7 @@ async function giftCardBalanceOperation(
 }
 
 async function redeemGiftCardInFull(input: Record<string, unknown>, context: GiftUpRuntimeContext): Promise<unknown> {
-  const code = readRequiredString(input.code, "code");
+  const code = requiredInputString(input.code, "code");
   return normalizeTransactionResult(
     await requestGiftUpJson({
       context,
@@ -218,14 +211,14 @@ async function redeemGiftCardInFull(input: Record<string, unknown>, context: Gif
 }
 
 async function undoGiftCardRedemption(input: Record<string, unknown>, context: GiftUpRuntimeContext): Promise<unknown> {
-  const code = readRequiredString(input.code, "code");
+  const code = requiredInputString(input.code, "code");
   return normalizeTransactionResult(
     await requestGiftUpJson({
       context,
       method: "POST",
       path: `/gift-cards/${encodeURIComponent(code)}/undo-redemption`,
       body: {
-        transactionId: readRequiredString(input.transactionId, "transactionId"),
+        transactionId: requiredInputString(input.transactionId, "transactionId"),
         ...eventBody(input),
       },
       phase: "execute",
@@ -238,7 +231,7 @@ async function listItems(input: Record<string, unknown>, context: GiftUpRuntimeC
     context,
     method: "GET",
     path: "/items",
-    query: giftUpQuery({ groupId: readOptionalString(input.groupId) }),
+    query: giftUpQuery({ groupId: optionalString(input.groupId) }),
     phase: "execute",
   });
   return {
@@ -248,7 +241,7 @@ async function listItems(input: Record<string, unknown>, context: GiftUpRuntimeC
 }
 
 async function getItem(input: Record<string, unknown>, context: GiftUpRuntimeContext): Promise<unknown> {
-  const id = readRequiredString(input.id, "id");
+  const id = requiredInputString(input.id, "id");
   return {
     item: normalizeItem(
       await requestGiftUpJson({
@@ -267,9 +260,9 @@ async function listOrders(input: Record<string, unknown>, context: GiftUpRuntime
     method: "GET",
     path: "/orders",
     query: giftUpQuery({
-      createdOnOrAfter: readOptionalString(input.createdOnOrAfter),
-      purchaserEmail: readOptionalString(input.purchaserEmail),
-      source: readOptionalString(input.source),
+      createdOnOrAfter: optionalString(input.createdOnOrAfter),
+      purchaserEmail: optionalString(input.purchaserEmail),
+      source: optionalString(input.source),
       limit: readOptionalInteger(input.limit),
       offset: readOptionalInteger(input.offset),
     }),
@@ -284,7 +277,7 @@ async function listOrders(input: Record<string, unknown>, context: GiftUpRuntime
 }
 
 async function getOrder(input: Record<string, unknown>, context: GiftUpRuntimeContext): Promise<unknown> {
-  const id = readRequiredString(input.id, "id");
+  const id = requiredInputString(input.id, "id");
   return {
     order: normalizeOrder(
       await requestGiftUpJson({
@@ -329,12 +322,12 @@ async function listReportTransactions(input: Record<string, unknown>, context: G
     method: "GET",
     path: "/reports/transactions",
     query: giftUpQuery({
-      eventOccurredOnOrAfter: readOptionalString(input.eventOccurredOnOrAfter),
-      eventOccurredOnOrBefore: readOptionalString(input.eventOccurredOnOrBefore),
+      eventOccurredOnOrAfter: optionalString(input.eventOccurredOnOrAfter),
+      eventOccurredOnOrBefore: optionalString(input.eventOccurredOnOrBefore),
       events: readOptionalStringArray(input.events),
       users: readOptionalStringArray(input.users),
       locations: readOptionalStringArray(input.locations),
-      code: readOptionalString(input.code),
+      code: optionalString(input.code),
       limit: readOptionalInteger(input.limit),
       offset: readOptionalInteger(input.offset),
     }),
@@ -349,7 +342,7 @@ async function listReportTransactions(input: Record<string, unknown>, context: G
 }
 
 async function getReportTransaction(input: Record<string, unknown>, context: GiftUpRuntimeContext): Promise<unknown> {
-  const id = readRequiredString(input.id, "id");
+  const id = requiredInputString(input.id, "id");
   return {
     transaction: normalizeTransaction(
       await requestGiftUpJson({
@@ -370,7 +363,7 @@ async function requestGiftUpJson(input: {
   query?: Record<string, GiftUpQueryValue>;
   body?: Record<string, unknown>;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, giftUpDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
 
   try {
     const response = await input.context.fetcher(buildGiftUpUrl(input.path, input.query), {
@@ -504,8 +497,8 @@ function extractGiftUpErrorMessage(payload: unknown): string | undefined {
 
 function eventBody(input: Record<string, unknown>): Record<string, unknown> {
   return jsonObject({
-    reason: readOptionalString(input.reason),
-    locationId: readOptionalString(input.locationId),
+    reason: optionalString(input.reason),
+    locationId: optionalString(input.locationId),
     metadata: optionalRecord(input.metadata),
   });
 }
@@ -513,7 +506,7 @@ function eventBody(input: Record<string, unknown>): Record<string, unknown> {
 function redemptionEventBody(input: Record<string, unknown>): Record<string, unknown> {
   return jsonObject({
     ...eventBody(input),
-    redeemedOn: readOptionalString(input.redeemedOn),
+    redeemedOn: optionalString(input.redeemedOn),
   });
 }
 
@@ -522,10 +515,10 @@ function balanceOperationBody(
   options: { includeRedeemedOn: boolean },
 ): Record<string, unknown> {
   return jsonObject({
-    amount: readOptionalNumber(input.amount),
+    amount: optionalNumber(input.amount),
     units: readOptionalInteger(input.units),
     ...eventBody(input),
-    redeemedOn: options.includeRedeemedOn ? readOptionalString(input.redeemedOn) : undefined,
+    redeemedOn: options.includeRedeemedOn ? optionalString(input.redeemedOn) : undefined,
   });
 }
 
@@ -738,18 +731,6 @@ function normalizeStringArray(value: unknown): string[] {
   }
 
   return value.flatMap((item) => (typeof item === "string" ? [item] : []));
-}
-
-function readRequiredString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
-function readOptionalString(value: unknown): string | undefined {
-  return optionalString(value);
-}
-
-function readOptionalNumber(value: unknown): number | undefined {
-  return optionalNumber(value);
 }
 
 function readOptionalInteger(value: unknown): number | undefined {

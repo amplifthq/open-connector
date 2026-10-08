@@ -1,18 +1,24 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { NorthflankActionName } from "./actions.ts";
 
 import {
   compactObject,
   objectArray,
   optionalInteger,
+  optionalRawString,
   optionalRecord,
   optionalString,
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  providerInputError,
+  providerResponseError,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 export const northflankApiBaseUrl = "https://api.northflank.com";
 
@@ -23,7 +29,10 @@ interface NorthflankRequestInput {
   query?: Array<[string, QueryValue]>;
 }
 
-export const northflankActionHandlers: Record<NorthflankActionName, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const northflankActionHandlers: ProviderActionHandlers<
+  "northflank",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   list_projects(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
     return executeListProjects(input, context);
   },
@@ -43,7 +52,7 @@ export async function validateNorthflankCredential(
   fetcher: ProviderFetch,
   signal?: AbortSignal,
 ): Promise<CredentialValidationResult> {
-  const token = requiredString(apiKey, "apiKey", invalidInput);
+  const token = requiredString(apiKey, "apiKey", providerInputError);
   const payload = await northflankRequest(
     {
       path: "/v1/projects",
@@ -57,9 +66,9 @@ export async function validateNorthflankCredential(
   );
 
   const projects = objectArray(
-    requiredRecord(payload.data, "data", providerResponse).projects,
+    requiredRecord(payload.data, "data", providerResponseError).projects,
     "projects",
-    providerResponse,
+    providerResponseError,
   );
 
   return {
@@ -89,9 +98,9 @@ async function executeListProjects(
     context,
   );
 
-  const data = requiredRecord(payload.data, "data", providerResponse);
+  const data = requiredRecord(payload.data, "data", providerResponseError);
   return {
-    projects: objectArray(data.projects, "data.projects", providerResponse).map(normalizeProjectSummary),
+    projects: objectArray(data.projects, "data.projects", providerResponseError).map(normalizeProjectSummary),
     pagination: normalizePagination(payload.pagination),
   };
 }
@@ -100,7 +109,7 @@ async function executeGetProject(
   input: Record<string, unknown>,
   context: ApiKeyProviderContext,
 ): Promise<Record<string, unknown>> {
-  const projectId = requiredString(input.projectId, "projectId", invalidInput);
+  const projectId = requiredString(input.projectId, "projectId", providerInputError);
   const payload = await northflankRequest(
     {
       path: `/v1/projects/${encodePathSegment(projectId)}`,
@@ -109,7 +118,7 @@ async function executeGetProject(
   );
 
   return {
-    project: normalizeProjectDetail(requiredRecord(payload.data, "data", providerResponse)),
+    project: normalizeProjectDetail(requiredRecord(payload.data, "data", providerResponseError)),
   };
 }
 
@@ -117,7 +126,7 @@ async function executeListServices(
   input: Record<string, unknown>,
   context: ApiKeyProviderContext,
 ): Promise<Record<string, unknown>> {
-  const projectId = requiredString(input.projectId, "projectId", invalidInput);
+  const projectId = requiredString(input.projectId, "projectId", providerInputError);
   const payload = await northflankRequest(
     {
       path: `/v1/projects/${encodePathSegment(projectId)}/services`,
@@ -126,9 +135,9 @@ async function executeListServices(
     context,
   );
 
-  const data = requiredRecord(payload.data, "data", providerResponse);
+  const data = requiredRecord(payload.data, "data", providerResponseError);
   return {
-    services: objectArray(data.services, "data.services", providerResponse).map(normalizeServiceSummary),
+    services: objectArray(data.services, "data.services", providerResponseError).map(normalizeServiceSummary),
     pagination: normalizePagination(payload.pagination),
   };
 }
@@ -137,8 +146,8 @@ async function executeGetService(
   input: Record<string, unknown>,
   context: ApiKeyProviderContext,
 ): Promise<Record<string, unknown>> {
-  const projectId = requiredString(input.projectId, "projectId", invalidInput);
-  const serviceId = requiredString(input.serviceId, "serviceId", invalidInput);
+  const projectId = requiredString(input.projectId, "projectId", providerInputError);
+  const serviceId = requiredString(input.serviceId, "serviceId", providerInputError);
   const payload = await northflankRequest(
     {
       path: `/v1/projects/${encodePathSegment(projectId)}/services/${encodePathSegment(serviceId)}`,
@@ -147,7 +156,7 @@ async function executeGetService(
   );
 
   return {
-    service: normalizeServiceDetail(requiredRecord(payload.data, "data", providerResponse)),
+    service: normalizeServiceDetail(requiredRecord(payload.data, "data", providerResponseError)),
   };
 }
 
@@ -181,7 +190,7 @@ async function northflankRequest(
     throw createNorthflankError(response.status, payload);
   }
 
-  return requiredRecord(payload, "payload", providerResponse);
+  return requiredRecord(payload, "payload", providerResponseError);
 }
 
 function buildNorthflankUrl(input: NorthflankRequestInput): URL {
@@ -220,33 +229,33 @@ function readPaginationQuery(input: Record<string, unknown>): Array<[string, Que
 
 function normalizeProjectSummary(value: Record<string, unknown>): Record<string, unknown> {
   return {
-    id: requiredString(value.id, "project.id", providerResponse),
-    name: requiredString(value.name, "project.name", providerResponse),
+    id: requiredString(value.id, "project.id", providerResponseError),
+    name: requiredString(value.name, "project.name", providerResponseError),
     ...compactObject({
-      description: readOptionalRawString(value.description),
+      description: optionalRawString(value.description),
     }),
   };
 }
 
 function normalizeServiceSummary(value: Record<string, unknown>): Record<string, unknown> {
   return {
-    id: requiredString(value.id, "service.id", providerResponse),
-    appId: requiredString(value.appId, "service.appId", providerResponse),
-    projectId: requiredString(value.projectId, "service.projectId", providerResponse),
-    name: requiredString(value.name, "service.name", providerResponse),
+    id: requiredString(value.id, "service.id", providerResponseError),
+    appId: requiredString(value.appId, "service.appId", providerResponseError),
+    projectId: requiredString(value.projectId, "service.projectId", providerResponseError),
+    name: requiredString(value.name, "service.name", providerResponseError),
     serviceType: readRequiredServiceType(value.serviceType, "service.serviceType"),
     disabledCI: readRequiredBoolean(value.disabledCI, "service.disabledCI"),
     disabledCD: readRequiredBoolean(value.disabledCD, "service.disabledCD"),
     ...compactObject({
       tags: Array.isArray(value.tags) ? value.tags.map((item) => String(item).trim()) : undefined,
-      description: readOptionalRawString(value.description),
+      description: optionalRawString(value.description),
       status: normalizeStatus(value.status),
     }),
   };
 }
 
 function normalizePagination(value: unknown): Record<string, unknown> {
-  const pagination = requiredRecord(value, "pagination", providerResponse);
+  const pagination = requiredRecord(value, "pagination", providerResponseError);
   return {
     hasNextPage: readRequiredBoolean(pagination.hasNextPage, "pagination.hasNextPage"),
     ...compactObject({
@@ -259,18 +268,18 @@ function normalizePagination(value: unknown): Record<string, unknown> {
 function normalizeProjectDetail(value: Record<string, unknown>): Record<string, unknown> {
   return {
     ...value,
-    id: requiredString(value.id, "project.id", providerResponse),
-    name: requiredString(value.name, "project.name", providerResponse),
+    id: requiredString(value.id, "project.id", providerResponseError),
+    name: requiredString(value.name, "project.name", providerResponseError),
     ...compactObject({
       deployment: normalizeDeployment(value.deployment),
       services: Array.isArray(value.services)
-        ? objectArray(value.services, "project.services", providerResponse).map(normalizeProjectServiceSummary)
+        ? objectArray(value.services, "project.services", providerResponseError).map(normalizeProjectServiceSummary)
         : undefined,
       jobs: Array.isArray(value.jobs)
-        ? objectArray(value.jobs, "project.jobs", providerResponse).map(normalizeJobSummary)
+        ? objectArray(value.jobs, "project.jobs", providerResponseError).map(normalizeJobSummary)
         : undefined,
       addons: Array.isArray(value.addons)
-        ? objectArray(value.addons, "project.addons", providerResponse).map(normalizeAddonSummary)
+        ? objectArray(value.addons, "project.addons", providerResponseError).map(normalizeAddonSummary)
         : undefined,
     }),
   };
@@ -279,38 +288,38 @@ function normalizeProjectDetail(value: Record<string, unknown>): Record<string, 
 function normalizeProjectServiceSummary(value: Record<string, unknown>): Record<string, unknown> {
   return {
     ...value,
-    id: requiredString(value.id, "project.service.id", providerResponse),
-    appId: requiredString(value.appId, "project.service.appId", providerResponse),
-    name: requiredString(value.name, "project.service.name", providerResponse),
+    id: requiredString(value.id, "project.service.id", providerResponseError),
+    appId: requiredString(value.appId, "project.service.appId", providerResponseError),
+    name: requiredString(value.name, "project.service.name", providerResponseError),
   };
 }
 
 function normalizeJobSummary(value: Record<string, unknown>): Record<string, unknown> {
   return {
     ...value,
-    id: requiredString(value.id, "project.job.id", providerResponse),
-    appId: requiredString(value.appId, "project.job.appId", providerResponse),
-    name: requiredString(value.name, "project.job.name", providerResponse),
-    jobType: requiredString(value.jobType, "project.job.jobType", providerResponse),
+    id: requiredString(value.id, "project.job.id", providerResponseError),
+    appId: requiredString(value.appId, "project.job.appId", providerResponseError),
+    name: requiredString(value.name, "project.job.name", providerResponseError),
+    jobType: requiredString(value.jobType, "project.job.jobType", providerResponseError),
   };
 }
 
 function normalizeAddonSummary(value: Record<string, unknown>): Record<string, unknown> {
   return {
     ...value,
-    id: requiredString(value.id, "project.addon.id", providerResponse),
-    appId: requiredString(value.appId, "project.addon.appId", providerResponse),
-    name: requiredString(value.name, "project.addon.name", providerResponse),
+    id: requiredString(value.id, "project.addon.id", providerResponseError),
+    appId: requiredString(value.appId, "project.addon.appId", providerResponseError),
+    name: requiredString(value.name, "project.addon.name", providerResponseError),
   };
 }
 
 function normalizeServiceDetail(value: Record<string, unknown>): Record<string, unknown> {
   return {
     ...value,
-    id: requiredString(value.id, "service.id", providerResponse),
-    appId: requiredString(value.appId, "service.appId", providerResponse),
-    name: requiredString(value.name, "service.name", providerResponse),
-    projectId: requiredString(value.projectId, "service.projectId", providerResponse),
+    id: requiredString(value.id, "service.id", providerResponseError),
+    appId: requiredString(value.appId, "service.appId", providerResponseError),
+    name: requiredString(value.name, "service.name", providerResponseError),
+    projectId: requiredString(value.projectId, "service.projectId", providerResponseError),
     serviceType: readRequiredServiceType(value.serviceType, "service.serviceType"),
     ...compactObject({
       tags: Array.isArray(value.tags) ? value.tags.map((item) => String(item).trim()) : undefined,
@@ -367,25 +376,21 @@ function readOptionalInteger(value: unknown, fieldName: string): number | undefi
   }
   const parsed = optionalInteger(value);
   if (parsed === undefined) {
-    throw invalidInput(`${fieldName} must be an integer`);
+    throw providerInputError(`${fieldName} must be an integer`);
   }
   return parsed;
 }
 
-function readOptionalRawString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
 function readRequiredNumber(value: unknown, fieldName: string): number {
   if (typeof value !== "number") {
-    throw providerResponse(`Northflank response missing ${fieldName}`);
+    throw providerResponseError(`Northflank response missing ${fieldName}`);
   }
   return value;
 }
 
 function readRequiredBoolean(value: unknown, fieldName: string): boolean {
   if (typeof value !== "boolean") {
-    throw providerResponse(`Northflank response missing ${fieldName}`);
+    throw providerResponseError(`Northflank response missing ${fieldName}`);
   }
   return value;
 }
@@ -394,7 +399,7 @@ function readRequiredServiceType(value: unknown, fieldName: string): "combined" 
   if (value === "combined" || value === "build" || value === "deployment") {
     return value;
   }
-  throw providerResponse(`Northflank response missing ${fieldName}`);
+  throw providerResponseError(`Northflank response missing ${fieldName}`);
 }
 
 async function readJsonPayload(response: Response): Promise<unknown> {
@@ -416,7 +421,7 @@ function extractErrorMessage(payload: unknown): string | undefined {
     return undefined;
   }
 
-  const message = readOptionalRawString(record.message) ?? readOptionalRawString(record.error);
+  const message = optionalRawString(record.message) ?? optionalRawString(record.error);
   if (message?.trim()) {
     return message;
   }
@@ -425,7 +430,7 @@ function extractErrorMessage(payload: unknown): string | undefined {
   if (Array.isArray(errors)) {
     const messages = errors
       .map((item) => {
-        const itemMessage = typeof item === "string" ? item : readOptionalRawString(optionalRecord(item)?.message);
+        const itemMessage = typeof item === "string" ? item : optionalRawString(optionalRecord(item)?.message);
         return itemMessage?.trim() ? itemMessage : undefined;
       })
       .filter((item) => item !== undefined);
@@ -436,12 +441,4 @@ function extractErrorMessage(payload: unknown): string | undefined {
   }
 
   return undefined;
-}
-
-function invalidInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerResponse(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

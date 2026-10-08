@@ -1,9 +1,10 @@
 import type { CredentialValidationResult, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProductiveActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
+import { compactObject, looseArray, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   defineProviderExecutors,
+  isAbortLikeError,
   providerFetch,
   ProviderRequestError,
   providerUserAgent,
@@ -19,7 +20,7 @@ type ProductiveActionHandler = (
   context: { apiKey: string; organizationId: string; fetcher: typeof fetch },
 ) => Promise<unknown>;
 
-export const productiveActionHandlers: Record<ProductiveActionName, ProductiveActionHandler> = {
+export const productiveActionHandlers: ProviderActionHandlers<"productive", ProductiveActionHandler> = {
   list_tasks(input, context) {
     return listTasks(input, context);
   },
@@ -61,8 +62,8 @@ export async function validateProductiveCredential(
     profile: {
       accountId: organization.id,
       displayName:
-        readOptionalString(organization.attributes.name) ??
-        readOptionalString(organization.attributes.company_name) ??
+        optionalString(organization.attributes.name) ??
+        optionalString(organization.attributes.company_name) ??
         `Organization ${organization.id}`,
       grantedScopes: [],
     },
@@ -72,38 +73,9 @@ export async function validateProductiveCredential(
       validationEndpoint: "/organization",
       organizationId,
       organizationName:
-        readOptionalString(organization.attributes.name) ?? readOptionalString(organization.attributes.company_name),
+        optionalString(organization.attributes.name) ?? optionalString(organization.attributes.company_name),
     }),
   };
-}
-
-export async function executeProductiveAction(
-  input: {
-    actionName: ProductiveActionName;
-    input: Record<string, unknown>;
-    apiKey?: string;
-    providerMetadata?: Record<string, unknown>;
-    values?: Record<string, string>;
-  },
-  fetcher: typeof fetch,
-): Promise<unknown> {
-  const apiKey = readRequiredApiKey(input.apiKey);
-  const organizationId =
-    readOptionalString(input.values?.organizationId) ?? readOptionalString(input.providerMetadata?.organizationId);
-  if (!organizationId) {
-    throw new ProviderRequestError(400, "organizationId is required");
-  }
-
-  const handler = (productiveActionHandlers as Record<ProductiveActionName, ProductiveActionHandler>)[input.actionName];
-  if (!handler) {
-    throw new ProviderRequestError(400, `unknown productive action: ${String(input.actionName)}`);
-  }
-
-  return handler(input.input, {
-    apiKey,
-    organizationId,
-    fetcher,
-  });
 }
 
 export const executors: ProviderExecutors = defineProviderExecutors({
@@ -129,7 +101,7 @@ async function listTasks(
   });
   return {
     tasks: readDataArray(payload, "tasks").map((item) => normalizeTaskResource(item)),
-    included: readOptionalArray(payload.included),
+    included: looseArray(payload.included),
     links: optionalRecord(payload.links) ?? {},
     meta: optionalRecord(payload.meta) ?? {},
   };
@@ -141,12 +113,12 @@ async function getTask(
 ) {
   const taskId = readRequiredString(input.taskId, "taskId");
   const path = buildPathWithQuery(`tasks/${encodeURIComponent(taskId)}`, {
-    include: readOptionalString(input.include),
+    include: optionalString(input.include),
   });
   const payload = await productiveGetJson(path, context, context.fetcher, { phase: "execute" });
   return {
     task: normalizeTaskResource(readDataResource(payload, "task")),
-    included: readOptionalArray(payload.included),
+    included: looseArray(payload.included),
   };
 }
 
@@ -172,7 +144,7 @@ async function createTask(
   );
   return {
     task: normalizeTaskResource(readDataResource(payload, "task")),
-    included: readOptionalArray(payload.included),
+    included: looseArray(payload.included),
   };
 }
 
@@ -200,7 +172,7 @@ async function updateTask(
   );
   return {
     task: normalizeTaskResource(readDataResource(payload, "task")),
-    included: readOptionalArray(payload.included),
+    included: looseArray(payload.included),
   };
 }
 
@@ -213,7 +185,7 @@ async function listTimeEntries(
   });
   return {
     timeEntries: readDataArray(payload, "time_entries").map((item) => normalizeTimeEntryResource(item)),
-    included: readOptionalArray(payload.included),
+    included: looseArray(payload.included),
     links: optionalRecord(payload.links) ?? {},
     meta: optionalRecord(payload.meta) ?? {},
   };
@@ -247,7 +219,7 @@ async function createTimeEntry(
   );
   return {
     timeEntry: normalizeTimeEntryResource(readDataResource(payload, "time_entry")),
-    included: readOptionalArray(payload.included),
+    included: looseArray(payload.included),
   };
 }
 
@@ -276,7 +248,7 @@ async function updateTimeEntry(
   );
   return {
     timeEntry: normalizeTimeEntryResource(readDataResource(payload, "time_entry")),
-    included: readOptionalArray(payload.included),
+    included: looseArray(payload.included),
   };
 }
 
@@ -299,8 +271,8 @@ function buildListPath(resource: string, input: Record<string, unknown>) {
   const query: Record<string, string | number | boolean | undefined> = {
     "page[number]": input.pageNumber as number | undefined,
     "page[size]": input.pageSize as number | undefined,
-    sort: readOptionalString(input.sort),
-    include: readOptionalString(input.include),
+    sort: optionalString(input.sort),
+    include: optionalString(input.include),
   };
   const filter = optionalRecord(input.filter);
   if (filter) {
@@ -419,10 +391,10 @@ function readProductiveErrorMessage(payload: Record<string, unknown>) {
   const errors = payload.errors;
   if (Array.isArray(errors)) {
     const first = optionalRecord(errors[0]);
-    return readOptionalString(first?.detail) ?? readOptionalString(first?.title) ?? readOptionalString(first?.message);
+    return optionalString(first?.detail) ?? optionalString(first?.title) ?? optionalString(first?.message);
   }
 
-  return readOptionalString(payload.error) ?? readOptionalString(payload.message) ?? readOptionalString(payload.detail);
+  return optionalString(payload.error) ?? optionalString(payload.message) ?? optionalString(payload.detail);
 }
 
 function buildJsonApiBody(
@@ -491,10 +463,10 @@ function normalizeTaskResource(value: unknown) {
   const resource = normalizeResource(value);
   return {
     ...resource,
-    title: readOptionalString(resource.attributes.title) ?? "",
+    title: optionalString(resource.attributes.title) ?? "",
     description: nullableOutputString(resource.attributes.description),
-    created_at: readOptionalString(resource.attributes.created_at) ?? "",
-    updated_at: readOptionalString(resource.attributes.updated_at) ?? "",
+    created_at: optionalString(resource.attributes.created_at) ?? "",
+    updated_at: optionalString(resource.attributes.updated_at) ?? "",
     due_date: nullableOutputString(resource.attributes.due_date),
     closed_at: nullableOutputString(resource.attributes.closed_at),
   };
@@ -504,12 +476,12 @@ function normalizeTimeEntryResource(value: unknown) {
   const resource = normalizeResource(value);
   return {
     ...resource,
-    date: readOptionalString(resource.attributes.date) ?? "",
-    time: readOptionalNumber(resource.attributes.time) ?? 0,
+    date: optionalString(resource.attributes.date) ?? "",
+    time: optionalNumber(resource.attributes.time) ?? 0,
     note: nullableOutputString(resource.attributes.note),
     billable: resource.attributes.billable === true,
-    created_at: readOptionalString(resource.attributes.created_at) ?? "",
-    updated_at: readOptionalString(resource.attributes.updated_at) ?? "",
+    created_at: optionalString(resource.attributes.created_at) ?? "",
+    updated_at: optionalString(resource.attributes.updated_at) ?? "",
   };
 }
 
@@ -521,7 +493,7 @@ function normalizeResource(value: unknown) {
 
   return {
     id: readRequiredString(resource.id, "data.id"),
-    type: readOptionalString(resource.type) ?? "",
+    type: optionalString(resource.type) ?? "",
     attributes: optionalRecord(resource.attributes) ?? {},
     relationships: optionalRecord(resource.relationships) ?? {},
   };
@@ -542,10 +514,6 @@ function readDataArray(payload: Record<string, unknown>, label: string) {
   return payload.data;
 }
 
-function readOptionalArray(value: unknown) {
-  return Array.isArray(value) ? value : [];
-}
-
 function nullableInputString(value: unknown) {
   if (value === null) {
     return null;
@@ -557,19 +525,11 @@ function nullableOutputString(value: unknown) {
   if (value === null) {
     return null;
   }
-  return readOptionalString(value) ?? null;
-}
-
-function readOptionalNumber(value: unknown) {
-  return optionalNumber(value);
-}
-
-function isAbortLikeError(error: unknown) {
-  return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
+  return optionalString(value) ?? null;
 }
 
 function readRequiredApiKey(apiKey: unknown) {
-  const value = readOptionalString(apiKey);
+  const value = optionalString(apiKey);
   if (!value) {
     throw new ProviderRequestError(400, "apiKey is required");
   }
@@ -577,7 +537,7 @@ function readRequiredApiKey(apiKey: unknown) {
 }
 
 function readRequiredOrganizationId(extraFields: Record<string, string> | undefined) {
-  const organizationId = readOptionalString(extraFields?.organizationId);
+  const organizationId = optionalString(extraFields?.organizationId);
   if (!organizationId) {
     throw new ProviderRequestError(400, "organizationId is required");
   }
@@ -585,13 +545,9 @@ function readRequiredOrganizationId(extraFields: Record<string, string> | undefi
 }
 
 function readRequiredString(value: unknown, fieldName: string) {
-  const text = readOptionalString(value);
+  const text = optionalString(value);
   if (!text) {
     throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return text;
-}
-
-function readOptionalString(value: unknown) {
-  return optionalString(value);
 }

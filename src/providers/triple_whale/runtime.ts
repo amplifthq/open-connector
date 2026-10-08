@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { TripleWhaleActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -18,7 +18,7 @@ const tripleWhaleValidateApiKeyPath = "/users/api-keys/me";
 type TripleWhaleRequestPhase = "validate" | "execute";
 type TripleWhaleActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
-export const tripleWhaleActionHandlers: Record<TripleWhaleActionName, TripleWhaleActionHandler> = {
+export const tripleWhaleActionHandlers: ProviderActionHandlers<"triple_whale", TripleWhaleActionHandler> = {
   async validate_api_key(_input, context): Promise<unknown> {
     const payload = await requestTripleWhaleJson({
       path: tripleWhaleValidateApiKeyPath,
@@ -229,7 +229,7 @@ function buildCustomerJourneyBody(input: Record<string, unknown>): Record<string
 function normalizeSummaryPagePayload(payload: unknown): Record<string, unknown> {
   const record = normalizeObject(payload);
   return {
-    metrics: objectArray(record.metrics, "metrics", providerResponseError),
+    metrics: objectArray(record.metrics, "metrics", tripleWhaleResponseError),
     raw: record,
   };
 }
@@ -239,7 +239,7 @@ function normalizeCustomSqlPayload(payload: unknown): Record<string, unknown> {
   return {
     success: optionalBoolean(record.success) ?? null,
     message: optionalString(record.message) ?? null,
-    data: objectArray(record.data, "data", providerResponseError),
+    data: objectArray(record.data, "data", tripleWhaleResponseError),
     raw: record,
   };
 }
@@ -253,7 +253,7 @@ function normalizeCustomerJourneyPayload(payload: unknown): Record<string, unkno
     endDate: optionalString(record.endDate) ?? null,
     page: optionalNumber(record.page) ?? null,
     earliestDate: optionalString(record.earliestDate) ?? null,
-    ordersWithJourneys: objectArray(record.ordersWithJourneys, "ordersWithJourneys", providerResponseError),
+    ordersWithJourneys: objectArray(record.ordersWithJourneys, "ordersWithJourneys", tripleWhaleResponseError),
     raw: record,
   };
 }
@@ -295,7 +295,7 @@ function requiredTrimmedString(value: unknown, fieldName: string): string {
   throw new ProviderRequestError(400, `${fieldName} is required`);
 }
 
-function providerResponseError(message: string): ProviderRequestError {
+function tripleWhaleResponseError(message: string): ProviderRequestError {
   return new ProviderRequestError(502, `Triple Whale returned invalid ${message}`);
 }
 

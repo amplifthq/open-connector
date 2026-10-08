@@ -1,7 +1,9 @@
+import type { ProviderActionHandlerSubset } from "../provider-runtime.ts";
 import type { MondayProviderActionInput } from "./runtime-common.ts";
 import type { MondayActionHandler } from "./runtime-common.ts";
 
 import { compactObject } from "../../core/cast.ts";
+import { ProviderRequestError } from "../provider-runtime.ts";
 import {
   asArray,
   mondayGraphqlRequest,
@@ -11,10 +13,9 @@ import {
   normalizeMondayDocNameResult,
   normalizeMondayReply,
   normalizeMondayUpdate,
-  mondayProviderError,
 } from "./runtime-common.ts";
 
-export const mondayCollaborationActionHandlers: Record<string, MondayActionHandler> = {
+export const mondayCollaborationActionHandlers: ProviderActionHandlerSubset<"monday", MondayActionHandler> = {
   list_updates(input, fetcher) {
     return mondayListUpdates(input, fetcher);
   },
@@ -56,7 +57,7 @@ async function mondayListUpdates(input: MondayProviderActionInput, fetcher: type
   // monday rejects a half-open range on the root `updates` query, so a partial
   // range is caught here instead of spending a request to be told.
   if ((since === undefined) !== (until === undefined)) {
-    throw mondayProviderError("invalid_input", "since and until must be supplied together.", 400);
+    throw new ProviderRequestError(400, "since and until must be supplied together.");
   }
 
   const payload = await mondayGraphqlRequest<{
@@ -337,7 +338,7 @@ async function mondayUpdateDocName(input: MondayProviderActionInput, fetcher: ty
     input.apiKey,
     {
       query: `
-        mutation UpdateDocName($docId: Int!, $name: String!) {
+        mutation UpdateDocName($docId: ID!, $name: String!) {
           update_doc_name(docId: $docId, name: $name)
         }
       `,

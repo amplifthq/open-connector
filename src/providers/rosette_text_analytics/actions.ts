@@ -83,16 +83,10 @@ const categorySchema = s.actionOutput(
   "One contextual category returned by Rosette Text Analytics.",
 );
 
-export type RosetteTextAnalyticsActionName =
-  | "identify_language"
-  | "extract_entities"
-  | "analyze_sentiment"
-  | "identify_categories"
-  | "identify_tokens";
-
 export const rosetteTextAnalyticsActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "identify_language",
+    operationType: "read",
     description: "Identify the language or languages of a text document with Rosette Text Analytics.",
     inputSchema: documentInputSchema,
     outputSchema: s.actionOutput(
@@ -105,6 +99,7 @@ export const rosetteTextAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "extract_entities",
+    operationType: "read",
     description: "Extract named entities such as people, organizations, locations, dates, and emails.",
     inputSchema: documentInputSchema,
     outputSchema: s.actionOutput(
@@ -117,6 +112,7 @@ export const rosetteTextAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "analyze_sentiment",
+    operationType: "read",
     description: "Analyze document sentiment and entity sentiment with Rosette Text Analytics.",
     inputSchema: documentInputSchema,
     outputSchema: s.actionOutput(
@@ -130,6 +126,7 @@ export const rosetteTextAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "identify_categories",
+    operationType: "read",
     description: "Identify contextual content categories for a text document.",
     inputSchema: documentInputSchema,
     outputSchema: s.actionOutput(
@@ -142,6 +139,7 @@ export const rosetteTextAnalyticsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "identify_tokens",
+    operationType: "read",
     description: "Identify word, number, affix, and punctuation tokens in a text document.",
     inputSchema: documentInputSchema,
     outputSchema: s.actionOutput(

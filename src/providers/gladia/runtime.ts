@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { basename, extname } from "node:path";
@@ -9,10 +10,16 @@ import {
   optionalNumber,
   optionalRecord,
   optionalString,
-  requiredString,
 } from "../../core/cast.ts";
 import { assertPublicHttpUrl, readBoundedResponseBytes } from "../../core/request.ts";
-import { providerFetch, ProviderRequestError, providerUserAgent, readTransitFileInput } from "../provider-runtime.ts";
+import {
+  providerFetch,
+  ProviderRequestError,
+  providerUserAgent,
+  readTransitFileInput,
+  requiredInputString,
+  requiredResponseRecord,
+} from "../provider-runtime.ts";
 
 export const gladiaApiBaseUrl = "https://api.gladia.io";
 const gladiaPreRecordedPath = "/v2/pre-recorded";
@@ -23,7 +30,7 @@ const defaultUploadMimeType = "application/octet-stream";
 type GladiaRequestPhase = "validate" | "execute";
 type GladiaActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const gladiaActionHandlers: Record<string, GladiaActionHandler> = {
+export const gladiaActionHandlers: ProviderActionHandlers<"gladia", GladiaActionHandler> = {
   upload_file(input, context) {
     return uploadFile(input, context);
   },
@@ -88,7 +95,7 @@ async function uploadFile(input: Record<string, unknown>, context: ApiKeyProvide
     signal: context.signal,
     phase: "execute",
   });
-  const payloadObject = requireObject(payload, "gladia upload_file response");
+  const payloadObject = requiredResponseRecord(payload, "gladia upload_file response");
 
   return {
     audioUrl: requireProviderString(payloadObject.audio_url, "gladia upload_file.audio_url"),
@@ -106,7 +113,7 @@ async function startTranscription(input: Record<string, unknown>, context: ApiKe
     signal: context.signal,
     phase: "execute",
   });
-  const payloadObject = requireObject(payload, "gladia start_transcription response");
+  const payloadObject = requiredResponseRecord(payload, "gladia start_transcription response");
 
   return {
     id: requireProviderString(payloadObject.id, "gladia start_transcription.id"),
@@ -124,7 +131,7 @@ async function getTranscription(input: Record<string, unknown>, context: ApiKeyP
   });
 
   return {
-    job: normalizeTranscriptionJob(requireObject(payload, "gladia get_transcription response")),
+    job: normalizeTranscriptionJob(requiredResponseRecord(payload, "gladia get_transcription response")),
   };
 }
 
@@ -137,14 +144,16 @@ async function listTranscriptions(input: Record<string, unknown>, context: ApiKe
     signal: context.signal,
     phase: "execute",
   });
-  const payloadObject = requireObject(payload, "gladia list_transcriptions response");
+  const payloadObject = requiredResponseRecord(payload, "gladia list_transcriptions response");
   const items = Array.isArray(payloadObject.items) ? payloadObject.items : [];
 
   return compactObject({
     first: optionalString(payloadObject.first),
     current: optionalString(payloadObject.current),
     next: payloadObject.next === null ? null : optionalString(payloadObject.next),
-    items: items.map((item) => normalizeTranscriptionJob(requireObject(item, "gladia list_transcriptions item"))),
+    items: items.map((item) =>
+      normalizeTranscriptionJob(requiredResponseRecord(item, "gladia list_transcriptions item")),
+    ),
   });
 }
 
@@ -607,18 +616,6 @@ function extractGladiaErrorMessage(payload: unknown): string | undefined {
   }
 
   return optionalString(object.message) ?? optionalString(object.error) ?? optionalString(object.detail);
-}
-
-function requireObject(value: unknown, fieldName: string): Record<string, unknown> {
-  const object = optionalRecord(value);
-  if (!object) {
-    throw new ProviderRequestError(502, `${fieldName} must be an object`);
-  }
-  return object;
-}
-
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function requireProviderString(value: unknown, fieldName: string): string {

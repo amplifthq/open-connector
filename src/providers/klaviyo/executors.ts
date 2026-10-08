@@ -4,8 +4,8 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { KlaviyoActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
 import {
@@ -13,6 +13,7 @@ import {
   createProviderProxyUrl,
   defineApiKeyProviderExecutors,
   normalizeProviderProxyHeaders,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
   readProviderProxyErrorMessage,
@@ -29,7 +30,7 @@ const klaviyoFetch = createProviderFetch({ skipDnsValidation: true });
 
 type KlaviyoActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const klaviyoActionHandlers: Record<KlaviyoActionName, KlaviyoActionHandler> = {
+export const klaviyoActionHandlers: ProviderActionHandlers<"klaviyo", KlaviyoActionHandler> = {
   validate_account(_input, context) {
     return executeValidateAccount(context);
   },
@@ -286,7 +287,7 @@ function buildPaginationSearchParams(input: Record<string, unknown>): URLSearchP
 }
 
 function buildCreateEventPayload(input: Record<string, unknown>): Record<string, unknown> {
-  const profileInput = requiredRecord(input.profile, "profile", inputError);
+  const profileInput = requiredRecord(input.profile, "profile", providerInputError);
   const profileAttributes = compactObject({
     email: profileInput.email,
     phone_number: profileInput.phoneNumber,
@@ -416,10 +417,6 @@ function readRequiredInputString(value: unknown, fieldName: string): string {
     throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return text;
-}
-
-function inputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function responseError(message: string): ProviderRequestError {

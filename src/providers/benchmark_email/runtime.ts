@@ -1,16 +1,11 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
-import {
-  createProviderTimeout,
-  isAbortLikeError,
-  ProviderRequestError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
 
-const benchmarkEmailDefaultRequestTimeoutMs = 30_000;
 const benchmarkEmailValidationMethod = "clientGetProfileDetails";
 
 type BenchmarkEmailRequestPhase = "validate" | "execute";
@@ -21,7 +16,7 @@ export interface BenchmarkEmailContext extends ApiKeyProviderContext {
 
 type BenchmarkEmailActionHandler = ProviderRuntimeHandler<BenchmarkEmailContext>;
 
-export const benchmarkEmailActionHandlers: Record<string, BenchmarkEmailActionHandler> = {
+export const benchmarkEmailActionHandlers: ProviderActionHandlers<"benchmark_email", BenchmarkEmailActionHandler> = {
   get_account_summary(_input, context) {
     return requestBenchmarkEmailJson({
       context,
@@ -118,9 +113,7 @@ async function requestBenchmarkEmailJson(input: {
   phase: BenchmarkEmailRequestPhase;
   query?: Record<string, string | undefined>;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, benchmarkEmailDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "benchmark_email" }, async (signal) => {
     const response = await input.context.fetcher(
       buildBenchmarkEmailUrl(input.context.baseUrl, {
         token: input.context.apiKey,
@@ -133,7 +126,7 @@ async function requestBenchmarkEmailJson(input: {
           accept: "application/json",
           "user-agent": providerUserAgent,
         },
-        signal: timeout.signal,
+        signal,
       },
     );
     const payload = await readBenchmarkEmailPayload(response);
@@ -153,20 +146,7 @@ async function requestBenchmarkEmailJson(input: {
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "benchmark_email request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `benchmark_email request failed: ${error.message}` : "benchmark_email request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildBenchmarkEmailUrl(baseUrl: string, query: Record<string, string | undefined> = {}): string {

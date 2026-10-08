@@ -5,16 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "grist";
 
-export type GristActionName =
-  | "list_workspaces"
-  | "get_document"
-  | "list_tables"
-  | "list_columns"
-  | "list_records"
-  | "add_records"
-  | "update_records"
-  | "delete_records";
-
 const looseObjectSchema = s.looseObject("A raw Grist object.");
 const unknownRecordSchema = s.record("Column IDs mapped to cell values.", s.unknown("A Grist cell value."));
 const timestampField = s.string("Timestamp in ISO 8601 format.");
@@ -118,6 +108,7 @@ const docTableInputSchema = (
 export const gristActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_workspaces",
+    operationType: "read",
     description:
       "List the Grist workspaces and documents that the authenticated API key can access on the current Grist site.",
     inputSchema: s.object("The input payload for listing Grist workspaces.", {}),
@@ -128,6 +119,7 @@ export const gristActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_document",
+    operationType: "read",
     description: "Fetch metadata for a Grist document by document ID or short URL alias.",
     inputSchema: docInputSchema("The input payload for fetching a Grist document."),
     outputSchema: documentSchema,
@@ -135,6 +127,7 @@ export const gristActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tables",
+    operationType: "read",
     description: "List the tables defined in a Grist document.",
     inputSchema: docInputSchema("The input payload for listing Grist document tables."),
     outputSchema: s.object("Table list returned by Grist.", {
@@ -144,6 +137,7 @@ export const gristActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_columns",
+    operationType: "read",
     description: "List the columns defined in a Grist table.",
     inputSchema: docTableInputSchema(
       "The input payload for listing Grist table columns.",
@@ -158,6 +152,7 @@ export const gristActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_records",
+    operationType: "read",
     description:
       "List records from a Grist table with optional filtering, sorting, limits, and hidden-column inclusion.",
     inputSchema: docTableInputSchema(
@@ -177,6 +172,7 @@ export const gristActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "add_records",
+    operationType: "write",
     description: "Add one or more records to a Grist table.",
     inputSchema: docTableInputSchema(
       "The input payload for adding records to a Grist table.",
@@ -193,6 +189,7 @@ export const gristActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_records",
+    operationType: "write",
     description: "Update one or more existing Grist records by row ID.",
     inputSchema: docTableInputSchema(
       "The input payload for updating records in a Grist table.",
@@ -209,6 +206,7 @@ export const gristActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_records",
+    operationType: "destructive",
     description: "Delete one or more records from a Grist table by row ID.",
     inputSchema: docTableInputSchema(
       "The input payload for deleting records from a Grist table.",

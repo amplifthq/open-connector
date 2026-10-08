@@ -1,9 +1,14 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { CallinglyActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  ProviderRequestError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 const service = "callingly";
 const callinglyApiBaseUrl = "https://api.callingly.com";
@@ -12,7 +17,7 @@ type CallinglyPhase = "validate" | "execute";
 type QueryValue = string | number | undefined;
 type CallinglyActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-const callinglyActionHandlers: Record<CallinglyActionName, CallinglyActionHandler> = {
+const callinglyActionHandlers: ProviderActionHandlers<"callingly", CallinglyActionHandler> = {
   get_call(input, context) {
     return executeGetCall(input, context);
   },
@@ -52,6 +57,16 @@ const callinglyActionHandlers: Record<CallinglyActionName, CallinglyActionHandle
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, callinglyActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: callinglyApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

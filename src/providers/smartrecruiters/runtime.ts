@@ -1,18 +1,16 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { SmartRecruitersActionName } from "./actions.ts";
 
-import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
   ProviderRequestError,
   providerUserAgent,
+  requiredInputString,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 export const smartrecruitersApiBaseUrl = "https://api.smartrecruiters.com";
-
-const smartrecruitersDefaultTimeoutMs = 30_000;
 
 type SmartRecruitersPhase = "validate" | "execute";
 type SmartRecruitersActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
@@ -25,7 +23,7 @@ interface SmartRecruitersRequestInput {
   query?: Partial<SmartRecruitersQuery>;
 }
 
-export const smartrecruitersActionHandlers: Record<SmartRecruitersActionName, SmartRecruitersActionHandler> = {
+export const smartrecruitersActionHandlers: ProviderActionHandlers<"smartrecruiters", SmartRecruitersActionHandler> = {
   async list_jobs(input, context) {
     const raw = await requestSmartRecruitersJson(
       {
@@ -44,7 +42,7 @@ export const smartrecruitersActionHandlers: Record<SmartRecruitersActionName, Sm
       job: await requestSmartRecruitersJson(
         {
           method: "GET",
-          path: `/jobs/${encodeURIComponent(readInputString(input.jobId, "jobId"))}`,
+          path: `/jobs/${encodeURIComponent(requiredInputString(input.jobId, "jobId"))}`,
           query: compactObject({
             language: optionalString(input.language),
           }),
@@ -73,7 +71,7 @@ export const smartrecruitersActionHandlers: Record<SmartRecruitersActionName, Sm
       candidate: await requestSmartRecruitersJson(
         {
           method: "GET",
-          path: `/candidates/${encodeURIComponent(readInputString(input.candidateId, "candidateId"))}`,
+          path: `/candidates/${encodeURIComponent(requiredInputString(input.candidateId, "candidateId"))}`,
           phase: "execute",
         },
         context,
@@ -117,8 +115,7 @@ async function requestSmartRecruitersJson(
   input: SmartRecruitersRequestInput,
   context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, smartrecruitersDefaultTimeoutMs);
-  try {
+  return runProviderRequest({ signal: context.signal, label: "SmartRecruiters" }, async (signal) => {
     const response = await context.fetcher(buildSmartRecruitersUrl(input.path, input.query), {
       method: input.method,
       headers: {
@@ -126,7 +123,7 @@ async function requestSmartRecruitersJson(
         "user-agent": providerUserAgent,
         "X-SmartToken": context.apiKey,
       },
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readSmartRecruitersPayload(response);
 
@@ -138,20 +135,7 @@ async function requestSmartRecruitersJson(
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "SmartRecruiters request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `SmartRecruiters request failed: ${error.message}` : "SmartRecruiters request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildSmartRecruitersUrl(path: string, query: Partial<SmartRecruitersQuery> = {}): URL {
@@ -280,10 +264,6 @@ function extractSmartRecruitersMessage(payload: unknown): string | undefined {
   }
 
   return undefined;
-}
-
-function readInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function optionalStringArray(value: unknown): string[] | undefined {

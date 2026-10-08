@@ -195,17 +195,10 @@ const updateLinkInputSchema = s.object(
 );
 updateLinkInputSchema.anyOf = updateLinkFieldNames.map((field) => ({ required: [field] }));
 
-export type LinklyActionName =
-  | "list_workspaces"
-  | "list_links"
-  | "get_link"
-  | "create_link"
-  | "update_link"
-  | "delete_link";
-
 export const linklyActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_workspaces",
+    operationType: "read",
     description: "List Linkly workspaces available to the authenticated API key.",
     requiredScopes: [],
     inputSchema: s.object("Input for listing Linkly workspaces.", {}),
@@ -219,6 +212,7 @@ export const linklyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_links",
+    operationType: "read",
     description: "List links in a Linkly workspace with optional search, filters, and pagination.",
     requiredScopes: [],
     inputSchema: listLinksInputSchema,
@@ -240,6 +234,7 @@ export const linklyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_link",
+    operationType: "read",
     description: "Get a Linkly link by ID, optionally scoped to a workspace.",
     requiredScopes: [],
     inputSchema: getLinkInputSchema,
@@ -253,6 +248,7 @@ export const linklyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_link",
+    operationType: "write",
     description: "Create a Linkly short link in a workspace.",
     requiredScopes: [],
     inputSchema: createLinkInputSchema,
@@ -266,6 +262,7 @@ export const linklyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_link",
+    operationType: "write",
     description: "Update a Linkly short link in a workspace.",
     requiredScopes: [],
     inputSchema: updateLinkInputSchema,
@@ -279,6 +276,7 @@ export const linklyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_link",
+    operationType: "destructive",
     description: "Delete a Linkly short link from a workspace.",
     requiredScopes: [],
     inputSchema: s.object(

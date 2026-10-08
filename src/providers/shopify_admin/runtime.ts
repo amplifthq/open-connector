@@ -1,5 +1,5 @@
 import type { TransitFileWriter } from "../../core/types.ts";
-import type { ShopifyAdminActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -11,7 +11,12 @@ import {
   requiredString,
 } from "../../core/cast.ts";
 import { readBoundedResponseBytes } from "../../core/request.ts";
-import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  createProviderTimeout,
+  providerInputError,
+  ProviderRequestError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 export const shopifyAdminApiVersion = "2026-04";
 
@@ -622,7 +627,7 @@ interface ShopifyAdminShop {
   raw: Record<string, unknown>;
 }
 
-export const shopifyAdminActionHandlers: Record<ShopifyAdminActionName, ShopifyAdminActionHandler> = {
+export const shopifyAdminActionHandlers: ProviderActionHandlers<"shopify_admin", ShopifyAdminActionHandler> = {
   async get_shop(_input, context) {
     const payload = await requestShopifyAdminGraphQL(context, { query: getShopQuery });
     return { shop: normalizeShop(readObject(readObject(payload.data, "data").shop, "shop")) };
@@ -1140,7 +1145,7 @@ async function cancelUnreadResponseBody(response: Response): Promise<void> {
   try {
     await response.body.cancel();
   } catch {
-    // 清理是 best-effort，不能覆盖原始下载或存储错误。
+    // Cleanup is best-effort and must not replace the original download or storage error.
   }
 }
 
@@ -1613,8 +1618,4 @@ function isDnsLabel(value: string): boolean {
     }
   }
   return true;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

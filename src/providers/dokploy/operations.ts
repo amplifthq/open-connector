@@ -1,5 +1,5 @@
 // Generated in part by src/providers/dokploy/generate.ts.
-import type { JsonSchema } from "../../core/types.ts";
+import type { ActionOperationType, JsonSchema } from "../../core/types.ts";
 
 import { adminOperations } from "./operations/admin.ts";
 import { aiOperations } from "./operations/ai.ts";
@@ -58,6 +58,7 @@ export interface DokployOperationDefinition {
   operationId?: string;
   tag?: string;
   description: string;
+  operationType: ActionOperationType;
   method: DokployActionMethod;
   path: string;
   pathFields: readonly string[];
@@ -123,7 +124,3 @@ export const dokployOperations: readonly DokployOperation[] = [
   volumeBackupsOperations,
   whitelabelingOperations,
 ].flat();
-
-export const dokployOperationByActionName: ReadonlyMap<string, DokployOperation> = new Map(
-  dokployOperations.map((operation) => [operation.name, operation]),
-);

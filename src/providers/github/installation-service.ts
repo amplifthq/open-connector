@@ -6,6 +6,7 @@ import { ConnectionError } from "../../connection-service.ts";
 import { ProviderRequestError, providerFetch } from "../provider-runtime.ts";
 import {
   listGitHubUserInstallations,
+  resolveGitHubAppInstallation,
   verifyGitHubUserInstallation as verifyGitHubUserInstallationDefault,
 } from "./app-auth.ts";
 
@@ -33,6 +34,16 @@ export class GitHubAppInstallationService {
     this.fetcher = input.fetcher ?? providerFetch;
     this.runtimeConfig = input.runtimeConfig;
     this.verifyUserInstallation = input.verifyUserInstallation ?? verifyGitHubUserInstallationDefault;
+  }
+
+  async resolveInstallationToken(installationId: string, signal?: AbortSignal): Promise<string> {
+    const installation = await resolveGitHubAppInstallation({
+      fetcher: this.fetcher,
+      installationId,
+      runtimeConfig: this.runtimeConfig,
+      signal,
+    });
+    return installation.accessToken;
   }
 
   async complete(input: {

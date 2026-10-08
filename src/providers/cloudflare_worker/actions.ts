@@ -442,7 +442,7 @@ patchWorkerScriptSettingsInputSchema.anyOf = [
 export const cloudflareWorkerActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_accounts",
-    effect: "read",
+    operationType: "read",
     description: "List Cloudflare accounts visible to the current credential.",
     requiredScopes: [workersReadScope],
     providerPermissions: [workersReadPermission],
@@ -465,7 +465,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_workers",
-    effect: "read",
+    operationType: "read",
     description: "List Workers in a Cloudflare account using the Workers beta API.",
     requiredScopes: [workersReadScope],
     providerPermissions: [workersReadPermission],
@@ -487,7 +487,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_worker",
-    effect: "read",
+    operationType: "read",
     description: "Get one Worker by Worker ID using the Workers beta API.",
     requiredScopes: [workersReadScope],
     providerPermissions: [workersReadPermission],
@@ -503,7 +503,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_worker",
-    effect: "write",
+    operationType: "write",
     description: "Create a Cloudflare Worker using the Workers beta API.",
     requiredScopes: [workersWriteScope],
     providerPermissions: [workersWritePermission],
@@ -519,7 +519,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_worker",
-    effect: "write",
+    operationType: "destructive",
     description: "Replace a Cloudflare Worker using the Workers beta API, setting omitted fields to API defaults.",
     requiredScopes: [workersWriteScope],
     providerPermissions: [workersWritePermission],
@@ -539,7 +539,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "edit_worker",
-    effect: "write",
+    operationType: "write",
     description:
       "Partially update a Cloudflare Worker using the Workers beta API while leaving omitted fields unchanged.",
     requiredScopes: [workersWriteScope],
@@ -549,7 +549,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_worker",
-    effect: "destructive",
+    operationType: "destructive",
     description: "Delete a Cloudflare Worker and its associated resources using the Workers beta API.",
     requiredScopes: [workersWriteScope],
     providerPermissions: [workersWritePermission],
@@ -568,7 +568,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_worker_scripts",
-    effect: "read",
+    operationType: "read",
     description: "List Worker scripts in a Cloudflare account.",
     requiredScopes: [workersReadScope],
     providerPermissions: [workersReadPermission],
@@ -592,7 +592,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_worker_scripts",
-    effect: "read",
+    operationType: "read",
     description: "Search Worker scripts in a Cloudflare account by name or script tag.",
     requiredScopes: [workersReadScope],
     providerPermissions: [workersReadPermission],
@@ -608,7 +608,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_build_triggers",
-    effect: "read",
+    operationType: "read",
     description: "List Workers Builds triggers configured for one Worker script tag.",
     requiredScopes: [workersCiReadScope],
     providerPermissions: [workersCiReadPermission],
@@ -626,7 +626,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_manual_build",
-    effect: "write",
+    operationType: "write",
     description: "Start a Workers Builds job from a configured trigger and branch or commit.",
     requiredScopes: [workersCiWriteScope],
     providerPermissions: [workersCiWritePermission],
@@ -659,7 +659,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_builds",
-    effect: "read",
+    operationType: "read",
     description: "List Workers Builds jobs for one Worker script tag.",
     requiredScopes: [workersCiReadScope],
     providerPermissions: [workersCiReadPermission],
@@ -684,7 +684,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_build",
-    effect: "read",
+    operationType: "read",
     description: "Get the current status and outcome of one Workers Builds job.",
     requiredScopes: [workersCiReadScope],
     providerPermissions: [workersCiReadPermission],
@@ -702,7 +702,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_build_logs",
-    effect: "read",
+    operationType: "read",
     description: "Get one page of log lines for a Workers Builds job.",
     requiredScopes: [workersCiReadScope],
     providerPermissions: [workersCiReadPermission],
@@ -727,7 +727,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "cancel_build",
-    effect: "destructive",
+    operationType: "destructive",
     description: "Cancel a queued or running Workers Builds job.",
     requiredScopes: [workersCiWriteScope],
     providerPermissions: [workersCiWritePermission],
@@ -748,7 +748,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "upload_worker_script",
-    effect: "write",
+    operationType: "destructive",
     description: "Create or replace a Cloudflare Worker script by uploading a module bundle as multipart/form-data.",
     requiredScopes: [workersWriteScope],
     providerPermissions: [workersWritePermission],
@@ -796,7 +796,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "put_worker_script_content",
-    effect: "write",
+    operationType: "destructive",
     description: "Replace only the content of a Cloudflare Worker script without changing metadata.",
     requiredScopes: [workersWriteScope],
     providerPermissions: [workersWritePermission],
@@ -819,7 +819,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_worker_script_content",
-    effect: "read",
+    operationType: "read",
     description: "Fetch the raw source content for a Cloudflare Worker script.",
     requiredScopes: [workersReadScope],
     providerPermissions: [workersReadPermission],
@@ -838,7 +838,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_worker_script_settings",
-    effect: "read",
+    operationType: "read",
     description: "Get Worker metadata and configuration for a Cloudflare Worker script.",
     requiredScopes: [workersReadScope],
     providerPermissions: [workersReadPermission],
@@ -854,7 +854,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "patch_worker_script_settings",
-    effect: "write",
+    operationType: "write",
     description: "Patch Worker metadata and configuration for a Cloudflare Worker script.",
     requiredScopes: [workersWriteScope],
     providerPermissions: [workersWritePermission],
@@ -863,7 +863,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_worker_script_secrets",
-    effect: "read",
+    operationType: "read",
     description: "List secret bindings attached to a Cloudflare Worker script.",
     requiredScopes: [workersReadScope],
     providerPermissions: [workersReadPermission],
@@ -886,7 +886,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_worker_script_secret",
-    effect: "read",
+    operationType: "read",
     description: "Get one secret binding attached to a Cloudflare Worker script.",
     requiredScopes: [workersReadScope],
     providerPermissions: [workersReadPermission],
@@ -903,7 +903,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "put_worker_script_secret",
-    effect: "write",
+    operationType: "destructive",
     description: "Add or replace a secret_text binding on a Cloudflare Worker script.",
     requiredScopes: [workersWriteScope],
     providerPermissions: [workersWritePermission],
@@ -922,7 +922,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_worker_script_secret",
-    effect: "destructive",
+    operationType: "destructive",
     description: "Delete a secret binding from a Cloudflare Worker script.",
     requiredScopes: [workersWriteScope],
     providerPermissions: [workersWritePermission],
@@ -942,7 +942,7 @@ export const cloudflareWorkerActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_worker_script",
-    effect: "destructive",
+    operationType: "destructive",
     description: "Delete a Cloudflare Worker script.",
     requiredScopes: [workersWriteScope],
     providerPermissions: [workersWritePermission],

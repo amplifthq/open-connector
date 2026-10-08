@@ -1,11 +1,12 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { FairingActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -13,19 +14,28 @@ import {
 
 const service = "fairing";
 const fairingApiBaseUrl = "https://app.fairing.co/api";
-const fairingRequestTimeoutMs = 30_000;
 
 type FairingPhase = "validate" | "execute";
 type FairingActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type FairingActionHandler = (input: Record<string, unknown>, context: FairingActionContext) => Promise<unknown>;
 
-export const fairingActionHandlers: Record<FairingActionName, FairingActionHandler> = {
+export const fairingActionHandlers: ProviderActionHandlers<"fairing", FairingActionHandler> = {
   list_responses(input, context) {
     return listResponses(input, context);
   },
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, fairingActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: fairingApiBaseUrl,
+  auth: { type: "api_key_header", name: "authorization" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -100,7 +110,7 @@ async function requestFairingJson(input: {
     }
   }
 
-  const timeout = createProviderTimeout(input.context.signal, fairingRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const response = await input.context.fetcher(url, {
       method: "GET",

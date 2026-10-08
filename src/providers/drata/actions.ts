@@ -5,16 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "drata" as const;
 
-export type DrataActionName =
-  | "get_company"
-  | "list_workspaces"
-  | "list_personnel"
-  | "get_personnel"
-  | "list_controls"
-  | "get_control"
-  | "list_vendors"
-  | "get_vendor";
-
 const nonEmptyString = (description: string) => s.string(description, { minLength: 1 });
 
 const cursorSchema = nonEmptyString("The Drata cursor returned in pagination.cursor by a previous list response.");
@@ -76,6 +66,7 @@ const companySchema = s.looseRequiredObject(
 
 const getCompanyAction = defineProviderAction(service, {
   name: "get_company",
+  operationType: "read",
   description: "Get company metadata for the connected Drata account.",
   requiredScopes: [],
   inputSchema: s.object("The input payload for getting Drata company metadata.", {}),
@@ -87,6 +78,7 @@ const getCompanyAction = defineProviderAction(service, {
 
 const listWorkspacesAction = defineProviderAction(service, {
   name: "list_workspaces",
+  operationType: "read",
   description: "List Drata workspaces visible to the current API key.",
   requiredScopes: [],
   inputSchema: s.object("The input payload for listing Drata workspaces.", listInputProperties, {
@@ -99,6 +91,7 @@ const listWorkspacesAction = defineProviderAction(service, {
 
 const listPersonnelAction = defineProviderAction(service, {
   name: "list_personnel",
+  operationType: "read",
   description: "List Drata personnel visible to the current API key.",
   requiredScopes: [],
   inputSchema: s.object(
@@ -125,6 +118,7 @@ const listPersonnelAction = defineProviderAction(service, {
 
 const getPersonnelAction = defineProviderAction(service, {
   name: "get_personnel",
+  operationType: "read",
   description: "Get one Drata personnel record by ID or email-prefixed identifier.",
   requiredScopes: [],
   inputSchema: s.object(
@@ -148,6 +142,7 @@ const workspaceIdSchema = s.integer("The Drata workspace ID.");
 
 const listControlsAction = defineProviderAction(service, {
   name: "list_controls",
+  operationType: "read",
   description: "List controls in a Drata workspace.",
   requiredScopes: [],
   inputSchema: s.object(
@@ -187,6 +182,7 @@ const listControlsAction = defineProviderAction(service, {
 
 const getControlAction = defineProviderAction(service, {
   name: "get_control",
+  operationType: "read",
   description: "Get one Drata control by ID or code-prefixed identifier.",
   requiredScopes: [],
   inputSchema: s.object(
@@ -213,6 +209,7 @@ const getControlAction = defineProviderAction(service, {
 
 const listVendorsAction = defineProviderAction(service, {
   name: "list_vendors",
+  operationType: "read",
   description: "List vendors in Drata.",
   requiredScopes: [],
   inputSchema: s.object(
@@ -247,6 +244,7 @@ const listVendorsAction = defineProviderAction(service, {
 
 const getVendorAction = defineProviderAction(service, {
   name: "get_vendor",
+  operationType: "read",
   description: "Get one Drata vendor by ID.",
   requiredScopes: [],
   inputSchema: s.object(
@@ -273,7 +271,3 @@ export const drataActions: ActionDefinition[] = [
   listVendorsAction,
   getVendorAction,
 ];
-
-export const drataActionByName: Map<DrataActionName, ActionDefinition> = new Map(
-  drataActions.map((action) => [action.name as DrataActionName, action]),
-);

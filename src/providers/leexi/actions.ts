@@ -189,17 +189,10 @@ const callDateFilterSchema = s.stringEnum("The Leexi date field used by from/to 
   "updated_at",
 ]);
 
-export type LeexiActionName =
-  | "list_users"
-  | "list_teams"
-  | "list_calls"
-  | "get_call"
-  | "list_call_notes"
-  | "get_call_note";
-
 export const leexiActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List users in the current Leexi workspace.",
     requiredScopes: [],
     inputSchema: paginationInputSchema,
@@ -210,6 +203,7 @@ export const leexiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_teams",
+    operationType: "read",
     description: "List teams in the current Leexi workspace.",
     requiredScopes: [],
     inputSchema: paginationInputSchema,
@@ -220,6 +214,7 @@ export const leexiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_calls",
+    operationType: "read",
     description: "List calls and meetings in the current Leexi workspace with optional filters.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -282,6 +277,7 @@ export const leexiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_call",
+    operationType: "read",
     description: "Retrieve one Leexi call or meeting by UUID.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for retrieving one Leexi call.", {
@@ -293,6 +289,7 @@ export const leexiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_call_notes",
+    operationType: "read",
     description: "List call notes for a Leexi call, optionally filtered by prompt UUID.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -312,6 +309,7 @@ export const leexiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_call_note",
+    operationType: "read",
     description: "Retrieve one Leexi call note by UUID.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for retrieving one Leexi call note.", {

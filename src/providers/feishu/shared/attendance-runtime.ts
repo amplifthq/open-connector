@@ -1,6 +1,7 @@
 import type { FeishuJsonRequest } from "./client.ts";
 
-import { ProviderRequestError } from "../../provider-runtime.ts";
+import { optionalBoolean } from "../../../core/cast.ts";
+import { providerInputError } from "../../provider-runtime.ts";
 
 interface FeishuAttendanceActionHandler {
   (input: Record<string, unknown>): Promise<unknown>;
@@ -20,7 +21,7 @@ async function queryMyAttendanceTasks(input: Record<string, unknown>, request: F
   const checkDateFrom = requireDate(input.checkDateFrom, "checkDateFrom");
   const checkDateTo = requireDate(input.checkDateTo, "checkDateTo");
   if (checkDateFrom > checkDateTo) {
-    throw invalidInput("checkDateFrom must not be later than checkDateTo");
+    throw providerInputError("checkDateFrom must not be later than checkDateTo");
   }
   const data = await request({
     method: "POST",
@@ -46,7 +47,7 @@ async function queryMyAttendanceTasks(input: Record<string, unknown>, request: F
 
 function requireDate(value: unknown, fieldName: string) {
   if (typeof value !== "number" || !Number.isInteger(value) || !isValidDate(value)) {
-    throw invalidInput(`${fieldName} must be a valid date in yyyyMMdd form`);
+    throw providerInputError(`${fieldName} must be a valid date in yyyyMMdd form`);
   }
   return value;
 }
@@ -62,14 +63,6 @@ function isValidDate(value: number) {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
-function optionalBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
-}
-
 function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function invalidInput(message: string) {
-  return new ProviderRequestError(400, message);
 }

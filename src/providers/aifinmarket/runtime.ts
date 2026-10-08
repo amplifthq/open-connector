@@ -1,9 +1,8 @@
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 import type { AifinMarketServerType } from "./actions.ts";
+import type { Client } from "@modelcontextprotocol/client";
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
+import { withMcpClient } from "../mcp-client.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 const origin = "https://mcp.wind.com.cn";
@@ -14,7 +13,6 @@ const maxToolPages = 100;
 const maxTools = 10_000;
 const maxToolArgumentsBytes = 1_000_000;
 const maxErrorMessageLength = 2_000;
-const validator = new CfWorkerJsonSchemaValidator();
 
 export const serverTypes: readonly AifinMarketServerType[] = [
   "stock_data",
@@ -121,9 +119,12 @@ export async function callTool(
 
   const result = await runWindRequest("execute", context.apiKey, () =>
     withClient(context, serverType, actionTimeoutMs, async (client) => {
-      const response = await client.callTool({ name: toolName, arguments: args }, undefined, {
-        timeout: actionTimeoutMs,
-      });
+      const response = await client.callTool(
+        { name: toolName, arguments: args },
+        {
+          timeout: actionTimeoutMs,
+        },
+      );
       if (response.isError) {
         const message = readToolErrorMessage(response) ?? `Wind AIFin Market tool ${toolName} returned an error`;
         throw new ProviderRequestError(502, message, response);
@@ -189,38 +190,34 @@ async function withClient<T>(
   timeoutMs: number,
   run: (client: Client) => Promise<T>,
 ): Promise<T> {
-  const transport = new StreamableHTTPClientTransport(new URL(endpointByServerType[serverType]), {
-    fetch: createLimitedFetch(context.fetcher),
-    requestInit: {
+  return withMcpClient(
+    {
+      endpoint: new URL(endpointByServerType[serverType]),
+      transport: "streamable_http",
+      fetcher: createLimitedFetch(context.fetcher),
       headers: { authorization: `Bearer ${context.apiKey}`, "user-agent": providerUserAgent },
       signal: context.signal,
+      mapError: mapAifinMarketMcpError,
     },
-  });
-  const client = new Client(
-    { name: "open-connector-aifinmarket", version: "1.0.0" },
-    { jsonSchemaValidator: validator },
+    run,
   );
-  try {
-    await client.connect(transport, { timeout: timeoutMs });
-    return await run(client);
-  } catch (error) {
-    if (error instanceof ProviderRequestError) throw error;
-    const status = readErrorStatus(error);
-    throw new ProviderRequestError(
-      status ?? 502,
-      error instanceof Error
-        ? `Wind AIFin Market MCP request failed: ${error.message}`
-        : "Wind AIFin Market MCP request failed",
-      error,
-    );
-  } finally {
-    await client.close().catch(() => undefined);
-  }
+}
+
+function mapAifinMarketMcpError(error: unknown): unknown {
+  if (error instanceof ProviderRequestError) return error;
+  const status = readErrorStatus(error);
+  return new ProviderRequestError(
+    status ?? 502,
+    error instanceof Error
+      ? `Wind AIFin Market MCP request failed: ${error.message}`
+      : "Wind AIFin Market MCP request failed",
+    error,
+  );
 }
 
 function createLimitedFetch(fetcher: typeof fetch): typeof fetch {
   return async (request, init) => {
-    const response = await fetcher(request, { ...init, redirect: "error" });
+    const response = await fetcher(request, { ...init, redirect: "manual" });
     if (response.status === 403) {
       await response.body?.cancel().catch(() => undefined);
       throw new ProviderRequestError(403, "Wind AIFin Market denied access to this service or tool");

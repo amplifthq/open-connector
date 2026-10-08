@@ -1,9 +1,14 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { NewsdataIoActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalScalarString, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "newsdata_io";
 const newsdataIoApiBaseUrl = "https://newsdata.io";
@@ -11,7 +16,7 @@ const newsdataIoApiBaseUrl = "https://newsdata.io";
 type NewsdataIoPhase = "validate" | "execute";
 type NewsdataIoActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const newsdataIoActionHandlers: Record<NewsdataIoActionName, NewsdataIoActionHandler> = {
+export const newsdataIoActionHandlers: ProviderActionHandlers<"newsdata_io", NewsdataIoActionHandler> = {
   get_latest_news(input, context) {
     return requestNewsdataIoJson("/api/1/latest", buildNewsdataIoQuery(input), context, "execute");
   },
@@ -27,6 +32,16 @@ export const newsdataIoActionHandlers: Record<NewsdataIoActionName, NewsdataIoAc
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, newsdataIoActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: newsdataIoApiBaseUrl,
+  auth: { type: "api_key_query", name: "apikey" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

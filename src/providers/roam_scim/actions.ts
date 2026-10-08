@@ -198,24 +198,10 @@ const deleteResourceOutputSchema = s.actionOutput(
   "The Roam SCIM archive response.",
 );
 
-export type RoamScimActionName =
-  | "get_service_provider_config"
-  | "list_users"
-  | "get_user"
-  | "create_user"
-  | "replace_user"
-  | "set_user_active"
-  | "delete_user"
-  | "list_groups"
-  | "get_group"
-  | "create_group"
-  | "replace_group"
-  | "update_group_members"
-  | "delete_group";
-
 export const roamScimActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_service_provider_config",
+    operationType: "read",
     description: "Get the Roam SCIM service provider configuration.",
     requiredScopes: [],
     inputSchema: emptyInputSchema,
@@ -228,6 +214,7 @@ export const roamScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List Roam SCIM users with optional SCIM filtering and pagination.",
     requiredScopes: ["user:read", "user:read.email"],
     inputSchema: listUsersInputSchema,
@@ -241,6 +228,7 @@ export const roamScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Get one Roam SCIM user by Roam Person ID.",
     requiredScopes: ["user:read", "user:read.email"],
     inputSchema: getResourceInputSchema,
@@ -253,6 +241,7 @@ export const roamScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_user",
+    operationType: "write",
     description: "Create a Roam SCIM user from name, email, and optional role metadata.",
     requiredScopes: ["user:write"],
     inputSchema: createUserInputSchema,
@@ -265,6 +254,7 @@ export const roamScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "replace_user",
+    operationType: "destructive",
     description: "Fully replace supported attributes for a Roam SCIM user.",
     requiredScopes: ["user:write"],
     inputSchema: replaceUserInputSchema,
@@ -277,6 +267,7 @@ export const roamScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "set_user_active",
+    operationType: "destructive",
     description: "Archive or reactivate a Roam SCIM user by replacing the active flag.",
     requiredScopes: ["user:write"],
     inputSchema: setUserActiveInputSchema,
@@ -289,6 +280,7 @@ export const roamScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_user",
+    operationType: "destructive",
     description: "Archive a Roam SCIM user by Roam Person ID.",
     requiredScopes: ["user:write"],
     inputSchema: getResourceInputSchema,
@@ -296,6 +288,7 @@ export const roamScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_groups",
+    operationType: "read",
     description: "List Roam SCIM groups with optional pagination.",
     requiredScopes: ["user:read", "user:read.email"],
     inputSchema: listGroupsInputSchema,
@@ -309,6 +302,7 @@ export const roamScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_group",
+    operationType: "read",
     description: "Get one Roam SCIM group by Roam Address ID.",
     requiredScopes: ["user:read", "user:read.email"],
     inputSchema: getResourceInputSchema,
@@ -321,6 +315,7 @@ export const roamScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_group",
+    operationType: "write",
     description: "Create a Roam SCIM group with optional initial members.",
     requiredScopes: ["user:write"],
     inputSchema: createGroupInputSchema,
@@ -333,6 +328,7 @@ export const roamScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "replace_group",
+    operationType: "destructive",
     description: "Fully replace a Roam SCIM group display name and member list.",
     requiredScopes: ["user:write"],
     inputSchema: replaceGroupInputSchema,
@@ -345,6 +341,7 @@ export const roamScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_group_members",
+    operationType: "destructive",
     description: "Patch Roam SCIM group members with add, remove, or replace semantics.",
     requiredScopes: ["user:write"],
     inputSchema: updateGroupMembersInputSchema,
@@ -357,6 +354,7 @@ export const roamScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_group",
+    operationType: "destructive",
     description: "Archive a Roam SCIM group by Roam Address ID.",
     requiredScopes: ["user:write"],
     inputSchema: getResourceInputSchema,

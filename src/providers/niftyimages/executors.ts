@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { createHash } from "node:crypto";
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -13,7 +14,6 @@ import {
 
 const service = "niftyimages";
 const niftyimagesApiBaseUrl = "https://api.niftyimages.com/v1";
-const niftyimagesRequestTimeoutMs = 30_000;
 const niftyimagesMaxResponseBytes = 10 * 1024 * 1024;
 
 type NiftyimagesRequestPhase = "validate" | "execute";
@@ -25,7 +25,7 @@ interface NiftyimagesContext {
 
 type NiftyimagesActionHandler = (input: Record<string, unknown>, context: NiftyimagesContext) => Promise<unknown>;
 
-export const niftyimagesActionHandlers: Record<string, NiftyimagesActionHandler> = {
+export const niftyimagesActionHandlers: ProviderActionHandlers<"niftyimages", NiftyimagesActionHandler> = {
   list_images(input, context) {
     return requestNiftyimagesJson(
       {
@@ -157,7 +157,7 @@ async function requestNiftyimagesJson(
   },
   context: NiftyimagesContext,
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, niftyimagesRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(buildNiftyimagesUrl(input.path, input.params), {
       method: "GET",

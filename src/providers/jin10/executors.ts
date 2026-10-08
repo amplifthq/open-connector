@@ -1,13 +1,14 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 import type { Jin10ActionName } from "./actions.ts";
+import type { Client } from "@modelcontextprotocol/client";
 
-import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { McpError } from "@modelcontextprotocol/sdk/types.js";
-import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
+import { UnauthorizedError } from "@modelcontextprotocol/client";
+import { SdkHttpError } from "@modelcontextprotocol/client";
+import { ProtocolError } from "@modelcontextprotocol/client";
 import { createHash } from "node:crypto";
+import { withMcpClient } from "../mcp-client.ts";
 import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
@@ -20,7 +21,6 @@ const jin10McpOrigin = "https://mcp.jin10.com";
 const jin10McpEndpoint = "https://mcp.jin10.com/mcp";
 const jin10QuoteCodesResourceUri = "quote://codes";
 const jin10RequestTimeoutMs = 30_000;
-const jin10McpJsonSchemaValidator = new CfWorkerJsonSchemaValidator();
 
 type Jin10ActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type Jin10ActionHandler = (input: Record<string, unknown>, context: Jin10ActionContext) => Promise<unknown>;
@@ -31,7 +31,7 @@ interface Jin10McpToolSummary {
   description?: string;
 }
 
-export const jin10ActionHandlers: Record<Jin10ActionName, Jin10ActionHandler> = {
+export const jin10ActionHandlers: ProviderActionHandlers<"jin10", Jin10ActionHandler> = {
   list_quote_codes(_input, context) {
     return readJin10QuoteCodes(context);
   },
@@ -126,7 +126,6 @@ async function callJin10McpTool(
         name: toolName,
         arguments: argumentsInput,
       },
-      undefined,
       {
         timeout: jin10RequestTimeoutMs,
       },
@@ -171,31 +170,17 @@ async function withJin10McpClient<T>(
   headers.set("content-type", "application/json");
   headers.set("user-agent", providerUserAgent);
 
-  const transport = new StreamableHTTPClientTransport(new URL(jin10McpEndpoint), {
-    fetch: input.fetcher,
-    requestInit: {
+  return withMcpClient(
+    {
+      endpoint: new URL(jin10McpEndpoint),
+      transport: "streamable_http",
+      fetcher: input.fetcher,
       headers,
       signal: input.signal,
+      mapError: mapJin10McpError,
     },
-  });
-  const client = new Client(
-    {
-      name: "oomol-connect-jin10",
-      version: "1.0.0",
-    },
-    { jsonSchemaValidator: jin10McpJsonSchemaValidator },
+    run,
   );
-
-  try {
-    await client.connect(transport, {
-      timeout: jin10RequestTimeoutMs,
-    });
-    return await run(client);
-  } catch (error) {
-    throw mapJin10McpError(error);
-  } finally {
-    await client.close().catch(() => undefined);
-  }
 }
 
 function normalizeJin10McpToolResult(toolName: string, result: Jin10McpToolResult): unknown {
@@ -240,15 +225,15 @@ function mapJin10McpError(error: unknown): ProviderRequestError {
   if (error instanceof UnauthorizedError) {
     return new ProviderRequestError(401, "Jin10 MCP API key is invalid or expired", error);
   }
-  if (error instanceof StreamableHTTPError) {
-    const status = error.code;
+  if (error instanceof SdkHttpError) {
+    const status = error.status;
     return new ProviderRequestError(
       status === 401 || status === 403 ? 401 : status && status >= 400 && status < 500 ? 400 : 502,
       `jin10 MCP request failed: ${error.message}`,
       error,
     );
   }
-  if (error instanceof McpError) {
+  if (error instanceof ProtocolError) {
     return new ProviderRequestError(502, `jin10 MCP request failed: ${error.message}`, error);
   }
 

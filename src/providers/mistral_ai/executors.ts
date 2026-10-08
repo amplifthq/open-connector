@@ -1,10 +1,23 @@
-import type { CredentialValidators, ProviderExecutors, TransitFileWriter } from "../../core/types.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+  TransitFileWriter,
+} from "../../core/types.ts";
+import type {
+  ApiKeyProviderContext,
+  ProviderActionHandlers,
+  ProviderActionName,
+  ProviderActionSources,
+} from "../provider-runtime.ts";
 
 import { base64Bytes, compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl, compactJson, readBoundedResponseBytes } from "../../core/request.ts";
 import {
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  mapProviderActionSources,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
   readTransitFileInput,
@@ -33,7 +46,7 @@ interface UploadSource {
   mimeType: string;
 }
 
-const mistralActionSpecs: Record<string, MistralActionSpec> = {
+const mistralActionSpecs: ProviderActionSources<"mistral_ai", MistralActionSpec> = {
   list_models: { method: "GET", path: "/v1/models" },
   get_model: { method: "GET", path: "/v1/models/{model_id}", pathKeys: ["model_id"] },
   list_conversations: { method: "GET", path: "/v1/conversations" },
@@ -170,15 +183,23 @@ const mistralActionSpecs: Record<string, MistralActionSpec> = {
   },
 };
 
-export const mistralAiActionHandlers = Object.fromEntries(
-  Object.keys(mistralActionSpecs).map((name) => [
-    name,
-    (input: Record<string, unknown>, context: ApiKeyProviderContext) =>
-      executeMistralAction(name as string, input, context),
-  ]),
-) as Record<string, MistralActionHandler>;
+export const mistralAiActionHandlers: ProviderActionHandlers<"mistral_ai", MistralActionHandler> =
+  mapProviderActionSources(
+    service,
+    mistralActionSpecs,
+    (name): MistralActionHandler =>
+      (input, context) =>
+        executeMistralAction(name, input, context),
+  );
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, mistralAiActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: mistralApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -205,7 +226,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function executeMistralAction(
-  actionName: string,
+  actionName: ProviderActionName<"mistral_ai">,
   input: Record<string, unknown>,
   context: ApiKeyProviderContext,
 ): Promise<unknown> {
@@ -328,7 +349,7 @@ async function downloadMistralFile(input: Record<string, unknown>, context: ApiK
     throw new ProviderRequestError(400, "download_file requires local transit file storage.");
   }
 
-  const fileId = requiredString(input.file_id, "file_id", invalidInputError);
+  const fileId = requiredString(input.file_id, "file_id", providerInputError);
   const metadata = optionalRecord(
     await executeJsonMistralAction(
       { file_id: fileId },
@@ -374,7 +395,7 @@ function buildMistralUrl(
   const remainingInput = { ...input };
   let path = spec.path;
   for (const key of spec.pathKeys ?? []) {
-    const value = requiredString(remainingInput[key], key, invalidInputError);
+    const value = requiredString(remainingInput[key], key, providerInputError);
     path = path.replace(`{${key}}`, encodeURIComponent(value));
     delete remainingInput[key];
   }
@@ -450,7 +471,7 @@ async function resolveUploadSource(
     return readTransitUploadSource(file, context.transitFiles);
   }
 
-  const fileName = requiredString(file.name, "file.name", invalidInputError);
+  const fileName = requiredString(file.name, "file.name", providerInputError);
   const mimeType = optionalString(file.mimeType) ?? optionalString(file.mimetype);
   const fileUrl = optionalString(file.url);
   const contentBase64 = optionalString(file.content_base64);
@@ -463,7 +484,7 @@ async function resolveUploadSource(
   }
   if (contentBase64) {
     return {
-      bytes: base64Bytes(contentBase64, "file.content_base64", invalidInputError),
+      bytes: base64Bytes(contentBase64, "file.content_base64", providerInputError),
       fileName,
       mimeType: mimeType ?? "application/octet-stream",
     };
@@ -519,7 +540,7 @@ async function readRemoteUploadSource(
 function readPublicFileUrl(fileUrl: string, fieldName: string): URL {
   return assertPublicHttpUrl(fileUrl, {
     fieldName,
-    createError: invalidInputError,
+    createError: providerInputError,
   });
 }
 
@@ -619,8 +640,4 @@ async function readMistralError(response: Response): Promise<{ type: string; mes
       message: (await response.text().catch(() => "")) || `mistral_ai request failed with ${response.status}`,
     };
   }
-}
-
-function invalidInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

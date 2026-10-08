@@ -1,9 +1,14 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { FixerActionName } from "./actions.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "fixer";
 const fixerApiBaseUrl = "https://data.fixer.io/api";
@@ -17,7 +22,7 @@ interface FixerRequestInput {
   query?: Record<string, FixerQueryValue>;
 }
 
-export const fixerActionHandlers: Record<FixerActionName, FixerActionHandler> = {
+export const fixerActionHandlers: ProviderActionHandlers<"fixer", FixerActionHandler> = {
   get_supported_symbols(_input, context) {
     return fixerRequest(context, {
       path: "/symbols",
@@ -45,6 +50,13 @@ export const fixerActionHandlers: Record<FixerActionName, FixerActionHandler> = 
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, fixerActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: fixerApiBaseUrl,
+  auth: { type: "api_key_query", name: "access_key" },
+  skipDnsValidation: true,
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

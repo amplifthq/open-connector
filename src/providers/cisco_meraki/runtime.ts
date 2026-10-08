@@ -1,17 +1,17 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
   readProviderJsonBody,
 } from "../provider-runtime.ts";
 
 export const ciscoMerakiApiBaseUrl = "https://api.meraki.com/api/v1";
-
-const ciscoMerakiRequestTimeoutMs = 30_000;
 
 type CiscoMerakiRequestPhase = "validate" | "execute";
 
@@ -25,7 +25,10 @@ interface CiscoMerakiListResult {
   link: string | null;
 }
 
-export const ciscoMerakiActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const ciscoMerakiActionHandlers: ProviderActionHandlers<
+  "cisco_meraki",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   async list_organizations(input, context) {
     const result = await requestCiscoMerakiList(
       {
@@ -42,7 +45,7 @@ export const ciscoMerakiActionHandlers: Record<string, ProviderRuntimeHandler<Ap
     };
   },
   async list_organization_networks(input, context) {
-    const organizationId = requiredString(input.organizationId, "organizationId", inputError);
+    const organizationId = requiredString(input.organizationId, "organizationId", providerInputError);
     const result = await requestCiscoMerakiList(
       {
         path: `/organizations/${encodeURIComponent(organizationId)}/networks`,
@@ -58,7 +61,7 @@ export const ciscoMerakiActionHandlers: Record<string, ProviderRuntimeHandler<Ap
     };
   },
   async list_organization_inventory_devices(input, context) {
-    const organizationId = requiredString(input.organizationId, "organizationId", inputError);
+    const organizationId = requiredString(input.organizationId, "organizationId", providerInputError);
     const result = await requestCiscoMerakiList(
       {
         path: `/organizations/${encodeURIComponent(organizationId)}/inventory/devices`,
@@ -74,7 +77,7 @@ export const ciscoMerakiActionHandlers: Record<string, ProviderRuntimeHandler<Ap
     };
   },
   async get_device(input, context) {
-    const serial = requiredString(input.serial, "serial", inputError);
+    const serial = requiredString(input.serial, "serial", providerInputError);
     const payload = await requestCiscoMeraki(
       {
         path: `/devices/${encodeURIComponent(serial)}`,
@@ -166,7 +169,7 @@ async function requestCiscoMerakiResponse(
     url.searchParams.append(key, value);
   }
 
-  const timeout = createProviderTimeout(context.signal, ciscoMerakiRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     return await context.fetcher(url, {
       headers: {
@@ -250,10 +253,6 @@ function buildSearch(input: Record<string, unknown>, omittedKeys: readonly strin
     }
   }
   return search;
-}
-
-function inputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function responseError(message: string): ProviderRequestError {

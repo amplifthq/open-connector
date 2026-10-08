@@ -1,25 +1,38 @@
-import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
-import { optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { optionalInteger, optionalRecord, optionalString, recordOrEmpty, requiredString } from "../../core/cast.ts";
 import {
   defineProviderProxy,
   defineProviderExecutors,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
-  requireApiKeyCredential,
 } from "../provider-runtime.ts";
 
 const service = "bamboohr";
 
-interface BamboohrContext extends ApiKeyProviderContext {
+interface BamboohrContext {
+  authorization: string;
+  companyDomain: string;
+  fetcher: typeof fetch;
+  signal?: AbortSignal;
+}
+
+interface BamboohrAuthorization {
+  authorization: string;
   companyDomain: string;
 }
 
-type BamboohrActionHandler = (input: Record<string, unknown>, context: BamboohrContext) => Promise<unknown>;
-
-export const bamboohrActionHandlers: Record<string, BamboohrActionHandler> = {
+export const bamboohrActionHandlers: ProviderActionHandlers<"bamboohr", ProviderRuntimeHandler<BamboohrContext>> = {
   async get_company_information(_input, context) {
     const raw = await requestBamboohrJson({
       context,
@@ -27,7 +40,7 @@ export const bamboohrActionHandlers: Record<string, BamboohrActionHandler> = {
     });
 
     return {
-      company: asRecord(raw),
+      company: recordOrEmpty(raw),
       raw,
     };
   },
@@ -55,18 +68,18 @@ export const bamboohrActionHandlers: Record<string, BamboohrActionHandler> = {
         "page[before]": optionalString(input.before),
       },
     });
-    const body = asRecord(raw);
+    const body = recordOrEmpty(raw);
 
     return {
       employees: Array.isArray(body.data) ? body.data : [],
-      meta: asRecord(body.meta),
-      links: asRecord(body._links),
+      meta: recordOrEmpty(body.meta),
+      links: recordOrEmpty(body._links),
       raw,
     };
   },
 
   async get_employee(input, context) {
-    const employeeId = requiredString(input.employeeId, "employeeId", invalidInputError);
+    const employeeId = requiredString(input.employeeId, "employeeId", providerInputError);
     const raw = await requestBamboohrJson({
       context,
       path: `/api/v1/employees/${encodeURIComponent(employeeId)}`,
@@ -77,7 +90,7 @@ export const bamboohrActionHandlers: Record<string, BamboohrActionHandler> = {
     });
 
     return {
-      employee: asRecord(raw),
+      employee: recordOrEmpty(raw),
       raw,
     };
   },
@@ -86,55 +99,115 @@ export const bamboohrActionHandlers: Record<string, BamboohrActionHandler> = {
 export const executors: ProviderExecutors = defineProviderExecutors<BamboohrContext>({
   service,
   handlers: bamboohrActionHandlers,
-  async createContext(context, fetcher): Promise<BamboohrContext> {
-    const credential = await requireApiKeyCredential(context, service);
+  async createContext(context: ExecutionContext, fetcher: typeof fetch): Promise<BamboohrContext> {
+    const auth = await resolveBamboohrAuthorization(context);
     return {
-      apiKey: credential.apiKey,
-      companyDomain: readBamboohrCompanyDomain(credential.values.companyDomain ?? credential.metadata.companyDomain),
+      ...auth,
       fetcher,
       signal: context.signal,
-      transitFiles: context.transitFiles,
     };
   },
 });
 
 export const proxy: ProviderProxyExecutor = defineProviderProxy({
   service,
-  baseUrl: async (context) => {
-    const credential = await requireApiKeyCredential(context, service);
-    return buildBamboohrApiBaseUrl(credential.values.companyDomain ?? credential.metadata.companyDomain);
+  baseUrl: async (context): Promise<string> => {
+    const auth = await resolveBamboohrAuthorization(context);
+    return buildBamboohrApiBaseUrl(auth.companyDomain);
   },
-  auth: { type: "api_key_basic", suffix: ":x" },
+  auth: { type: "none" },
+  async customizeRequest({ context, headers }) {
+    const auth = await resolveBamboohrAuthorization(context);
+    headers.set("accept", "application/json");
+    headers.set("authorization", auth.authorization);
+    headers.set("user-agent", providerUserAgent);
+  },
 });
 
 export const credentialValidators: CredentialValidators = {
-  async apiKey(input, { fetcher, signal }) {
-    const companyDomain = normalizeBamboohrCompanyDomain(input.values.companyDomain);
-    const raw = await requestBamboohrJson({
-      context: {
-        apiKey: input.apiKey,
-        companyDomain,
-        fetcher,
-        signal,
+  apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {
+    return validateBamboohrCredential(
+      {
+        authorization: buildBamboohrApiKeyAuthorization(input.apiKey),
+        companyDomain: normalizeBamboohrCompanyDomain(input.values.companyDomain),
+        grantedScopes: [],
       },
-      path: "/api/v1/company_information",
-    });
-    const company = asRecord(raw);
-    const label = readFirstString(company, ["displayName", "legalName", "name"]) ?? "BambooHR Account";
-
-    return {
-      profile: {
-        accountId: companyDomain,
-        displayName: label,
+      fetcher,
+      signal,
+    );
+  },
+  oauth2(input, { fetcher, signal }): Promise<CredentialValidationResult> {
+    return validateBamboohrCredential(
+      {
+        authorization: `${input.tokenType} ${input.accessToken}`,
+        companyDomain: resolveBamboohrOAuthCompanyDomain(input.metadata),
+        grantedScopes: readBamboohrGrantedScopes(input.metadata.scope, input.profile.grantedScopes),
       },
-      grantedScopes: [],
-      metadata: {
-        companyDomain,
-        apiBaseUrl: buildBamboohrApiBaseUrl(companyDomain),
-      },
-    };
+      fetcher,
+      signal,
+    );
   },
 };
+
+async function validateBamboohrCredential(
+  auth: BamboohrAuthorization & { grantedScopes: string[] },
+  fetcher: typeof fetch,
+  signal?: AbortSignal,
+): Promise<CredentialValidationResult> {
+  const raw = await requestBamboohrJson({
+    context: {
+      authorization: auth.authorization,
+      companyDomain: auth.companyDomain,
+      fetcher,
+      signal,
+    },
+    path: "/api/v1/company_information",
+  });
+  const company = recordOrEmpty(raw);
+  const label = readFirstString(company, ["displayName", "legalName", "name"]) ?? "BambooHR Account";
+
+  return {
+    profile: {
+      accountId: auth.companyDomain,
+      displayName: label,
+    },
+    grantedScopes: auth.grantedScopes,
+    metadata: {
+      companyDomain: auth.companyDomain,
+      apiBaseUrl: buildBamboohrApiBaseUrl(auth.companyDomain),
+    },
+  };
+}
+
+async function resolveBamboohrAuthorization(context: ExecutionContext): Promise<BamboohrAuthorization> {
+  const credential = await context.getCredential(service);
+  if (credential?.authType === "oauth2") {
+    return {
+      authorization: `${credential.tokenType} ${credential.accessToken}`,
+      companyDomain: resolveBamboohrOAuthCompanyDomain(credential.metadata),
+    };
+  }
+  if (credential?.authType === "api_key") {
+    return {
+      authorization: buildBamboohrApiKeyAuthorization(credential.apiKey),
+      companyDomain: readBamboohrCompanyDomain(credential.values.companyDomain ?? credential.metadata.companyDomain),
+    };
+  }
+  throw new ProviderRequestError(401, "Configure BambooHR OAuth or API key credentials first.");
+}
+
+function resolveBamboohrOAuthCompanyDomain(metadata: Record<string, unknown>): string {
+  const storedCompanyDomain = optionalString(metadata.companyDomain);
+  if (storedCompanyDomain) {
+    return normalizeBamboohrCompanyDomain(storedCompanyDomain);
+  }
+  return readBamboohrCompanyDomain(optionalRecord(metadata.oauthClientExtra)?.companyDomain);
+}
+
+function readBamboohrGrantedScopes(value: unknown, fallback: string[]): string[] {
+  const scope = optionalString(value);
+  return scope ? [...new Set(scope.split(/\s+/u).filter(Boolean))] : fallback;
+}
 
 function readBamboohrCompanyDomain(value: unknown): string {
   if (typeof value !== "string") {
@@ -154,6 +227,9 @@ function normalizeBamboohrCompanyDomain(value: unknown): string {
   if (trimmed.includes("://") || trimmed.includes("/") || trimmed.includes(".")) {
     throw new ProviderRequestError(400, "companyDomain must be the BambooHR company subdomain, not a full URL");
   }
+  if (!/^[a-z0-9](?:[a-z0-9_-]{0,61}[a-z0-9])?$/u.test(trimmed)) {
+    throw new ProviderRequestError(400, "companyDomain must be a valid BambooHR company subdomain");
+  }
   return trimmed;
 }
 
@@ -162,14 +238,14 @@ function buildBamboohrApiBaseUrl(companyDomain: string): string {
 }
 
 async function requestBamboohrJson(input: {
-  context: Pick<BamboohrContext, "apiKey" | "companyDomain" | "fetcher" | "signal">;
+  context: Pick<BamboohrContext, "authorization" | "companyDomain" | "fetcher" | "signal">;
   path: string;
   query?: Record<string, string | number | boolean | undefined>;
 }): Promise<unknown> {
   let response: Response;
   try {
     response = await input.context.fetcher(buildBamboohrUrl(input.context.companyDomain, input.path, input.query), {
-      headers: buildBamboohrHeaders(input.context.apiKey),
+      headers: buildBamboohrHeaders(input.context.authorization),
       signal: input.context.signal,
     });
   } catch (error) {
@@ -208,12 +284,16 @@ function buildBamboohrUrl(
   return url;
 }
 
-function buildBamboohrHeaders(apiKey: string): Record<string, string> {
+function buildBamboohrHeaders(authorization: string): Record<string, string> {
   return {
     accept: "application/json",
-    authorization: `Basic ${Buffer.from(`${apiKey}:x`).toString("base64")}`,
+    authorization,
     "user-agent": providerUserAgent,
   };
+}
+
+function buildBamboohrApiKeyAuthorization(apiKey: string): string {
+  return `Basic ${Buffer.from(`${apiKey}:x`).toString("base64")}`;
 }
 
 async function throwBamboohrError(response: Response): Promise<never> {
@@ -234,7 +314,7 @@ async function readBamboohrErrorMessage(response: Response): Promise<string> {
   if (text) {
     try {
       const body = JSON.parse(text) as unknown;
-      const record = asRecord(body);
+      const record = recordOrEmpty(body);
       return readFirstString(record, ["detail", "message", "error"]) ?? text;
     } catch {
       return text;
@@ -248,10 +328,6 @@ function joinFields(value: unknown): string | undefined {
   return Array.isArray(value) ? value.map((field) => String(field)).join(",") : undefined;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return optionalRecord(value) ?? {};
-}
-
 function readFirstString(record: Record<string, unknown>, keys: string[]): string | undefined {
   for (const key of keys) {
     const value = optionalString(record[key]);
@@ -260,10 +336,6 @@ function readFirstString(record: Record<string, unknown>, keys: string[]): strin
     }
   }
   return undefined;
-}
-
-function invalidInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function isAbortError(error: unknown): boolean {

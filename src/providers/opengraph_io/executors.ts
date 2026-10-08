@@ -1,4 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -6,6 +7,7 @@ import { assertPublicHttpUrl } from "../../core/request.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
   ProviderRequestError,
   providerUserAgent,
@@ -14,7 +16,6 @@ import {
 const service = "opengraph_io";
 const opengraphIoApiBaseUrl = "https://opengraph.io";
 const opengraphIoValidationTargetUrl = "https://example.com";
-const opengraphIoRequestTimeoutMs = 30_000;
 
 type OpenGraphIoRequestPhase = "validate" | "execute";
 type OpenGraphIoQueryValue = string | number | boolean | undefined;
@@ -43,7 +44,7 @@ interface OpenGraphIoSiteResult {
   tags?: Record<string, unknown>[];
 }
 
-export const opengraphIoActionHandlers: Record<string, OpenGraphIoActionHandler> = {
+export const opengraphIoActionHandlers: ProviderActionHandlers<"opengraph_io", OpenGraphIoActionHandler> = {
   extract_site(input, context) {
     return opengraphIoExtractSite(input, context);
   },
@@ -59,6 +60,16 @@ export const opengraphIoActionHandlers: Record<string, OpenGraphIoActionHandler>
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, opengraphIoActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: opengraphIoApiBaseUrl,
+  auth: { type: "api_key_query", name: "app_id" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -190,7 +201,7 @@ async function opengraphIoRequest(input: {
     }
   }
 
-  const timeout = createProviderTimeout(input.context.signal, opengraphIoRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const response = await input.context.fetcher(url, {
       method: "GET",

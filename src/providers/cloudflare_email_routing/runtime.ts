@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -43,10 +44,10 @@ interface CloudflareAuthContext {
   signal?: AbortSignal;
 }
 
-const apiBaseUrl = "https://api.cloudflare.com/client/v4";
+export const cloudflareEmailRoutingApiBaseUrl = "https://api.cloudflare.com/client/v4";
 
-export const cloudflareEmailRoutingActionHandlers: Record<
-  string,
+export const cloudflareEmailRoutingActionHandlers: ProviderActionHandlers<
+  "cloudflare_email_routing",
   ProviderRuntimeHandler<CloudflareEmailRoutingContext>
 > = {
   list_routing_rules(input, context) {
@@ -255,7 +256,7 @@ function buildHeaders(context: { email?: string; apiKey: string }, hasBody: bool
 }
 
 function buildUrl(path: string, query?: Record<string, string | number | boolean | undefined>): string {
-  const url = new URL(`${apiBaseUrl}${path}`);
+  const url = new URL(`${cloudflareEmailRoutingApiBaseUrl}${path}`);
   for (const [key, value] of Object.entries(queryParams(query ?? {}))) url.searchParams.set(key, value);
   return url.toString();
 }

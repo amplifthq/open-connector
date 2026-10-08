@@ -35,11 +35,10 @@ const entitySchema = s.object("A normalized Dynatrace monitored entity.", {
   raw: rawObjectSchema,
 });
 
-export type DynatraceActionName = "list_problems" | "list_entities" | "get_entity";
-
 export const dynatraceActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_problems",
+    operationType: "read",
     description: "List Dynatrace Problems API v2 problems with optional selectors and pagination.",
     requiredScopes: ["problems.read"],
     inputSchema: s.object(
@@ -67,6 +66,7 @@ export const dynatraceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_entities",
+    operationType: "read",
     description: "List Dynatrace monitored entities with optional selector, fields, and pagination.",
     requiredScopes: ["entities.read"],
     inputSchema: s.object(
@@ -89,6 +89,7 @@ export const dynatraceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_entity",
+    operationType: "read",
     description: "Get one Dynatrace monitored entity by entity ID.",
     requiredScopes: ["entities.read"],
     inputSchema: s.object(

@@ -141,16 +141,10 @@ const getGroupOutputSchema = s.object(
   { required: ["group"] },
 );
 
-export type LucidScimActionName =
-  | "get_service_provider_config"
-  | "list_users"
-  | "get_user"
-  | "list_groups"
-  | "get_group";
-
 export const lucidScimActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_service_provider_config",
+    operationType: "read",
     description: "Get the Lucid SCIM service provider configuration for the connected account.",
     requiredScopes: [],
     inputSchema: s.object("No input is required for this Lucid SCIM request.", {}),
@@ -158,6 +152,7 @@ export const lucidScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List Lucid SCIM users with optional SCIM filter, pagination, and attributes.",
     requiredScopes: [],
     inputSchema: listUsersInputSchema,
@@ -165,6 +160,7 @@ export const lucidScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Get one Lucid SCIM user by ID.",
     requiredScopes: [],
     inputSchema: getUserInputSchema,
@@ -172,6 +168,7 @@ export const lucidScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_groups",
+    operationType: "read",
     description: "List Lucid SCIM org groups or teams with optional SCIM filter, pagination, and attributes.",
     requiredScopes: [],
     inputSchema: listGroupsInputSchema,
@@ -179,6 +176,7 @@ export const lucidScimActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_group",
+    operationType: "read",
     description: "Get one Lucid SCIM org group or team by ID.",
     requiredScopes: [],
     inputSchema: getGroupInputSchema,

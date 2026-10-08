@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { optionalInteger, optionalRawString, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -16,7 +17,6 @@ const apiBaseUrl = "https://brain.predis.ai/predis_api/v1";
 const createContentPath = "/create_content/";
 const getPostsPath = "/get_posts/";
 const getTemplatesPath = "/get_templates/";
-const requestTimeoutMs = 30_000;
 const maxResponseBytes = 10 * 1024 * 1024;
 const validationBrandId = "__oomol_validation_brand__";
 
@@ -34,7 +34,7 @@ interface PredisAiRequest {
 
 type PredisAiActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const predisAiActionHandlers: Record<string, PredisAiActionHandler> = {
+export const predisAiActionHandlers: ProviderActionHandlers<"predis_ai", PredisAiActionHandler> = {
   async list_templates(input, context) {
     const query = buildListQuery(input);
     setQuery(query, "post_type", optionalString(input.postType));
@@ -144,7 +144,7 @@ async function requestPredisAi(input: PredisAiRequest): Promise<{ payload: unkno
   for (const [key, value] of input.query ?? []) {
     url.searchParams.append(key, value);
   }
-  const timeout = createProviderTimeout(input.context.signal, requestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const response = await input.context.fetcher(url, {
       method: input.method,

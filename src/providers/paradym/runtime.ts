@@ -1,8 +1,8 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ParadymActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { compactObject, looseArray, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 export const paradymApiBaseUrl = "https://api.paradym.id";
@@ -11,7 +11,7 @@ type ParadymRequestMode = "validate" | "execute";
 type ParadymActionContext = ApiKeyProviderContext;
 type ParadymActionHandler = (input: Record<string, unknown>, context: ParadymActionContext) => Promise<unknown>;
 
-export const paradymActionHandlers: Record<ParadymActionName, ParadymActionHandler> = {
+export const paradymActionHandlers: ProviderActionHandlers<"paradym", ParadymActionHandler> = {
   list_projects(input, context) {
     return listProjects(input, context);
   },
@@ -388,7 +388,7 @@ function normalizeProject(value: unknown) {
 }
 
 function normalizeOffer(value: Record<string, unknown>) {
-  const credentials = readOptionalArray(value.credentials).map(normalizeCredential);
+  const credentials = looseArray(value.credentials).map(normalizeCredential);
   return {
     id: requireString(value.id, "id"),
     status: asNullableString(value.status),
@@ -411,7 +411,7 @@ function normalizeIssuanceSession(value: unknown) {
     status: optionalString(session.status) ?? "",
     offerUri: optionalString(session.offerUri) ?? "",
     offerQrUri: optionalString(session.offerQrUri) ?? "",
-    credentials: readOptionalArray(session.credentials).map(normalizeCredential),
+    credentials: looseArray(session.credentials).map(normalizeCredential),
     createdAt: asNullableString(session.createdAt),
     updatedAt: asNullableString(session.updatedAt),
     expiresAt: asNullableString(session.expiresAt),
@@ -428,7 +428,7 @@ function normalizeVerificationSession(value: unknown) {
     presentationTemplateId: optionalString(session.presentationTemplateId) ?? "",
     authorizationRequestUri: optionalString(session.authorizationRequestUri) ?? "",
     authorizationRequestQrUri: optionalString(session.authorizationRequestQrUri) ?? "",
-    credentials: readOptionalArray(session.credentials),
+    credentials: looseArray(session.credentials),
     createdAt: asNullableString(session.createdAt),
     updatedAt: asNullableString(session.updatedAt),
     expiresAt: asNullableString(session.expiresAt),
@@ -511,10 +511,6 @@ function readArrayField(value: unknown, fieldName: string) {
     throw new ProviderRequestError(502, `Paradym response missing ${fieldName} array`);
   }
   return value;
-}
-
-function readOptionalArray(value: unknown) {
-  return Array.isArray(value) ? value : [];
 }
 
 function requireObjectPayload(value: unknown, fieldName: string) {

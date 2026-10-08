@@ -1,13 +1,13 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
-import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { optionalBoolean, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
   readProviderJsonBody,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 type QueryValue = string | number | boolean | readonly (string | number | boolean)[] | undefined;
@@ -28,9 +28,8 @@ interface RequestInput {
 
 export const snykApiBaseUrl = "https://api.snyk.io/rest";
 const apiVersion = "2024-10-15";
-const timeoutMs = 30_000;
 
-export const snykActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const snykActionHandlers: ProviderActionHandlers<"snyk", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   async get_self(_input, context) {
     const response = await requestJson({ context, path: "/self", phase: "execute" });
     return { principal: requireResource(response.data, "Snyk principal"), raw: response };
@@ -43,7 +42,7 @@ export const snykActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyPro
         query: {
           ...cursorQuery(input),
           group_id: trimmed(input.groupId),
-          is_personal: boolean(input.isPersonal),
+          is_personal: optionalBoolean(input.isPersonal),
           slug: trimmed(input.slug),
           name: trimmed(input.name),
           expand: input.includeMemberRole === true ? ["member_role"] : undefined,
@@ -82,8 +81,8 @@ export const snykActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyPro
             environment: stringArray(input.environment),
             lifecycle: stringArray(input.lifecycle),
             expand: input.includeTarget === true ? ["target"] : undefined,
-            "meta.latest_issue_counts": boolean(input.includeLatestIssueCounts),
-            "meta.latest_dependency_total": boolean(input.includeLatestDependencyTotal),
+            "meta.latest_issue_counts": optionalBoolean(input.includeLatestIssueCounts),
+            "meta.latest_dependency_total": optionalBoolean(input.includeLatestDependencyTotal),
             cli_monitored_before: trimmed(input.cliMonitoredBefore),
             cli_monitored_after: trimmed(input.cliMonitoredAfter),
           },
@@ -113,8 +112,8 @@ export const snykActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyPro
       path: `/orgs/${encodeURIComponent(orgId)}/projects/${encodeURIComponent(projectId)}`,
       query: {
         expand: input.includeTarget === true ? ["target"] : undefined,
-        "meta.latest_issue_counts": boolean(input.includeLatestIssueCounts),
-        "meta.latest_dependency_total": boolean(input.includeLatestDependencyTotal),
+        "meta.latest_issue_counts": optionalBoolean(input.includeLatestIssueCounts),
+        "meta.latest_dependency_total": optionalBoolean(input.includeLatestDependencyTotal),
       },
       commaArrays: ["expand"],
       phase: "execute",
@@ -140,7 +139,7 @@ export const snykActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyPro
             created_after: trimmed(input.createdAfter),
             effective_severity_level: stringArray(input.effectiveSeverityLevel),
             status: stringArray(input.status),
-            ignored: boolean(input.ignored),
+            ignored: optionalBoolean(input.ignored),
           },
           commaArrays: ["effective_severity_level", "status"],
           phase: "execute",
@@ -173,8 +172,7 @@ export async function validateSnykCredential(
 }
 
 async function requestJson(input: RequestInput): Promise<SnykResponse> {
-  const timeout = createProviderTimeout(input.context.signal, timeoutMs);
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "Snyk" }, async (signal) => {
     const url = buildUrl(input.path, input.query, input.commaArrays);
     const response = await input.context.fetcher(url, {
       headers: {
@@ -183,7 +181,7 @@ async function requestJson(input: RequestInput): Promise<SnykResponse> {
         "content-type": "application/vnd.api+json",
         "user-agent": providerUserAgent,
       },
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readProviderJsonBody(response, {
       emptyBody: null,
@@ -204,16 +202,7 @@ async function requestJson(input: RequestInput): Promise<SnykResponse> {
     const object = optionalRecord(payload);
     if (!object) throw new ProviderRequestError(502, "Snyk returned a non-object response");
     return object;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) throw error;
-    if (timeout.didTimeout() || isAbortLikeError(error)) throw new ProviderRequestError(504, "Snyk request timed out");
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Snyk request failed: ${error.message}` : "Snyk request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildUrl(path: string, query: Record<string, QueryValue> = {}, commaArrays: readonly string[] = []): URL {
@@ -258,9 +247,6 @@ function requiredTrimmed(value: unknown, field: string): string {
 }
 function trimmed(value: unknown): string | undefined {
   return optionalString(value)?.trim() || undefined;
-}
-function boolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
 }
 function stringArray(value: unknown): string[] | undefined {
   if (value === undefined) return undefined;

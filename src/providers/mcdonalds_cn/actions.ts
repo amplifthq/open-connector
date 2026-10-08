@@ -185,18 +185,10 @@ const productSearchDataSchema = s.object(
   },
 );
 
-export type McdonaldsCnActionName =
-  | "get_cities"
-  | "search_stores"
-  | "get_store"
-  | "get_store_business"
-  | "get_menu"
-  | "get_product_detail"
-  | "search_products";
-
 export const mcdonaldsCnActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_cities",
+    operationType: "read",
     description: "Get McDonald's China cities that support restaurant and menu lookup.",
     inputSchema: s.object(
       {
@@ -211,6 +203,7 @@ export const mcdonaldsCnActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_stores",
+    operationType: "read",
     description: "Search McDonald's China stores by delivery address, city, location, keyword, or order filters.",
     inputSchema: s.object(
       {
@@ -252,6 +245,7 @@ export const mcdonaldsCnActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_store",
+    operationType: "read",
     description: "Get one McDonald's China store by store code.",
     inputSchema: s.object(
       {
@@ -267,6 +261,7 @@ export const mcdonaldsCnActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_store_business",
+    operationType: "read",
     description: "Get McDonald's China business details for a store business entity code.",
     inputSchema: s.object(
       {
@@ -286,6 +281,7 @@ export const mcdonaldsCnActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_menu",
+    operationType: "read",
     description: "Get a McDonald's China store menu for an order type, daypart, and sales channel.",
     inputSchema: s.object(
       {
@@ -313,6 +309,7 @@ export const mcdonaldsCnActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_product_detail",
+    operationType: "read",
     description: "Get detailed McDonald's China menu product information.",
     inputSchema: s.object(
       {
@@ -337,6 +334,7 @@ export const mcdonaldsCnActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_products",
+    operationType: "read",
     description: "Search McDonald's China menu products for one store, daypart, and order type.",
     inputSchema: s.object(
       {

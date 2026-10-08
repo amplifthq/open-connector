@@ -5,13 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "metronome";
 
-export type MetronomeActionName =
-  | "list_customers"
-  | "get_customer"
-  | "list_billable_metrics"
-  | "list_invoices"
-  | "get_invoice";
-
 const rawObjectSchema = s.looseObject("The raw Metronome object returned by the API.");
 
 const paginationOutputSchema = {
@@ -74,6 +67,7 @@ const pageInputFields = {
 
 const listCustomersAction = defineProviderAction(service, {
   name: "list_customers",
+  operationType: "read",
   description: "List Metronome customers with optional filters and cursor pagination.",
   requiredScopes: [],
   inputSchema: s.object(
@@ -105,6 +99,7 @@ const listCustomersAction = defineProviderAction(service, {
 
 const getCustomerAction = defineProviderAction(service, {
   name: "get_customer",
+  operationType: "read",
   description: "Get detailed information for a specific Metronome customer.",
   requiredScopes: [],
   inputSchema: customerIdInputSchema,
@@ -115,6 +110,7 @@ const getCustomerAction = defineProviderAction(service, {
 
 const listBillableMetricsAction = defineProviderAction(service, {
   name: "list_billable_metrics",
+  operationType: "read",
   description: "List Metronome billable metrics with optional archived metrics and pagination.",
   requiredScopes: [],
   inputSchema: s.object(
@@ -133,6 +129,7 @@ const listBillableMetricsAction = defineProviderAction(service, {
 
 const listInvoicesAction = defineProviderAction(service, {
   name: "list_invoices",
+  operationType: "read",
   description: "List invoices for a Metronome customer with stable filters and pagination.",
   requiredScopes: [],
   inputSchema: s.object(
@@ -172,6 +169,7 @@ const listInvoicesAction = defineProviderAction(service, {
 
 const getInvoiceAction = defineProviderAction(service, {
   name: "get_invoice",
+  operationType: "read",
   description: "Get a specific Metronome invoice by customer ID and invoice ID.",
   requiredScopes: [],
   inputSchema: s.object(

@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { CodaActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -12,9 +12,15 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  providerInputError,
+  providerResponseError,
+  providerUserAgent,
+  ProviderRequestError,
+  requiredInputString,
+} from "../provider-runtime.ts";
 
-const codaApiBaseUrl = "https://coda.io/apis/v1";
+export const codaApiBaseUrl = "https://coda.io/apis/v1";
 const codaWhoamiPath = "/whoami";
 
 interface CodaCredentialInput {
@@ -26,7 +32,7 @@ type CodaQueryValue = string | number | boolean | string[] | undefined;
 type CodaRuntimeContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type CodaActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const codaActionHandlers: Record<CodaActionName, CodaActionHandler> = {
+export const codaActionHandlers: ProviderActionHandlers<"coda", CodaActionHandler> = {
   async get_current_user(_input, context) {
     const user = await requestCodaObject({
       context,
@@ -59,7 +65,7 @@ export const codaActionHandlers: Record<CodaActionName, CodaActionHandler> = {
   async get_doc(input, context) {
     const doc = await requestCodaObject({
       context,
-      path: `/docs/${encodeURIComponent(requireInputString(input.docId, "docId"))}`,
+      path: `/docs/${encodeURIComponent(requiredInputString(input.docId, "docId"))}`,
       mode: "execute",
       notFoundAsInvalidInput: true,
     });
@@ -69,7 +75,7 @@ export const codaActionHandlers: Record<CodaActionName, CodaActionHandler> = {
   async list_pages(input, context) {
     return requestCodaList({
       context,
-      path: `/docs/${encodeURIComponent(requireInputString(input.docId, "docId"))}/pages`,
+      path: `/docs/${encodeURIComponent(requiredInputString(input.docId, "docId"))}/pages`,
       query: compactObject({
         limit: readOptionalPositiveInteger(input.limit, "limit"),
         pageToken: optionalString(input.pageToken),
@@ -82,7 +88,7 @@ export const codaActionHandlers: Record<CodaActionName, CodaActionHandler> = {
   async create_page(input, context) {
     const payload = await requestCodaObject({
       context,
-      path: `/docs/${encodeURIComponent(requireInputString(input.docId, "docId"))}/pages`,
+      path: `/docs/${encodeURIComponent(requiredInputString(input.docId, "docId"))}/pages`,
       method: "POST",
       body: compactObject({
         name: optionalString(input.name),
@@ -105,7 +111,7 @@ export const codaActionHandlers: Record<CodaActionName, CodaActionHandler> = {
   async list_tables(input, context) {
     return requestCodaList({
       context,
-      path: `/docs/${encodeURIComponent(requireInputString(input.docId, "docId"))}/tables`,
+      path: `/docs/${encodeURIComponent(requiredInputString(input.docId, "docId"))}/tables`,
       query: compactObject({
         limit: readOptionalPositiveInteger(input.limit, "limit"),
         pageToken: optionalString(input.pageToken),
@@ -120,8 +126,8 @@ export const codaActionHandlers: Record<CodaActionName, CodaActionHandler> = {
   async get_table(input, context) {
     const table = await requestCodaObject({
       context,
-      path: `/docs/${encodeURIComponent(requireInputString(input.docId, "docId"))}/tables/${encodeURIComponent(
-        requireInputString(input.tableIdOrName, "tableIdOrName"),
+      path: `/docs/${encodeURIComponent(requiredInputString(input.docId, "docId"))}/tables/${encodeURIComponent(
+        requiredInputString(input.tableIdOrName, "tableIdOrName"),
       )}`,
       query: compactObject({
         useUpdatedTableLayouts: optionalBoolean(input.useUpdatedTableLayouts),
@@ -135,8 +141,8 @@ export const codaActionHandlers: Record<CodaActionName, CodaActionHandler> = {
   async list_columns(input, context) {
     return requestCodaList({
       context,
-      path: `/docs/${encodeURIComponent(requireInputString(input.docId, "docId"))}/tables/${encodeURIComponent(
-        requireInputString(input.tableIdOrName, "tableIdOrName"),
+      path: `/docs/${encodeURIComponent(requiredInputString(input.docId, "docId"))}/tables/${encodeURIComponent(
+        requiredInputString(input.tableIdOrName, "tableIdOrName"),
       )}/columns`,
       query: compactObject({
         limit: readOptionalPositiveInteger(input.limit, "limit"),
@@ -151,8 +157,8 @@ export const codaActionHandlers: Record<CodaActionName, CodaActionHandler> = {
   async list_rows(input, context) {
     const payload = await requestCodaObject({
       context,
-      path: `/docs/${encodeURIComponent(requireInputString(input.docId, "docId"))}/tables/${encodeURIComponent(
-        requireInputString(input.tableIdOrName, "tableIdOrName"),
+      path: `/docs/${encodeURIComponent(requiredInputString(input.docId, "docId"))}/tables/${encodeURIComponent(
+        requiredInputString(input.tableIdOrName, "tableIdOrName"),
       )}/rows`,
       query: compactObject({
         query: optionalString(input.query),
@@ -179,8 +185,8 @@ export const codaActionHandlers: Record<CodaActionName, CodaActionHandler> = {
   async upsert_rows(input, context) {
     const payload = await requestCodaObject({
       context,
-      path: `/docs/${encodeURIComponent(requireInputString(input.docId, "docId"))}/tables/${encodeURIComponent(
-        requireInputString(input.tableIdOrName, "tableIdOrName"),
+      path: `/docs/${encodeURIComponent(requiredInputString(input.docId, "docId"))}/tables/${encodeURIComponent(
+        requiredInputString(input.tableIdOrName, "tableIdOrName"),
       )}/rows`,
       method: "POST",
       query: compactObject({
@@ -203,7 +209,7 @@ export const codaActionHandlers: Record<CodaActionName, CodaActionHandler> = {
   async get_mutation_status(input, context) {
     const payload = await requestCodaObject({
       context,
-      path: `/mutationStatus/${encodeURIComponent(requireInputString(input.requestId, "requestId"))}`,
+      path: `/mutationStatus/${encodeURIComponent(requiredInputString(input.requestId, "requestId"))}`,
       mode: "execute",
       notFoundAsInvalidInput: true,
     });
@@ -413,7 +419,7 @@ function readOptionalPositiveInteger(value: unknown, fieldName: string): number 
   if (value == null || value === "") {
     return undefined;
   }
-  return positiveInteger(value, fieldName, invalidInputError);
+  return positiveInteger(value, fieldName, providerInputError);
 }
 
 function readOptionalStringArray(value: unknown): string[] | undefined {
@@ -424,34 +430,22 @@ function readOptionalStringArray(value: unknown): string[] | undefined {
 }
 
 function readRowsUpsert(value: unknown): Array<Record<string, unknown>> {
-  const rows = objectArray(value, "rows", invalidInputError);
+  const rows = objectArray(value, "rows", providerInputError);
   if (rows.length === 0) {
     throw new ProviderRequestError(400, "rows is required");
   }
 
   return rows.map((row, rowIndex) => {
-    const cells = objectArray(row.cells, `rows[${rowIndex}].cells`, invalidInputError);
+    const cells = objectArray(row.cells, `rows[${rowIndex}].cells`, providerInputError);
     if (cells.length === 0) {
       throw new ProviderRequestError(400, `rows[${rowIndex}].cells is required`);
     }
 
     return {
       cells: cells.map((cell, cellIndex) => ({
-        column: requiredString(cell.column, `rows[${rowIndex}].cells[${cellIndex}].column`, invalidInputError),
+        column: requiredString(cell.column, `rows[${rowIndex}].cells[${cellIndex}].column`, providerInputError),
         value: cell.value,
       })),
     };
   });
-}
-
-function requireInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, invalidInputError);
-}
-
-function invalidInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerResponseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

@@ -73,6 +73,39 @@ const adjustmentFactorRowSchema = s.object("One adj_factor row.", {
   tradeDate: nullableStringSchema("Trade date in YYYYMMDD format."),
   adjFactor: nullableNumberSchema("Adjustment factor."),
 });
+
+const shareholderTradeRowSchema = s.object("One stk_holdertrade row.", {
+  tsCode: nullableStringSchema("Tushare security code."),
+  announcementDate: nullableStringSchema("Announcement date in YYYYMMDD format."),
+  holderName: nullableStringSchema("Shareholder name."),
+  holderType: nullableStringSchema("Shareholder type: G executive, P individual, or C company."),
+  tradeType: nullableStringSchema("Share trade type: IN increase or DE decrease."),
+  changeVolume: nullableNumberSchema("Number of shares changed."),
+  changeRatio: nullableNumberSchema("Change as a percentage of circulating shares."),
+  sharesAfterChange: nullableNumberSchema("Shares held after the change."),
+  ratioAfterChange: nullableNumberSchema("Holding after the change as a percentage of circulating shares."),
+  averagePrice: nullableNumberSchema("Average transaction price."),
+  totalShares: nullableNumberSchema("Total shares held."),
+  beginDate: nullableStringSchema("Shareholding change start date in YYYYMMDD format."),
+  closeDate: nullableStringSchema("Shareholding change end date in YYYYMMDD format."),
+});
+
+const shareholderTradesInputSchema = s.object(
+  "Filters for the Tushare stk_holdertrade API.",
+  {
+    tsCode: tsCodeSchema,
+    announcementDate: yyyymmddSchema("Announcement date in YYYYMMDD format."),
+    startDate: yyyymmddSchema("Announcement start date in YYYYMMDD format."),
+    endDate: yyyymmddSchema("Announcement end date in YYYYMMDD format."),
+    tradeType: s.stringEnum("Share trade type: IN for an increase or DE for a decrease.", ["IN", "DE"]),
+    holderType: s.stringEnum("Shareholder type: C for a company, P for an individual, or G for an executive.", [
+      "C",
+      "P",
+      "G",
+    ]),
+  },
+  { optional: ["tsCode", "announcementDate", "startDate", "endDate", "tradeType", "holderType"] },
+);
 const datedMarketDataInputSchema = (actionName: string): JsonSchema =>
   s.actionInput(
     {
@@ -88,6 +121,7 @@ const datedMarketDataInputSchema = (actionName: string): JsonSchema =>
 export const tushareActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "query_data",
+    operationType: "read",
     description: "Call a Tushare data API through the official HTTP interface and return normalized table rows.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -127,6 +161,7 @@ export const tushareActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_stocks",
+    operationType: "read",
     description: "List A-share stock basic information through Tushare stock_basic with normalized rows.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -149,6 +184,7 @@ export const tushareActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_trade_calendar",
+    operationType: "read",
     description: "Get exchange trading calendar rows through Tushare trade_cal with normalized dates.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -175,6 +211,7 @@ export const tushareActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_daily_quotes",
+    operationType: "read",
     description: "Get A-share daily quote rows through Tushare daily with normalized rows.",
     requiredScopes: [],
     inputSchema: datedMarketDataInputSchema("get_daily_quotes"),
@@ -189,6 +226,7 @@ export const tushareActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_daily_basic",
+    operationType: "read",
     description: "Get A-share daily valuation and share indicators through Tushare daily_basic.",
     requiredScopes: [],
     inputSchema: datedMarketDataInputSchema("get_daily_basic"),
@@ -203,6 +241,7 @@ export const tushareActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_adjustment_factors",
+    operationType: "read",
     description: "Get A-share adjustment factor rows through Tushare adj_factor.",
     requiredScopes: [],
     inputSchema: datedMarketDataInputSchema("get_adjustment_factors"),
@@ -215,12 +254,22 @@ export const tushareActions: ActionDefinition[] = [
       "Adjustment factor rows returned by Tushare.",
     ),
   }),
+  defineProviderAction(service, {
+    name: "get_shareholder_trades",
+    operationType: "read",
+    description: "Get A-share important shareholder increases and decreases through Tushare stk_holdertrade.",
+    requiredScopes: [],
+    inputSchema: shareholderTradesInputSchema,
+    outputSchema: s.actionOutput(
+      {
+        requestId: requestIdSchema,
+        message: responseMessageSchema,
+        shareholderTrades: s.array(
+          "A-share important shareholder increase and decrease records.",
+          shareholderTradeRowSchema,
+        ),
+      },
+      "Important shareholder trades returned by Tushare stk_holdertrade.",
+    ),
+  }),
 ];
-
-export type TushareActionName =
-  | "query_data"
-  | "list_stocks"
-  | "get_trade_calendar"
-  | "get_daily_quotes"
-  | "get_daily_basic"
-  | "get_adjustment_factors";

@@ -1,11 +1,12 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { PerigonActionName } from "./actions.ts";
 
-import { optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { looseArray, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
 } from "../provider-runtime.ts";
@@ -170,7 +171,7 @@ const summarizeTrimmedBodyKeys = new Set(["model"]);
 const vectorNewsTrimmedBodyKeys = new Set(["prompt", "pubDateFrom", "pubDateTo"]);
 const vectorWikipediaTrimmedBodyKeys = new Set(["prompt", "wikiRevisionFrom", "wikiRevisionTo"]);
 
-export const perigonActionHandlers: Record<PerigonActionName, PerigonActionHandler> = {
+export const perigonActionHandlers: ProviderActionHandlers<"perigon", PerigonActionHandler> = {
   async search_articles(input, context) {
     return normalizeListResponse(
       await requestPerigonJson(
@@ -234,7 +235,7 @@ export const perigonActionHandlers: Record<PerigonActionName, PerigonActionHandl
     );
   },
   async get_journalist(input, context) {
-    const id = requiredString(input.id, "id", requestInputError);
+    const id = requiredString(input.id, "id", providerInputError);
     const payload = await requestPerigonJson(
       "GET",
       `/v1/journalists/${encodeURIComponent(id)}`,
@@ -301,7 +302,7 @@ export const perigonActionHandlers: Record<PerigonActionName, PerigonActionHandl
       status: readNullableInteger(record.status),
       numResults: readNullableInteger(record.numResults),
       summary: optionalString(record.summary) ?? null,
-      results: readArray(record.results),
+      results: looseArray(record.results),
       raw: record,
     };
   },
@@ -529,7 +530,7 @@ function normalizeListResponse(payload: unknown, key: "articles" | "stories"): R
   return {
     status: readNullableInteger(record.status),
     numResults: readNullableInteger(record.numResults),
-    [key]: readArray(record[key]),
+    [key]: looseArray(record[key]),
     raw: record,
   };
 }
@@ -539,7 +540,7 @@ function normalizeResultsResponse(payload: unknown): Record<string, unknown> {
   return {
     status: readNullableInteger(record.status),
     numResults: readNullableInteger(record.numResults),
-    results: readArray(record.results),
+    results: looseArray(record.results),
     raw: record,
   };
 }
@@ -548,7 +549,7 @@ function normalizeTopicsResponse(payload: unknown): Record<string, unknown> {
   const record = readObject(payload, "Perigon topics response");
   return {
     total: readNullableInteger(record.total),
-    data: readArray(record.data),
+    data: looseArray(record.data),
     raw: record,
   };
 }
@@ -557,7 +558,7 @@ function normalizeVectorResponse(payload: unknown): Record<string, unknown> {
   const record = readObject(payload, "Perigon vector response");
   return {
     status: readNullableInteger(record.status),
-    results: readArray(record.results),
+    results: looseArray(record.results),
     raw: record,
   };
 }
@@ -570,16 +571,8 @@ function readObject(value: unknown, fieldName: string): Record<string, unknown> 
   return record;
 }
 
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
 function readNullableInteger(value: unknown): number | null {
   return optionalInteger(value) ?? null;
-}
-
-function requestInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 export const proxy: ProviderProxyExecutor = defineProviderProxy({

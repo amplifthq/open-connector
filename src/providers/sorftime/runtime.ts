@@ -44,6 +44,16 @@ const endpointByActionName = {
   reverse_lookup_category_keywords: "CategoryRequestKeyword",
   get_keyword_product_rankings: "KeywordProductRanking",
   get_asin_keyword_rankings: "ASINKeywordRanking",
+  get_walmart_category_report: "CategoryRequest",
+  get_walmart_product_details: "ProductRequest",
+  get_walmart_product_trend: "ProductTrendRequest",
+  get_walmart_product_sales_history: "ProductSalesVolume",
+  search_walmart_keywords: "KeywordQuery",
+  search_walmart_keywords_by_name: "KeywordSearchFromName",
+  get_walmart_keyword_search_results: "KeywordSearchResults",
+  get_walmart_keyword_details: "KeywordRequest",
+  reverse_lookup_walmart_product_keywords: "ProductRequestKeyword",
+  extend_walmart_keywords: "KeywordExtends",
 } as const satisfies Record<SorftimeActionName, string>;
 
 type SorftimeRequestPhase = "validate" | "execute";
@@ -82,7 +92,7 @@ export function executeSorftimeAction(
   validateSorftimeInput(actionName, input);
   return requestSorftime({
     endpoint: endpointByActionName[actionName],
-    domain: optionalInteger(input.domain) ?? 1,
+    domain: actionName.includes("walmart") ? 21 : (optionalInteger(input.domain) ?? 1),
     body: buildSorftimeBody(actionName, input),
     apiKey,
     fetcher,
@@ -161,6 +171,13 @@ function validateSorftimeInput(actionName: SorftimeActionName, input: Record<str
       requireStartWhenEnd(input, "query_start_date", "query_end_date");
       requireOrdered(input, "query_start_date", "query_end_date");
       return;
+    case "get_walmart_product_sales_history":
+      requireStartWhenEnd(input, "query_start_date", "query_end_date");
+      requireOrdered(input, "query_start_date", "query_end_date");
+      if (typeof input.query_start_date === "string" && input.query_start_date < "2023-09-01") {
+        throw new ProviderRequestError(400, "query_start_date must not be earlier than 2023-09-01");
+      }
+      return;
     case "get_keyword_search_result_trend":
     case "get_asin_keyword_rankings":
       requireStartWhenEnd(input, "query_start", "query_end");
@@ -208,6 +225,37 @@ function buildSorftimeBody(actionName: SorftimeActionName, input: Record<string,
         QueryTrendStartDt: input.query_trend_start_date,
         QueryTrendEndDt: input.query_trend_end_date,
       });
+    case "get_walmart_category_report":
+      return { nodePath: input.node_path };
+    case "get_walmart_product_details":
+    case "get_walmart_product_trend":
+      return { productId: input.product_id };
+    case "get_walmart_product_sales_history":
+      return compactObject({
+        productId: input.product_id,
+        queryDate: input.query_start_date,
+        queryEndDate: input.query_end_date,
+        pageIndex: input.page_index,
+      });
+    case "search_walmart_keywords":
+      return compactObject({
+        pattern: compactObject({
+          keyword: input.keyword,
+          rankCondition: input.rank_condition,
+          searchVolumeCondition: input.search_volume_condition,
+        }),
+        pageIndex: input.page_index,
+        pageSize: input.page_size,
+      });
+    case "search_walmart_keywords_by_name":
+      return { name: input.name };
+    case "get_walmart_keyword_search_results":
+    case "extend_walmart_keywords":
+      return compactObject({ keyword: input.keyword, pageIndex: input.page_index, pageSize: input.page_size });
+    case "get_walmart_keyword_details":
+      return { keyword: input.keyword };
+    case "reverse_lookup_walmart_product_keywords":
+      return compactObject({ productId: input.product_id, pageIndex: input.page_index, pageSize: input.page_size });
     case "search_products_by_name":
       return compactObject({
         Name: input.name,
@@ -483,7 +531,7 @@ function createSorftimeHttpError(response: Response, payload: unknown, phase: So
     return new ProviderRequestError(429, message);
   }
   if (response.status === 401 || response.status === 403) {
-    return phase === "validate" ? new ProviderRequestError(400, message) : new ProviderRequestError(409, message);
+    return phase === "validate" ? new ProviderRequestError(400, message) : new ProviderRequestError(401, message);
   }
   if (phase === "execute" && [400, 404, 422].includes(response.status)) {
     return new ProviderRequestError(400, message);

@@ -71,11 +71,10 @@ const usageSchema = s.object("The current ScrapingBee usage snapshot.", {
   renewal_subscription_date: s.string("The renewal timestamp for the current subscription period."),
 });
 
-export type ScrapingbeeActionName = "fetch_html" | "extract_data" | "get_usage_stats";
-
 export const scrapingbeeActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "fetch_html",
+    operationType: "read",
     description: "Fetch HTML content from one public URL with optional rendering and proxy controls.",
     inputSchema: s.object(
       "The input payload for fetching page HTML with ScrapingBee.",
@@ -89,6 +88,7 @@ export const scrapingbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "extract_data",
+    operationType: "read",
     description: "Extract structured JSON data from one public URL with ScrapingBee extract_rules.",
     inputSchema: s.object(
       "The input payload for extracting structured data with ScrapingBee.",
@@ -103,6 +103,7 @@ export const scrapingbeeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_usage_stats",
+    operationType: "read",
     description: "Retrieve the current ScrapingBee API usage and concurrency statistics.",
     inputSchema: s.object("The input payload for retrieving ScrapingBee usage statistics.", {}),
     outputSchema: s.object("The output payload for retrieving ScrapingBee usage statistics.", {

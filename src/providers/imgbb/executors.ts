@@ -1,9 +1,14 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ImgbbActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "imgbb";
 const imgbbApiBaseUrl = "https://api.imgbb.com";
@@ -23,7 +28,7 @@ interface ImgbbHostedVariant {
   url: string;
 }
 
-export const imgbbActionHandlers: Record<ImgbbActionName, ImgbbActionHandler> = {
+export const imgbbActionHandlers: ProviderActionHandlers<"imgbb", ImgbbActionHandler> = {
   async upload_image(input, context) {
     const payload = await requestImgbbUpload(buildImgbbUploadFormData(input), context, "execute");
     return {
@@ -33,6 +38,16 @@ export const imgbbActionHandlers: Record<ImgbbActionName, ImgbbActionHandler> = 
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, imgbbActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: imgbbApiBaseUrl,
+  auth: { type: "api_key_query", name: "key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

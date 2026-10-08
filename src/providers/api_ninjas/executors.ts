@@ -1,8 +1,16 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { optionalNumber, optionalRecord, optionalString, objectArray } from "../../core/cast.ts";
 import {
   defineProviderExecutors,
+  defineProviderProxy,
+  providerResponseError,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
@@ -22,7 +30,7 @@ interface ApiNinjasActionContext {
 
 type ApiNinjasActionHandler = (input: Record<string, unknown>, context: ApiNinjasActionContext) => Promise<unknown>;
 
-export const apiNinjasActionHandlers: Record<string, ApiNinjasActionHandler> = {
+export const apiNinjasActionHandlers: ProviderActionHandlers<"api_ninjas", ApiNinjasActionHandler> = {
   async geocode(input, context) {
     const payload = await requestApiNinjasJson(
       "/v1/geocoding",
@@ -37,7 +45,7 @@ export const apiNinjasActionHandlers: Record<string, ApiNinjasActionHandler> = {
     );
 
     return {
-      results: objectArray(payload, "API Ninjas geocode response", providerError).map((item) => ({
+      results: objectArray(payload, "API Ninjas geocode response", providerResponseError).map((item) => ({
         name: requireResponseString(item.name, "name"),
         latitude: requireResponseNumber(item.latitude, "latitude"),
         longitude: requireResponseNumber(item.longitude, "longitude"),
@@ -58,7 +66,7 @@ export const apiNinjasActionHandlers: Record<string, ApiNinjasActionHandler> = {
     );
 
     return {
-      results: objectArray(payload, "API Ninjas reverse geocode response", providerError).map((item) => ({
+      results: objectArray(payload, "API Ninjas reverse geocode response", providerResponseError).map((item) => ({
         name: requireResponseString(item.name, "name"),
         country: requireResponseString(item.country, "country"),
         state: optionalString(item.state),
@@ -92,7 +100,7 @@ export const apiNinjasActionHandlers: Record<string, ApiNinjasActionHandler> = {
     );
 
     return {
-      forecast: objectArray(payload, "API Ninjas weather forecast response", providerError).map((item) =>
+      forecast: objectArray(payload, "API Ninjas weather forecast response", providerResponseError).map((item) =>
         normalizeWeatherMetrics(item),
       ),
     };
@@ -162,6 +170,13 @@ export const executors: ProviderExecutors = defineProviderExecutors<ApiNinjasAct
       signal: context.signal,
     };
   },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apiNinjasApiBaseUrl,
+  auth: { type: "api_key_header", name: "X-Api-Key" },
+  skipDnsValidation: true,
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -386,8 +401,4 @@ function requireResponseNumber(value: unknown, fieldName: string): number {
   }
 
   throw new ProviderRequestError(502, `API Ninjas response missing numeric field: ${fieldName}`);
-}
-
-function providerError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

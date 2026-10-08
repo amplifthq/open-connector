@@ -152,11 +152,10 @@ const searchBusinessesInputSchema: JsonSchema = {
   oneOf: [{ required: ["location"] }, { required: ["latitude", "longitude"] }],
 };
 
-export type YelpActionName = "search_businesses" | "search_businesses_by_phone" | "get_business_details";
-
 export const yelpActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "search_businesses",
+    operationType: "read",
     description: "Search Yelp businesses by keyword and geographic anchor.",
     inputSchema: searchBusinessesInputSchema,
     outputSchema: s.object(
@@ -171,6 +170,7 @@ export const yelpActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_businesses_by_phone",
+    operationType: "read",
     description: "Find Yelp businesses by exact phone number.",
     inputSchema: s.actionInput(
       { phone: s.nonEmptyString("Business phone number in E.164 format, including the leading plus sign.") },
@@ -187,6 +187,7 @@ export const yelpActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_business_details",
+    operationType: "read",
     description: "Get Yelp business details for one business identifier or alias.",
     inputSchema: s.object(
       "Input for Yelp business details.",

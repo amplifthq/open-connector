@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -14,7 +15,6 @@ import {
 const service = "nozbe_teams";
 const nozbeTeamsApiBaseUrl = "https://api4.nozbe.com/v1/api";
 const nozbeTeamsValidationPath = "/teams";
-const nozbeTeamsRequestTimeoutMs = 30_000;
 const nozbeTeamsMaxResponseBytes = 10 * 1024 * 1024;
 
 type NozbeRequestPhase = "validate" | "execute";
@@ -29,7 +29,7 @@ interface NozbeRequestInput {
   allowEmpty?: boolean;
 }
 
-export const nozbeTeamsActionHandlers: Record<string, NozbeActionHandler> = {
+export const nozbeTeamsActionHandlers: ProviderActionHandlers<"nozbe_teams", NozbeActionHandler> = {
   list_teams(input, context) {
     return requestNozbeArray({ method: "GET", path: "/teams", query: input }, context, "execute");
   },
@@ -177,7 +177,7 @@ async function requestNozbeJson(
     }
   }
 
-  const timeout = createProviderTimeout(context.signal, nozbeTeamsRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       method: input.method,

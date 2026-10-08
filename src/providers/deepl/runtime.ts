@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
 
-import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
+import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 export const deeplApiBaseUrl = "https://api.deepl.com";
@@ -8,7 +8,6 @@ export const deeplApiFreeBaseUrl = "https://api-free.deepl.com";
 export const deeplTranslatePath = "/v2/translate";
 export const deeplLanguagesPath = "/v2/languages";
 export const deeplUsagePath = "/v2/usage";
-export const deeplDefaultRequestTimeoutMs = 30_000;
 
 type DeeplRequestMode = "validate" | "execute";
 type DeeplLanguageType = "source" | "target";
@@ -143,7 +142,7 @@ async function requestDeepl(apiKey: string, input: DeeplRequestInput, fetcher: t
     headers.set("content-type", "application/json");
   }
 
-  const timeout = createProviderTimeout(undefined, deeplDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(undefined);
 
   let response: Response;
   try {
@@ -243,7 +242,7 @@ function normalizeDeeplLanguagesPayload(payload: unknown, type: DeeplLanguageTyp
     const record = optionalRecord(item);
     const language = readRequiredString(record?.language, `languages[${index}].language`);
     const name = readRequiredString(record?.name, `languages[${index}].name`);
-    const supportsFormality = readOptionalBoolean(record?.supports_formality);
+    const supportsFormality = optionalBoolean(record?.supports_formality);
 
     return compactObject({
       language,
@@ -331,8 +330,8 @@ function buildTranslateBody(input: Record<string, unknown>) {
     context: readOptionalInputText(input.context),
     formality: readOptionalNonEmptyString(input.formality),
     split_sentences: readOptionalNonEmptyString(input.split_sentences),
-    preserve_formatting: readOptionalBoolean(input.preserve_formatting),
-    show_billed_characters: readOptionalBoolean(input.show_billed_characters),
+    preserve_formatting: optionalBoolean(input.preserve_formatting),
+    show_billed_characters: optionalBoolean(input.show_billed_characters),
   });
 }
 
@@ -385,10 +384,6 @@ function readOptionalInteger(value: unknown) {
     return undefined;
   }
   return number;
-}
-
-function readOptionalBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
 }
 
 function readOptionalIsoDatetime(value: unknown) {

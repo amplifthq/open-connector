@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -11,7 +12,13 @@ import {
   requiredString,
 } from "../../core/cast.ts";
 import { encodePathSegment, jsonObject } from "../../core/request.ts";
-import { defineOAuthProviderExecutors, defineProviderProxy, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineOAuthProviderExecutors,
+  defineProviderProxy,
+  providerInputError,
+  ProviderRequestError,
+  providerResponseError,
+} from "../provider-runtime.ts";
 
 const service = "discord";
 // Pin regular REST calls to v10; use the unversioned OAuth/OIDC URLs from official discovery.
@@ -38,7 +45,7 @@ interface DiscordRequestInput {
 
 type DiscordActionHandler = (input: Record<string, unknown>, context: DiscordContext) => Promise<unknown>;
 
-export const discordActionHandlers: Record<string, DiscordActionHandler> = {
+export const discordActionHandlers: ProviderActionHandlers<"discord", DiscordActionHandler> = {
   delete_my_application_role_connection(input, context) {
     return deleteMyApplicationRoleConnection(input, context);
   },
@@ -354,12 +361,4 @@ function normalizeInviteCode(value: string): string {
 
 function readGrantedScopes(scope: unknown): string[] {
   return optionalString(scope)?.split(/\s+/u).filter(Boolean) ?? [];
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerResponseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

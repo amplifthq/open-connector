@@ -101,16 +101,10 @@ const resultCodeDataOutput = {
   raw: s.looseObject("The raw OneDesk response."),
 };
 
-export type OnedeskActionName =
-  | "get_organization_profile"
-  | "filter_projects"
-  | "get_project"
-  | "filter_items"
-  | "get_item";
-
 export const onedeskActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_organization_profile",
+    operationType: "read",
     description: "Get the OneDesk organization profile and policy for the connected API key.",
     inputSchema: s.object("The input payload for getting the OneDesk organization profile.", {}),
     outputSchema: s.requiredObject(
@@ -120,6 +114,7 @@ export const onedeskActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "filter_projects",
+    operationType: "read",
     description: "Filter OneDesk projects and return matching project external IDs.",
     inputSchema: s.object("Input parameters for filtering OneDesk projects.", filterInputFields, {
       optional: ["properties", "customFields", "isAsc", "limit", "offset"],
@@ -128,6 +123,7 @@ export const onedeskActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_project",
+    operationType: "read",
     description: "Get OneDesk project details by external ID or numeric ID.",
     inputSchema: detailLookupSchema,
     outputSchema: s.requiredObject("The normalized OneDesk project details response.", {
@@ -138,6 +134,7 @@ export const onedeskActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "filter_items",
+    operationType: "read",
     description: "Filter OneDesk work items by item type and return matching external IDs.",
     inputSchema: s.object(
       "Input parameters for filtering OneDesk work items.",
@@ -155,6 +152,7 @@ export const onedeskActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_item",
+    operationType: "read",
     description: "Get OneDesk work item details by external ID or numeric ID.",
     inputSchema: detailLookupSchema,
     outputSchema: s.requiredObject("The normalized OneDesk work item details response.", {

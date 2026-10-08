@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   optionalNumber,
@@ -10,8 +11,7 @@ import {
 } from "../../core/cast.ts";
 import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const datascopeApiBaseUrl = "https://www.mydatascope.com/api/external/";
-const datascopeDefaultRequestTimeoutMs = 30_000;
+export const datascopeApiBaseUrl = "https://www.mydatascope.com/api/external/";
 
 type DatascopeRequestPhase = "validate" | "execute";
 type DatascopeQueryValue = string | number | boolean | undefined;
@@ -42,7 +42,7 @@ const answerReservedKeys = new Set([
   "assign_location_code",
 ]);
 
-export const datascopeActionHandlers: Record<string, DatascopeActionHandler> = {
+export const datascopeActionHandlers: ProviderActionHandlers<"datascope", DatascopeActionHandler> = {
   async list_answers(input, context) {
     const payload = await requestDatascopeJson({
       apiKey: context.apiKey,
@@ -240,7 +240,7 @@ async function requestDatascopeJson(input: {
     body = JSON.stringify(input.json);
   }
 
-  const timeoutHandle = createProviderTimeout(undefined, datascopeDefaultRequestTimeoutMs);
+  const timeoutHandle = createProviderTimeout(undefined);
 
   let response: Response;
   try {

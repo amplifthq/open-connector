@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { GlobalpingActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -10,11 +10,10 @@ import {
   optionalRecord,
   optionalString,
   requiredRecord,
-  requiredString,
 } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
-const globalpingApiBaseUrl = "https://api.globalping.io";
+export const globalpingApiBaseUrl = "https://api.globalping.io";
 
 type GlobalpingRequestPhase = "validate" | "execute";
 type GlobalpingActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -39,7 +38,7 @@ const measurementOptionsValidators: Record<GlobalpingMeasurementType, (options: 
   },
 };
 
-export const globalpingActionHandlers: Record<GlobalpingActionName, GlobalpingActionHandler> = {
+export const globalpingActionHandlers: ProviderActionHandlers<"globalping", GlobalpingActionHandler> = {
   get_limits(_input, context) {
     return getLimits(context);
   },
@@ -150,7 +149,7 @@ async function createMeasurement(input: Record<string, unknown>, context: ApiKey
 }
 
 async function getMeasurement(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const measurementId = requireInputString(input.measurement_id, "measurement_id");
+  const measurementId = requiredInputString(input.measurement_id, "measurement_id");
   const { payload } = await requestGlobalpingJson({
     apiKey: context.apiKey,
     path: `/v1/measurements/${encodeURIComponent(measurementId)}`,
@@ -302,7 +301,7 @@ function buildCreateMeasurementBody(input: Record<string, unknown>): Record<stri
 
   return compactObject({
     type,
-    target: requireInputString(input.target, "target"),
+    target: requiredInputString(input.target, "target"),
     inProgressUpdates: optionalBoolean(input.in_progress_updates),
     locations: buildLocationsBody(input.locations),
     limit: optionalInteger(input.limit),
@@ -463,12 +462,8 @@ function requireArrayPayload(value: unknown, label: string): unknown[] {
   return value;
 }
 
-function requireInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function requireMeasurementType(value: unknown): GlobalpingMeasurementType {
-  const type = requireInputString(value, "type");
+  const type = requiredInputString(value, "type");
   if (type === "ping" || type === "traceroute" || type === "dns" || type === "mtr" || type === "http") {
     return type;
   }

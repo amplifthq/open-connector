@@ -5,8 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "crunchbase";
 
-export type CrunchbaseActionName = "autocomplete_entities" | "get_organization" | "search_organizations";
-
 const rawObjectSchema = s.looseObject("Raw object returned by the official Crunchbase API.");
 const entityIdentifierSchema = s.looseObject(
   {
@@ -66,10 +64,33 @@ const organizationSearchResultSchema = s.looseObject(
   },
   { description: "One Crunchbase organization search result." },
 );
+const acquisitionSchema = s.looseObject(
+  {
+    cards: s.looseObject("Cards included on the acquisition response."),
+    properties: s.looseObject("Properties included on the acquisition response."),
+  },
+  { description: "A Crunchbase acquisition entity." },
+);
+const acquisitionSearchResultSchema = s.looseObject(
+  {
+    uuid: s.string("The Crunchbase acquisition UUID."),
+    properties: s.looseObject("The requested acquisition fields returned by Crunchbase."),
+  },
+  { description: "One Crunchbase acquisition search result." },
+);
+const organizationCardProperties = {
+  organizationId: s.nonEmptyString("Crunchbase organization UUID or permalink."),
+  cardFieldIds: s.array("Fields to include for each entity in the organization card.", fieldIdSchema, { minItems: 1 }),
+  afterId: s.nonEmptyString("UUID cursor for the next page."),
+  beforeId: s.nonEmptyString("UUID cursor for the previous page."),
+  order: s.nonEmptyString("Card field and direction used to order results."),
+  limit: s.integer("Number of card results to return.", { minimum: 1, maximum: 100 }),
+};
 
 export const crunchbaseActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "autocomplete_entities",
+    operationType: "read",
     description: "Suggest Crunchbase entities that match a text query.",
     inputSchema: s.object(
       {
@@ -99,6 +120,7 @@ export const crunchbaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_organization",
+    operationType: "read",
     description: "Look up one Crunchbase organization by UUID or permalink.",
     inputSchema: s.object(
       {
@@ -118,6 +140,7 @@ export const crunchbaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_organizations",
+    operationType: "read",
     description: "Search Crunchbase organizations using the official Search API query structure.",
     inputSchema: s.object(
       {
@@ -139,6 +162,76 @@ export const crunchbaseActions: ActionDefinition[] = [
         raw: rawObjectSchema,
       },
       { required: ["count", "entities", "raw"], description: "Crunchbase organization search response." },
+    ),
+  }),
+  defineProviderAction(service, {
+    name: "search_acquisitions",
+    operationType: "read",
+    description: "Search Crunchbase acquisitions using the official Search API query structure.",
+    inputSchema: s.object(
+      {
+        fieldIds: s.array("Acquisition field IDs to include in each result.", fieldIdSchema, { minItems: 1 }),
+        query: s.array("Official Crunchbase Search API predicates to apply.", searchPredicateSchema, {
+          minItems: 1,
+          maxItems: 25,
+        }),
+        order: s.array("Sort rules for the search response.", searchOrderSchema, { minItems: 1 }),
+        limit: s.integer("Number of acquisitions to return.", { minimum: 1, maximum: 1000 }),
+        afterId: s.nonEmptyString("UUID cursor from the previous page."),
+        beforeId: s.nonEmptyString("UUID cursor from the previous page."),
+      },
+      { required: ["fieldIds", "query"] },
+    ),
+    outputSchema: s.object(
+      {
+        count: s.integer("Number of acquisitions returned."),
+        entities: s.array("Acquisition results.", acquisitionSearchResultSchema),
+        raw: rawObjectSchema,
+      },
+      { required: ["count", "entities", "raw"] },
+    ),
+  }),
+  defineProviderAction(service, {
+    name: "get_acquisition",
+    operationType: "read",
+    description: "Look up one Crunchbase acquisition by UUID or permalink.",
+    inputSchema: s.object(
+      {
+        entityId: s.nonEmptyString("Crunchbase acquisition UUID or permalink."),
+        fieldIds: s.array("Acquisition field IDs.", fieldIdSchema),
+        cardIds: s.array("Acquisition card IDs.", cardIdSchema),
+      },
+      { required: ["entityId"] },
+    ),
+    outputSchema: s.object(
+      { acquisition: acquisitionSchema, raw: rawObjectSchema },
+      { required: ["acquisition", "raw"] },
+    ),
+  }),
+  defineProviderAction(service, {
+    name: "get_organization_acquisitions",
+    operationType: "read",
+    description: "List acquisitions where an organization is the acquiree or acquirer.",
+    inputSchema: s.object(
+      {
+        ...organizationCardProperties,
+        relationship: s.stringEnum("The organization's role.", ["acquiree", "acquirer"]),
+      },
+      { required: ["organizationId", "relationship"] },
+    ),
+    outputSchema: s.object(
+      { acquisitions: s.array("Acquisitions linked to the organization.", rawObjectSchema), raw: rawObjectSchema },
+      { required: ["acquisitions", "raw"] },
+    ),
+  }),
+  defineProviderAction(service, {
+    name: "get_organization_ipos",
+    operationType: "read",
+    description: "List IPO records linked to a Crunchbase organization.",
+    inputSchema: s.object(organizationCardProperties, { required: ["organizationId"] }),
+    outputSchema: s.object(
+      { ipos: s.array("IPO records linked to the organization.", rawObjectSchema), raw: rawObjectSchema },
+      { required: ["ipos", "raw"] },
     ),
   }),
 ];

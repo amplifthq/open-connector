@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -13,7 +14,6 @@ import {
 
 const service = "breezy_hr";
 const breezyHrApiBaseUrl = "https://api.breezy.hr/v3";
-const breezyHrRequestTimeoutMs = 30_000;
 const breezyHrMaxResponseBytes = 10 * 1024 * 1024;
 
 type BreezyHrPhase = "validate" | "execute";
@@ -28,7 +28,7 @@ interface BreezyHrRequestInput {
   readonly phase: BreezyHrPhase;
 }
 
-export const breezyHrActionHandlers: Record<string, BreezyHrActionHandler> = {
+export const breezyHrActionHandlers: ProviderActionHandlers<"breezy_hr", BreezyHrActionHandler> = {
   async get_current_user(_input, context) {
     const raw = await requestBreezyHrJson({
       path: "/user",
@@ -208,7 +208,7 @@ async function requestBreezyHrJson(input: BreezyHrRequestInput) {
     }
   }
 
-  const timeout = createProviderTimeout(input.signal, breezyHrRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const response = await input.fetcher(url, {
       method: "GET",

@@ -4,15 +4,24 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { createHash } from "node:crypto";
-import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import {
+  compactObject,
+  optionalBoolean,
+  optionalInteger,
+  optionalRecord,
+  optionalString,
+  recordOrEmpty,
+} from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
 import {
   createProviderFetch,
   createProviderTimeout,
   defineProviderExecutors,
   defineProviderProxy,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
@@ -20,7 +29,6 @@ import {
 } from "../provider-runtime.ts";
 
 const service = "altiria";
-const altiriaRequestTimeoutMs = 30_000;
 const altiriaMaxResponseBytes = 10 * 1024 * 1024;
 const altiriaRestPath = "/api/rest";
 
@@ -48,7 +56,7 @@ interface AltiriaWrappedPayload {
   error?: unknown;
 }
 
-export const altiriaActionHandlers: Record<string, AltiriaActionHandler> = {
+export const altiriaActionHandlers: ProviderActionHandlers<"altiria", AltiriaActionHandler> = {
   send_sms(input, context) {
     return sendAltiriaSms(input, context);
   },
@@ -149,7 +157,7 @@ async function sendAltiriaSms(input: Record<string, unknown>, context: AltiriaCr
     }),
     phase: "execute",
   });
-  const wrapped = asAltiriaWrappedPayload(payload);
+  const wrapped = recordOrEmpty(payload);
   return {
     accepted: true,
     messages: readDataArray(wrapped).map(normalizeSms),
@@ -163,7 +171,7 @@ async function getAltiriaSms(input: Record<string, unknown>, context: AltiriaCre
     path: `/sms/${encodeURIComponent(requireString(input.id, "id"))}`,
     phase: "execute",
   });
-  const wrapped = asAltiriaWrappedPayload(payload);
+  const wrapped = recordOrEmpty(payload);
   return {
     messages: readDataArray(wrapped).map(normalizeSms),
     raw: payload,
@@ -181,7 +189,7 @@ async function listAltiriaContacts(input: Record<string, unknown>, context: Alti
     ],
     phase: "execute",
   });
-  const wrapped = asAltiriaWrappedPayload(payload);
+  const wrapped = recordOrEmpty(payload);
   return {
     contacts: readDataArray(wrapped).map(normalizeContact),
     meta: optionalRecord(wrapped.meta) ?? null,
@@ -196,7 +204,7 @@ async function getAltiriaContact(input: Record<string, unknown>, context: Altiri
     query: [["include", normalizeInclude(input.include)]],
     phase: "execute",
   });
-  const wrapped = asAltiriaWrappedPayload(payload);
+  const wrapped = recordOrEmpty(payload);
   return {
     contact: normalizeContact(readDataObject(wrapped)),
     raw: payload,
@@ -211,7 +219,7 @@ async function createAltiriaContact(input: Record<string, unknown>, context: Alt
     body: buildContactWriteBody(input),
     phase: "execute",
   });
-  const wrapped = asAltiriaWrappedPayload(payload);
+  const wrapped = recordOrEmpty(payload);
   return {
     contact: normalizeContact(readDataObject(wrapped)),
     raw: payload,
@@ -226,7 +234,7 @@ async function updateAltiriaContact(input: Record<string, unknown>, context: Alt
     body: buildContactWriteBody(input),
     phase: "execute",
   });
-  const wrapped = asAltiriaWrappedPayload(payload);
+  const wrapped = recordOrEmpty(payload);
   return {
     contact: normalizeContact(readDataObject(wrapped)),
     raw: payload,
@@ -253,7 +261,7 @@ async function listAltiriaGroups(input: Record<string, unknown>, context: Altiri
     ],
     phase: "execute",
   });
-  const wrapped = asAltiriaWrappedPayload(payload);
+  const wrapped = recordOrEmpty(payload);
   return {
     groups: readDataArray(wrapped).map(normalizeGroup),
     meta: optionalRecord(wrapped.meta) ?? null,
@@ -273,13 +281,13 @@ function normalizeAltiriaDashboardHost(value: unknown) {
   const rawValue = requireString(value, "dashboardHost");
   const url = assertPublicHttpUrl(rawValue, {
     fieldName: "dashboardHost",
-    createError: invalidInput,
+    createError: providerInputError,
   });
   if (url.protocol !== "https:") {
-    throw invalidInput("dashboardHost must use HTTPS");
+    throw providerInputError("dashboardHost must use HTTPS");
   }
   if (url.username || url.password) {
-    throw invalidInput("dashboardHost must not include credentials");
+    throw providerInputError("dashboardHost must not include credentials");
   }
 
   url.hash = "";
@@ -297,7 +305,7 @@ async function requestAltiria(input: AltiriaRequestInput) {
     }
   }
 
-  const timeout = createProviderTimeout(input.signal, altiriaRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   const fetcher = createProviderFetch({ fetch: input.fetcher });
 
   try {
@@ -385,13 +393,13 @@ function readAltiriaErrorMessage(payload: unknown) {
 
 function buildContactWriteBody(input: Record<string, unknown>) {
   if (input.email === undefined && input.phone === undefined && input.landline === undefined) {
-    throw invalidInput("email, phone, or landline is required");
+    throw providerInputError("email, phone, or landline is required");
   }
   if ((input.phone !== undefined || input.landline !== undefined) && input.countryIso === undefined) {
-    throw invalidInput("countryIso is required when phone or landline is specified");
+    throw providerInputError("countryIso is required when phone or landline is specified");
   }
   if (input.groupsIds === undefined && input.groupsNames === undefined) {
-    throw invalidInput("groupsIds or groupsNames is required");
+    throw providerInputError("groupsIds or groupsNames is required");
   }
 
   return compactObject({
@@ -409,10 +417,6 @@ function buildContactWriteBody(input: Record<string, unknown>) {
 
 function normalizeInclude(value: unknown) {
   return Array.isArray(value) ? value.join(",") : undefined;
-}
-
-function asAltiriaWrappedPayload(payload: unknown): AltiriaWrappedPayload {
-  return optionalRecord(payload) ?? {};
 }
 
 function readDataArray(payload: AltiriaWrappedPayload) {
@@ -466,7 +470,7 @@ function normalizeGroup(value: unknown) {
 function requireString(value: unknown, name: string) {
   const resolved = optionalString(value)?.trim();
   if (!resolved) {
-    throw invalidInput(`${name} is required`);
+    throw providerInputError(`${name} is required`);
   }
   return resolved;
 }
@@ -474,7 +478,7 @@ function requireString(value: unknown, name: string) {
 function requireInteger(value: unknown, name: string) {
   const resolved = optionalInteger(value);
   if (resolved == null) {
-    throw invalidInput(`${name} is required`);
+    throw providerInputError(`${name} is required`);
   }
   return resolved;
 }
@@ -482,13 +486,13 @@ function requireInteger(value: unknown, name: string) {
 function validateSendSmsRelations(input: Record<string, unknown>): void {
   const recipients = Array.isArray(input.to) ? input.to : [];
   if (input.tags !== undefined && input.campaignName === undefined) {
-    throw invalidInput("campaignName is required when tags is specified");
+    throw providerInputError("campaignName is required when tags is specified");
   }
   if (Array.isArray(input.notificationUrl) && input.notificationUrl.length !== recipients.length) {
-    throw invalidInput("notificationUrl must contain one URL per recipient");
+    throw providerInputError("notificationUrl must contain one URL per recipient");
   }
   if (Array.isArray(input.sub) && input.sub.length !== recipients.length) {
-    throw invalidInput("sub must contain one object per recipient");
+    throw providerInputError("sub must contain one object per recipient");
   }
 }
 
@@ -519,8 +523,4 @@ function normalizeCustomFields(value: unknown): unknown {
 
 function basicAuthorization(username: string, password: string): string {
   return `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
-}
-
-function invalidInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

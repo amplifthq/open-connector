@@ -1,19 +1,25 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { LaGrowthMachineActionName } from "./actions.ts";
 
 import { compactObject, optionalString, requiredString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
 const service = "la_growth_machine";
 const laGrowthMachineApiBaseUrl = "https://apiv2.lagrowthmachine.com/flow";
-const laGrowthMachineRequestTimeoutMs = 30_000;
 
 type JsonObject = Record<string, unknown>;
 type LaGrowthMachineContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
@@ -22,103 +28,114 @@ type LaGrowthMachineActionHandler = (
   context: LaGrowthMachineContext,
 ) => Promise<unknown>;
 
-export const laGrowthMachineActionHandlers: Record<LaGrowthMachineActionName, LaGrowthMachineActionHandler> = {
-  async list_members(_input, context): Promise<unknown> {
-    const payload = await requestLaGrowthMachine({ path: "/members", context });
-    return {
-      members: normalizeMembers(payload),
-      raw: payload,
-    };
-  },
+export const laGrowthMachineActionHandlers: ProviderActionHandlers<"la_growth_machine", LaGrowthMachineActionHandler> =
+  {
+    async list_members(_input, context): Promise<unknown> {
+      const payload = await requestLaGrowthMachine({ path: "/members", context });
+      return {
+        members: normalizeMembers(payload),
+        raw: payload,
+      };
+    },
 
-  async list_audiences(_input, context): Promise<unknown> {
-    const payload = await requestLaGrowthMachine({ path: "/audiences", context });
-    const record = asRecord(payload);
-    return {
-      audiences: normalizeArray(record.audiences),
-      raw: record,
-    };
-  },
+    async list_audiences(_input, context): Promise<unknown> {
+      const payload = await requestLaGrowthMachine({ path: "/audiences", context });
+      const record = asRecord(payload);
+      return {
+        audiences: normalizeArray(record.audiences),
+        raw: record,
+      };
+    },
 
-  async create_audience(input, context): Promise<unknown> {
-    const payload = await requestLaGrowthMachine({
-      method: "POST",
-      path: "/audiences/create",
-      body: { name: requiredString(input.name, "name", providerInputError) },
-      context,
-    });
-    const record = asRecord(payload);
-    return {
-      audience: unwrapDataObject(record),
-      raw: record,
-    };
-  },
+    async create_audience(input, context): Promise<unknown> {
+      const payload = await requestLaGrowthMachine({
+        method: "POST",
+        path: "/audiences/create",
+        body: { name: requiredString(input.name, "name", providerInputError) },
+        context,
+      });
+      const record = asRecord(payload);
+      return {
+        audience: unwrapDataObject(record),
+        raw: record,
+      };
+    },
 
-  async get_audience_detail(input, context): Promise<unknown> {
-    const payload = await requestLaGrowthMachine({
-      path: `/audiences/${encodePath(requiredString(input.audienceId, "audienceId", providerInputError))}/detail`,
-      context,
-    });
-    const record = asRecord(payload);
-    return {
-      audience: unwrapDataObject(record),
-      raw: record,
-    };
-  },
+    async get_audience_detail(input, context): Promise<unknown> {
+      const payload = await requestLaGrowthMachine({
+        path: `/audiences/${encodePath(requiredString(input.audienceId, "audienceId", providerInputError))}/detail`,
+        context,
+      });
+      const record = asRecord(payload);
+      return {
+        audience: unwrapDataObject(record),
+        raw: record,
+      };
+    },
 
-  async get_audience_leads(input, context): Promise<unknown> {
-    const payload = await requestLaGrowthMachine({
-      path: `/audiences/${encodePath(requiredString(input.audienceId, "audienceId", providerInputError))}/leads`,
-      search: [
-        ["skip", input.skip],
-        ["limit", input.limit],
-      ],
-      context,
-    });
-    const record = asRecord(payload);
-    return {
-      leads: normalizeArray(record.data),
-      total: typeof record.total === "number" ? record.total : null,
-      raw: record,
-    };
-  },
+    async get_audience_leads(input, context): Promise<unknown> {
+      const payload = await requestLaGrowthMachine({
+        path: `/audiences/${encodePath(requiredString(input.audienceId, "audienceId", providerInputError))}/leads`,
+        search: [
+          ["skip", input.skip],
+          ["limit", input.limit],
+        ],
+        context,
+      });
+      const record = asRecord(payload);
+      return {
+        leads: normalizeArray(record.data),
+        total: typeof record.total === "number" ? record.total : null,
+        raw: record,
+      };
+    },
 
-  async search_leads(input, context): Promise<unknown> {
-    if (!hasAtLeastOneNonEmptyValue(input)) {
-      throw new ProviderRequestError(400, "at least one lead search criterion is required");
-    }
-    const payload = await requestLaGrowthMachine({
-      path: "/leads/search",
-      search: Object.entries(input),
-      context,
-    });
-    const record = asRecord(payload);
-    return {
-      leads: normalizeLeadCollection(payload),
-      tooManyResults: record.tooManyResults === true,
-      raw: payload,
-    };
-  },
+    async search_leads(input, context): Promise<unknown> {
+      if (!hasAtLeastOneNonEmptyValue(input)) {
+        throw new ProviderRequestError(400, "at least one lead search criterion is required");
+      }
+      const payload = await requestLaGrowthMachine({
+        path: "/leads/search",
+        search: Object.entries(input),
+        context,
+      });
+      const record = asRecord(payload);
+      return {
+        leads: normalizeLeadCollection(payload),
+        tooManyResults: record.tooManyResults === true,
+        raw: payload,
+      };
+    },
 
-  async create_or_update_lead(input, context): Promise<unknown> {
-    if (!hasLeadMutationIdentifier(input)) {
-      throw new ProviderRequestError(400, "at least one lead identifier is required");
-    }
-    const payload = await requestLaGrowthMachine({
-      method: "POST",
-      path: "/leads",
-      body: compactObject(input),
-      context,
-    });
-    const record = asRecord(payload);
-    return {
-      lead: unwrapDataObject(record),
-      raw: record,
-    };
-  },
-};
+    async create_or_update_lead(input, context): Promise<unknown> {
+      if (!hasLeadMutationIdentifier(input)) {
+        throw new ProviderRequestError(400, "at least one lead identifier is required");
+      }
+      const payload = await requestLaGrowthMachine({
+        method: "POST",
+        path: "/leads",
+        body: compactObject(input),
+        context,
+      });
+      const record = asRecord(payload);
+      return {
+        lead: unwrapDataObject(record),
+        raw: record,
+      };
+    },
+  };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, laGrowthMachineActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: laGrowthMachineApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -169,7 +186,7 @@ async function requestLaGrowthMachine(request: {
     appendQueryValue(url, key, value);
   }
 
-  const timeout = createProviderTimeout(request.context.signal, laGrowthMachineRequestTimeoutMs);
+  const timeout = createProviderTimeout(request.context.signal);
   let response: Response;
   let payload: unknown;
   try {
@@ -350,8 +367,4 @@ function hasLeadMutationIdentifier(value: Record<string, unknown>): boolean {
 
 function hasNonEmptyString(value: unknown): boolean {
   return typeof value === "string" && value.trim().length > 0;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

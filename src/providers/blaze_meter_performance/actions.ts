@@ -50,17 +50,10 @@ const listTestsInputSchema: JsonSchema = s.object(
 );
 listTestsInputSchema.anyOf = [{ required: ["workspaceId"] }, { required: ["projectId"] }];
 
-export type BlazeMeterPerformanceActionName =
-  | "get_user"
-  | "list_accounts"
-  | "list_workspaces"
-  | "list_projects"
-  | "list_tests"
-  | "get_test";
-
 export const blazeMeterPerformanceActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Get the BlazeMeter user profile associated with the configured API key.",
     requiredScopes: [],
     inputSchema: s.object("Input for getting the current BlazeMeter user.", {}),
@@ -68,6 +61,7 @@ export const blazeMeterPerformanceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_accounts",
+    operationType: "read",
     description: "List BlazeMeter accounts available to the configured API key.",
     requiredScopes: [],
     inputSchema: paginationInputSchema,
@@ -75,6 +69,7 @@ export const blazeMeterPerformanceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_workspaces",
+    operationType: "read",
     description: "List BlazeMeter workspaces for an account.",
     requiredScopes: [],
     inputSchema: workspaceFilterInputSchema,
@@ -82,6 +77,7 @@ export const blazeMeterPerformanceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_projects",
+    operationType: "read",
     description: "List BlazeMeter projects for a workspace.",
     requiredScopes: [],
     inputSchema: projectListInputSchema,
@@ -89,6 +85,7 @@ export const blazeMeterPerformanceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tests",
+    operationType: "read",
     description: "List BlazeMeter performance tests by workspace or project.",
     requiredScopes: [],
     inputSchema: listTestsInputSchema,
@@ -96,6 +93,7 @@ export const blazeMeterPerformanceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_test",
+    operationType: "read",
     description: "Get one BlazeMeter performance test by ID.",
     requiredScopes: [],
     inputSchema: s.actionInput(

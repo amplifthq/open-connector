@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -21,7 +22,7 @@ interface SheetDbRequestInput extends SheetDbContext {
   phase: "validate" | "execute";
 }
 
-export const sheetDbActionHandlers: Record<string, ProviderRuntimeHandler<SheetDbContext>> = {
+export const sheetDbActionHandlers: ProviderActionHandlers<"sheetdb", ProviderRuntimeHandler<SheetDbContext>> = {
   list_rows(input, context) {
     return listRows(input, context);
   },
@@ -188,7 +189,7 @@ async function deleteRows(input: Record<string, unknown>, context: SheetDbContex
 
 export async function requestSheetDb(input: SheetDbRequestInput): Promise<unknown> {
   const url = buildSheetDbUrl(input.apiId, input.path, input.query);
-  const timeout = createProviderTimeout(input.signal, 30_000);
+  const timeout = createProviderTimeout(input.signal);
   let response: Response;
   let payload: unknown;
   try {

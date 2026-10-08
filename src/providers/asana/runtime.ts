@@ -1,4 +1,4 @@
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { BearerProviderContext } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -8,7 +8,13 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
-import { isAbortLikeError, ProviderRequestError, providerUserAgent, setSearchParams } from "../provider-runtime.ts";
+import {
+  isAbortLikeError,
+  providerInputError,
+  ProviderRequestError,
+  providerUserAgent,
+  setSearchParams,
+} from "../provider-runtime.ts";
 
 export const asanaApiBaseUrl = "https://app.asana.com/api/1.0";
 
@@ -16,7 +22,7 @@ type AsanaRequestPhase = "validate" | "execute";
 type AsanaRequestMethod = "GET" | "POST" | "PUT" | "DELETE";
 
 /** The authenticated transport shared by Asana API helpers. */
-export interface AsanaContext extends ApiKeyProviderContext {}
+export interface AsanaContext extends BearerProviderContext {}
 
 /** One Asana action handler backed by an authenticated Asana context. */
 export type AsanaActionHandler = (input: Record<string, unknown>, context: AsanaContext) => Promise<unknown>;
@@ -40,14 +46,9 @@ export interface AsanaWriteResourceOptions {
   notFoundAsInvalidInput?: boolean;
 }
 
-/** Build an invalid-input error for Asana action fields. */
-export function asanaInvalidInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
 /** Encode a required Asana gid for use in a request path. */
 export function asanaPathGid(value: unknown, fieldName: string): string {
-  return encodeURIComponent(requiredString(value, fieldName, asanaInvalidInputError));
+  return encodeURIComponent(requiredString(value, fieldName, providerInputError));
 }
 
 /** Remove undefined values from an Asana query parameter map. */
@@ -97,7 +98,7 @@ export function buildAsanaPaginationQuery(
 /** Reject an update body that contains no mutable Asana fields. */
 export function requireNonEmptyAsanaBody(body: Record<string, unknown>, message: string): void {
   if (Object.keys(body).length === 0) {
-    throw asanaInvalidInputError(message);
+    throw providerInputError(message);
   }
 }
 
@@ -111,7 +112,7 @@ export async function requestAsana(input: AsanaRequestOptions): Promise<Record<s
   try {
     response = await input.context.fetcher(url, {
       method: input.method ?? "GET",
-      headers: createAsanaHeaders(input.context.apiKey, requestBody.isJson),
+      headers: createAsanaHeaders(input.context.accessToken, requestBody.isJson),
       body: requestBody.body,
       signal: input.context.signal,
     });
@@ -229,10 +230,10 @@ function isJsonObject(body: AsanaRequestOptions["body"]): body is Record<string,
   );
 }
 
-function createAsanaHeaders(apiKey: string, isJson: boolean): Headers {
+function createAsanaHeaders(accessToken: string, isJson: boolean): Headers {
   const headers = new Headers({
     accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    authorization: `Bearer ${accessToken}`,
     "user-agent": providerUserAgent,
   });
   if (isJson) {

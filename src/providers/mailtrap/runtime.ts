@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
-import type { MailtrapActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -20,7 +20,7 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const mailtrapApiBaseUrl = "https://mailtrap.io";
+export const mailtrapApiBaseUrl: string = "https://mailtrap.io";
 const mailtrapRequestTimeoutMs = 30_000;
 
 type MailtrapPhase = "validate" | "execute";
@@ -37,7 +37,7 @@ interface MailtrapActionContext {
 
 type MailtrapActionHandler = (input: Record<string, unknown>, context: MailtrapActionContext) => Promise<unknown>;
 
-export const mailtrapActionHandlers: Record<MailtrapActionName, MailtrapActionHandler> = {
+export const mailtrapActionHandlers: ProviderActionHandlers<"mailtrap", MailtrapActionHandler> = {
   async list_accounts(_input, context) {
     return {
       accounts: await listMailtrapAccounts(context, "execute"),

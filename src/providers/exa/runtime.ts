@@ -1,11 +1,11 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { ExaActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const exaApiBaseUrl = "https://api.exa.ai";
+export const exaApiBaseUrl = "https://api.exa.ai";
 
 type ExaContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type ExaActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
@@ -17,7 +17,7 @@ interface ExaRequestInput {
   mode?: "validate" | "execute";
 }
 
-export const exaActionHandlers: Record<ExaActionName, ExaActionHandler> = {
+export const exaActionHandlers: ProviderActionHandlers<"exa", ExaActionHandler> = {
   search(input, context) {
     assertDomainFilters(input);
     return exaRequest({ method: "POST", path: "/search", body: input }, context);

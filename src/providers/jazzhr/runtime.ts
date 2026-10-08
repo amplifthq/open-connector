@@ -1,8 +1,9 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { JazzhrActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import { encodePathSegment } from "../../core/request.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
@@ -10,8 +11,7 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const jazzhrApiBaseUrl = "https://api.resumatorapi.com/v1";
-const jazzhrDefaultRequestTimeoutMs = 30_000;
+export const jazzhrApiBaseUrl = "https://api.resumatorapi.com/v1";
 
 type JazzhrRequestPhase = "validate" | "execute";
 
@@ -87,7 +87,7 @@ const getActionConfigs = {
   },
 } as const satisfies Record<string, JazzhrGetConfig>;
 
-export const jazzhrActionHandlers: Record<JazzhrActionName, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const jazzhrActionHandlers: ProviderActionHandlers<"jazzhr", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   list_jobs(input, context) {
     return listJazzhrRecords(input, context, listActionConfigs.list_jobs);
   },
@@ -205,7 +205,7 @@ async function requestJazzhrJson(input: {
   signal?: AbortSignal;
   phase: JazzhrRequestPhase;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, jazzhrDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const response = await input.fetcher(buildJazzhrUrl(input.apiKey, input.path, input.query), {
       method: "GET",
@@ -319,8 +319,4 @@ function stringifyOptional(value: unknown): string | undefined {
 function stringifyPathValue(value: unknown): string {
   if (typeof value === "boolean") return value ? "true" : "false";
   return String(value);
-}
-
-function encodePathSegment(value: string): string {
-  return encodeURIComponent(value);
 }

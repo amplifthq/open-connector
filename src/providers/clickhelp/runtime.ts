@@ -1,7 +1,13 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ClickhelpActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  basicAuthorizationHeader,
+  createProviderTimeout,
+  ProviderRequestError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 interface ApiKeyProviderActionInput {
   apiKey: string;
@@ -45,7 +51,7 @@ type ClickhelpActionHandler = (input: ClickhelpActionInput, fetcher: typeof fetc
 
 const clickhelpRequestTimeoutMs = 60_000;
 
-export const clickhelpActionHandlers: Record<ClickhelpActionName, ClickhelpActionHandler> = {
+export const clickhelpActionHandlers: ProviderActionHandlers<"clickhelp", ClickhelpActionHandler> = {
   async list_projects(input, fetcher) {
     const projects = requireObjectArray(
       await requestActionJson(input, fetcher, "projects", {
@@ -237,7 +243,7 @@ async function requestClickhelpJson(input: ClickhelpRequest) {
       method: input.method ?? "GET",
       headers: {
         accept: "application/json",
-        authorization: `Basic ${btoa(`${input.credential.login}:${input.credential.apiKey}`)}`,
+        authorization: basicAuthorizationHeader(`${input.credential.login}:${input.credential.apiKey}`),
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },
@@ -307,7 +313,7 @@ function mapClickhelpError(status: number, message: string, phase: ClickhelpRequ
     return new ProviderRequestError(400, message);
   }
   if (phase === "execute" && status === 401) {
-    return new ProviderRequestError(409, message);
+    return new ProviderRequestError(401, message);
   }
   if ([400, 403, 404, 409, 422].includes(status)) {
     return new ProviderRequestError(400, message);

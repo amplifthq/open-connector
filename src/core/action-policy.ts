@@ -2,7 +2,14 @@ import type { ActionDefinition } from "./types.ts";
 
 export type PolicySource = "deployment" | "runtime" | "token";
 
-export type PolicyErrorCode = "action_not_allowed" | "action_blocked" | "proxy_not_allowed" | "proxy_blocked";
+export type PolicyErrorCode =
+  | "action_not_allowed"
+  | "action_blocked"
+  | "proxy_not_allowed"
+  | "proxy_blocked"
+  | "connection_not_allowed"
+  | "trigger_not_allowed"
+  | "trigger_blocked";
 
 export interface PolicyCheck {
   source: PolicySource;
@@ -24,12 +31,16 @@ export interface PolicyRules {
   blockedActions: string[];
   allowedProxies: string[];
   blockedProxies: string[];
+  allowedTriggers?: string[];
+  blockedTriggers?: string[];
 }
 
 export interface TokenPolicy {
   allowedActions: string[];
   blockedActions: string[];
   allowedProxies: string[];
+  allowedConnections?: string[];
+  allowedTriggers?: string[];
 }
 
 export interface RuntimePolicyState {
@@ -43,6 +54,8 @@ export interface ActionPolicyConfig {
   blockedActions?: string[];
   allowedProxies?: string[];
   blockedProxies?: string[];
+  allowedTriggers?: string[];
+  blockedTriggers?: string[];
 }
 
 interface CompiledRule {
@@ -56,6 +69,8 @@ interface CompiledLayer {
   blockedActions: CompiledRule[];
   allowedProxies: CompiledRule[];
   blockedProxies: CompiledRule[];
+  allowedTriggers: CompiledRule[];
+  blockedTriggers: CompiledRule[];
 }
 
 /**
@@ -66,6 +81,8 @@ export class ActionPolicySnapshot {
   private readonly layers: CompiledLayer[];
   private readonly proxyLayers: CompiledLayer[];
   private readonly tokenProxyRules?: CompiledRule[];
+  private readonly tokenTriggerRules?: CompiledRule[];
+  private readonly allowedConnections: readonly string[];
 
   constructor(deployment: PolicyRules, runtime: PolicyRules, token?: TokenPolicy, updatedAt?: string) {
     const deploymentRules = immutablePolicyRules(deployment);
@@ -73,6 +90,7 @@ export class ActionPolicySnapshot {
     this.state = Object.freeze({ deployment: deploymentRules, runtime: runtimeRules, updatedAt });
     this.proxyLayers = [compileLayer("deployment", deploymentRules), compileLayer("runtime", runtimeRules)];
     this.layers = [...this.proxyLayers];
+    this.allowedConnections = Object.freeze([...(token?.allowedConnections ?? [])]);
     if (token) {
       const tokenRules = immutablePolicyRules({
         allowedActions: token.allowedActions,
@@ -83,6 +101,7 @@ export class ActionPolicySnapshot {
       const tokenLayer = compileLayer("token", tokenRules);
       this.layers.push(tokenLayer);
       this.tokenProxyRules = tokenLayer.allowedProxies;
+      this.tokenTriggerRules = (token.allowedTriggers ?? []).map(compileActionRule);
     }
   }
 
@@ -164,6 +183,67 @@ export class ActionPolicySnapshot {
 
     return { allowed: true, checks };
   }
+
+  evaluateTrigger(id: string): ActionPolicyDecision {
+    const checks: PolicyCheck[] = [];
+    for (const layer of this.proxyLayers) {
+      const blocked = layer.blockedTriggers.find((rule) => rule.matches(id));
+      if (blocked)
+        return {
+          allowed: false,
+          code: "trigger_blocked",
+          message: `${id} is blocked by the Trigger policy.`,
+          checks: [{ source: layer.source, outcome: "block_match", rule: blocked.pattern }],
+        };
+    }
+    for (const layer of this.proxyLayers) {
+      const allowed = layer.allowedTriggers;
+      if (allowed.length === 0) continue;
+      const match = allowed.find((rule) => rule.matches(id));
+      if (!match)
+        return {
+          allowed: false,
+          code: "trigger_not_allowed",
+          message: `${id} is not included in the Trigger allowlist.`,
+          checks: [...checks, { source: layer.source, outcome: "allow_miss" }],
+        };
+      checks.push({ source: layer.source, outcome: "allow_match", rule: match.pattern });
+    }
+    if (this.tokenTriggerRules) {
+      const match = this.tokenTriggerRules.find((rule) => rule.matches(id));
+      if (!match)
+        return {
+          allowed: false,
+          code: "trigger_not_allowed",
+          message: `${id} is not granted to this runtime token.`,
+          checks: [...checks, { source: "token", outcome: "allow_miss" }],
+        };
+      checks.push({ source: "token", outcome: "allow_match", rule: match.pattern });
+    }
+    return { allowed: true, checks };
+  }
+
+  evaluateConnection(connectionId?: string): ActionPolicyDecision {
+    if (this.allowedConnections.length === 0) {
+      return { allowed: true, checks: [] };
+    }
+
+    if (connectionId && this.allowedConnections.includes(connectionId)) {
+      return {
+        allowed: true,
+        checks: [{ source: "token", outcome: "allow_match", rule: connectionId }],
+      };
+    }
+
+    return {
+      allowed: false,
+      code: "connection_not_allowed",
+      message: connectionId
+        ? `${connectionId} connection is not granted to this runtime token.`
+        : "The selected connection is not granted to this runtime token.",
+      checks: [{ source: "token", outcome: "allow_miss" }],
+    };
+  }
 }
 
 /**
@@ -183,14 +263,6 @@ export class ActionPolicyService {
   ): ActionPolicySnapshot {
     return new ActionPolicySnapshot(this.rules, runtime, token, updatedAt);
   }
-
-  evaluate(action: ActionDefinition): ActionPolicyDecision {
-    return this.createSnapshot().evaluate(action);
-  }
-
-  evaluateProxy(service: string): ActionPolicyDecision {
-    return this.createSnapshot().evaluateProxy(service);
-  }
 }
 
 export function emptyPolicyRules(): PolicyRules {
@@ -199,6 +271,8 @@ export function emptyPolicyRules(): PolicyRules {
     blockedActions: [],
     allowedProxies: [],
     blockedProxies: [],
+    allowedTriggers: [],
+    blockedTriggers: [],
   };
 }
 
@@ -215,6 +289,8 @@ function policyRules(config: ActionPolicyConfig): PolicyRules {
     blockedActions: config.blockedActions ?? [],
     allowedProxies: config.allowedProxies ?? [],
     blockedProxies: config.blockedProxies ?? [],
+    allowedTriggers: config.allowedTriggers ?? [],
+    blockedTriggers: config.blockedTriggers ?? [],
   });
 }
 
@@ -224,11 +300,15 @@ function immutablePolicyRules(rules: PolicyRules): PolicyRules {
     blockedActions: [...rules.blockedActions],
     allowedProxies: [...rules.allowedProxies],
     blockedProxies: [...rules.blockedProxies],
+    allowedTriggers: [...(rules.allowedTriggers ?? [])],
+    blockedTriggers: [...(rules.blockedTriggers ?? [])],
   };
   Object.freeze(immutable.allowedActions);
   Object.freeze(immutable.blockedActions);
   Object.freeze(immutable.allowedProxies);
   Object.freeze(immutable.blockedProxies);
+  Object.freeze(immutable.allowedTriggers);
+  Object.freeze(immutable.blockedTriggers);
   return Object.freeze(immutable);
 }
 
@@ -239,6 +319,8 @@ function compileLayer(source: PolicySource, rules: PolicyRules): CompiledLayer {
     blockedActions: rules.blockedActions.map(compileActionRule),
     allowedProxies: rules.allowedProxies.map(compileProxyRule),
     blockedProxies: rules.blockedProxies.map(compileProxyRule),
+    allowedTriggers: (rules.allowedTriggers ?? []).map(compileActionRule),
+    blockedTriggers: (rules.blockedTriggers ?? []).map(compileActionRule),
   };
 }
 

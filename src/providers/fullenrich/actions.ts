@@ -5,8 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "fullenrich";
 
-export type FullenrichActionName = "get_credit_balance" | "lookup_person" | "lookup_company";
-
 const rawObjectSchema = s.unknownObject("A JSON object returned by FullEnrich.");
 const lookupMetadataSchema = s.object(
   "The lookup metadata returned by FullEnrich.",
@@ -57,6 +55,7 @@ const companyLookupInputSchema = s.object(
 export const fullenrichActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_credit_balance",
+    operationType: "read",
     description: "Get the current FullEnrich credit balance for the workspace.",
     inputSchema: s.object("The input payload for getting the FullEnrich credit balance.", {}),
     outputSchema: s.object("The FullEnrich credit balance response.", {
@@ -65,6 +64,7 @@ export const fullenrichActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "lookup_person",
+    operationType: "read",
     description: "Look up one FullEnrich person by professional-network identifier or name.",
     inputSchema: personLookupInputSchema,
     outputSchema: s.object("The FullEnrich person lookup response.", {
@@ -75,6 +75,7 @@ export const fullenrichActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "lookup_company",
+    operationType: "read",
     description: "Look up one FullEnrich company by domain or professional-network identifier.",
     inputSchema: companyLookupInputSchema,
     outputSchema: s.object("The FullEnrich company lookup response.", {

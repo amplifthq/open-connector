@@ -1,10 +1,11 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const bugbugApiBaseUrl = "https://app.bugbug.io";
+export const bugbugApiBaseUrl = "https://app.bugbug.io";
 const bugbugValidationPath = "/api/v2/tests/";
 
 type BugbugRequestPhase = "validate" | "execute";
@@ -24,7 +25,7 @@ interface BugbugRequestOptions {
   notFoundAsInvalidInput?: boolean;
 }
 
-export const bugbugActionHandlers: Record<string, BugbugActionHandler> = {
+export const bugbugActionHandlers: ProviderActionHandlers<"bugbug", BugbugActionHandler> = {
   list_tests(input, context) {
     return listBugbugTests(input, context);
   },

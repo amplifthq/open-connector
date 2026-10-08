@@ -1,16 +1,16 @@
 import type { CredentialValidationResult, ResolvedCredential } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
 
-import { optionalBoolean, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { optionalBoolean, optionalInteger, optionalRecord, optionalString, recordOrEmpty } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
+  requiredInputString,
 } from "../provider-runtime.ts";
 import { workdayOAuthScopes } from "./scopes.ts";
-
-const workdayRequestTimeoutMs = 30_000;
 
 interface WorkdayContext {
   accessToken: string;
@@ -28,7 +28,7 @@ interface WorkdayRequestInput extends WorkdayContext {
   notFoundAsInvalidInput?: boolean;
 }
 
-export const workdayActionHandlers: Record<string, ProviderRuntimeHandler<WorkdayContext>> = {
+export const workdayActionHandlers: ProviderActionHandlers<"workday", ProviderRuntimeHandler<WorkdayContext>> = {
   async get_current_user(_input, context): Promise<unknown> {
     return { worker: normalizeWorker(await requestWorkdayJson({ ...context, path: "/workers/me", phase: "execute" })) };
   },
@@ -47,11 +47,11 @@ export const workdayActionHandlers: Record<string, ProviderRuntimeHandler<Workda
     return {
       workers: extractCollectionItems(payload, ["data", "workers"]).map(normalizeWorker),
       total: extractCollectionTotal(payload),
-      raw: normalizeRawObject(payload),
+      raw: recordOrEmpty(payload),
     };
   },
   async get_worker(input, context): Promise<unknown> {
-    const workerId = requiredProviderString(input.workerId, "workerId");
+    const workerId = requiredInputString(input.workerId, "workerId");
     return {
       worker: normalizeWorker(
         await requestWorkdayJson({
@@ -76,11 +76,11 @@ export const workdayActionHandlers: Record<string, ProviderRuntimeHandler<Workda
     return {
       jobs: extractCollectionItems(payload, ["data", "jobs"]).map(normalizeJob),
       total: extractCollectionTotal(payload),
-      raw: normalizeRawObject(payload),
+      raw: recordOrEmpty(payload),
     };
   },
   async get_job(input, context): Promise<unknown> {
-    const jobId = requiredProviderString(input.jobId, "jobId");
+    const jobId = requiredInputString(input.jobId, "jobId");
     return {
       job: normalizeJob(
         await requestWorkdayJson({
@@ -109,11 +109,11 @@ export const workdayActionHandlers: Record<string, ProviderRuntimeHandler<Workda
     return {
       jobPostings: extractCollectionItems(payload, ["data", "jobPostings"]).map(normalizeJobPosting),
       total: extractCollectionTotal(payload),
-      raw: normalizeRawObject(payload),
+      raw: recordOrEmpty(payload),
     };
   },
   async get_job_posting(input, context): Promise<unknown> {
-    const jobPostingId = requiredProviderString(input.jobPostingId, "jobPostingId");
+    const jobPostingId = requiredInputString(input.jobPostingId, "jobPostingId");
     return {
       jobPosting: normalizeJobPosting(
         await requestWorkdayJson({
@@ -165,7 +165,7 @@ export async function validateWorkdayCredential(
 }
 
 async function requestWorkdayJson(input: WorkdayRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, workdayRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   const url = buildWorkdayApiUrl(
     resolveWorkdayBaseUrl(input.metadata),
     resolveWorkdayTenant(input.metadata),
@@ -292,19 +292,18 @@ function extractWorkdayErrorMessage(payload: unknown): string | undefined {
 }
 
 function normalizeWorker(value: unknown): Record<string, unknown> {
-  const record = normalizeRawObject(value);
+  const record = recordOrEmpty(value);
   return {
-    id: readNonEmptyString(record.id) ?? null,
-    workerId: readNonEmptyString(record.workerId) ?? readNonEmptyString(record.worker_id) ?? null,
-    descriptor: readNonEmptyString(record.descriptor) ?? null,
-    isManager: readBoolean(record.isManager) ?? readBoolean(record.is_manager) ?? null,
-    businessTitle: readNonEmptyString(record.businessTitle) ?? readNonEmptyString(record.business_title) ?? null,
-    primaryWorkEmail: readNonEmptyString(record.primaryWorkEmail) ?? readNonEmptyString(record.email) ?? null,
-    primaryWorkPhone: readNonEmptyString(record.primaryWorkPhone) ?? readNonEmptyString(record.phone) ?? null,
-    primaryWorkAddressText:
-      readNonEmptyString(record.primaryWorkAddressText) ?? readNonEmptyString(record.address) ?? null,
-    dateOfBirth: readNonEmptyString(record.dateOfBirth) ?? readNonEmptyString(record.date_of_birth) ?? null,
-    yearsOfService: readNonEmptyString(record.yearsOfService) ?? readNonEmptyString(record.years_of_service) ?? null,
+    id: optionalString(record.id) ?? null,
+    workerId: optionalString(record.workerId) ?? optionalString(record.worker_id) ?? null,
+    descriptor: optionalString(record.descriptor) ?? null,
+    isManager: optionalBoolean(record.isManager) ?? optionalBoolean(record.is_manager) ?? null,
+    businessTitle: optionalString(record.businessTitle) ?? optionalString(record.business_title) ?? null,
+    primaryWorkEmail: optionalString(record.primaryWorkEmail) ?? optionalString(record.email) ?? null,
+    primaryWorkPhone: optionalString(record.primaryWorkPhone) ?? optionalString(record.phone) ?? null,
+    primaryWorkAddressText: optionalString(record.primaryWorkAddressText) ?? optionalString(record.address) ?? null,
+    dateOfBirth: optionalString(record.dateOfBirth) ?? optionalString(record.date_of_birth) ?? null,
+    yearsOfService: optionalString(record.yearsOfService) ?? optionalString(record.years_of_service) ?? null,
     person: normalizePerson(record.person),
     primaryJob: normalizeReference(record.primaryJob),
     workerType: normalizeWorkerType(record.workerType),
@@ -318,15 +317,13 @@ function normalizeWorker(value: unknown): Record<string, unknown> {
 }
 
 function normalizeJob(value: unknown): Record<string, unknown> {
-  const record = normalizeRawObject(value);
+  const record = recordOrEmpty(value);
   return {
-    id: readNonEmptyString(record.id) ?? null,
-    descriptor: readNonEmptyString(record.descriptor) ?? null,
-    businessTitle: readNonEmptyString(record.businessTitle) ?? readNonEmptyString(record.business_title) ?? null,
+    id: optionalString(record.id) ?? null,
+    descriptor: optionalString(record.descriptor) ?? null,
+    businessTitle: optionalString(record.businessTitle) ?? optionalString(record.business_title) ?? null,
     nextPayPeriodStartDate:
-      readNonEmptyString(record.nextPayPeriodStartDate) ??
-      readNonEmptyString(record.next_pay_period_start_date) ??
-      null,
+      optionalString(record.nextPayPeriodStartDate) ?? optionalString(record.next_pay_period_start_date) ?? null,
     worker: normalizeReference(record.worker),
     jobType: normalizeReference(record.jobType),
     location: normalizeReference(record.location),
@@ -337,15 +334,15 @@ function normalizeJob(value: unknown): Record<string, unknown> {
 }
 
 function normalizeJobPosting(value: unknown): Record<string, unknown> {
-  const record = normalizeRawObject(value);
+  const record = recordOrEmpty(value);
   return {
-    id: readNonEmptyString(record.id) ?? null,
-    descriptor: readNonEmptyString(record.descriptor) ?? null,
-    jobTitle: readNonEmptyString(record.jobTitle) ?? null,
-    postingTitle: readNonEmptyString(record.postingTitle) ?? null,
-    jobDescription: readNonEmptyString(record.jobDescription) ?? null,
-    postingStartDate: readNonEmptyString(record.postingStartDate) ?? null,
-    postingEndDate: readNonEmptyString(record.postingEndDate) ?? null,
+    id: optionalString(record.id) ?? null,
+    descriptor: optionalString(record.descriptor) ?? null,
+    jobTitle: optionalString(record.jobTitle) ?? null,
+    postingTitle: optionalString(record.postingTitle) ?? null,
+    jobDescription: optionalString(record.jobDescription) ?? null,
+    postingStartDate: optionalString(record.postingStartDate) ?? null,
+    postingEndDate: optionalString(record.postingEndDate) ?? null,
     location: normalizeReference(record.location),
     department: normalizeReference(record.department),
     position: normalizeReference(record.position),
@@ -360,27 +357,27 @@ function normalizeJobPosting(value: unknown): Record<string, unknown> {
 }
 
 function normalizePerson(value: unknown): Record<string, string | null> {
-  const record = normalizeRawObject(value);
+  const record = recordOrEmpty(value);
   return {
-    id: readNonEmptyString(record.id) ?? null,
-    descriptor: readNonEmptyString(record.descriptor) ?? null,
+    id: optionalString(record.id) ?? null,
+    descriptor: optionalString(record.descriptor) ?? null,
   };
 }
 
 function normalizeWorkerType(value: unknown): Record<string, string | null> {
-  const record = normalizeRawObject(value);
+  const record = recordOrEmpty(value);
   return {
-    id: readNonEmptyString(record.id) ?? null,
-    descriptor: readNonEmptyString(record.descriptor) ?? null,
+    id: optionalString(record.id) ?? null,
+    descriptor: optionalString(record.descriptor) ?? null,
   };
 }
 
 function normalizeReference(value: unknown): Record<string, string | null> {
-  const record = normalizeRawObject(value);
+  const record = recordOrEmpty(value);
   return {
-    id: readNonEmptyString(record.id) ?? null,
-    href: readNonEmptyString(record.href) ?? null,
-    descriptor: readNonEmptyString(record.descriptor) ?? null,
+    id: optionalString(record.id) ?? null,
+    href: optionalString(record.href) ?? null,
+    descriptor: optionalString(record.descriptor) ?? null,
   };
 }
 
@@ -389,7 +386,7 @@ function normalizeReferenceArray(value: unknown): Array<Record<string, string | 
 }
 
 function extractCollectionItems(payload: unknown, candidates: string[]): unknown[] {
-  const record = normalizeRawObject(payload);
+  const record = recordOrEmpty(payload);
   for (const key of candidates) {
     if (Array.isArray(record[key])) return record[key] as unknown[];
   }
@@ -397,12 +394,8 @@ function extractCollectionItems(payload: unknown, candidates: string[]): unknown
 }
 
 function extractCollectionTotal(payload: unknown): number | null {
-  const record = normalizeRawObject(payload);
+  const record = recordOrEmpty(payload);
   return optionalInteger(record.total) ?? optionalInteger(record.count) ?? optionalInteger(record.totalResults) ?? null;
-}
-
-function normalizeRawObject(value: unknown): Record<string, unknown> {
-  return optionalRecord(value) ?? {};
 }
 
 function normalizeStringArray(value: unknown): string[] | undefined {
@@ -425,21 +418,9 @@ function appendQueryParams(
   }
 }
 
-function requiredProviderString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function readGrantedScopes(metadata: Record<string, unknown>): string[] {
   const rawScope = optionalString(metadata.scope);
   return rawScope ? rawScope.split(/\s+/).filter(Boolean) : [...workdayOAuthScopes];
-}
-
-function readNonEmptyString(value: unknown): string | undefined {
-  return optionalString(value);
-}
-
-function readBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
 }
 
 function nonEmptyString(value: unknown): string | undefined {

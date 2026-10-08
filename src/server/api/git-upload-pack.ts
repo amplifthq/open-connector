@@ -1,7 +1,6 @@
 import type { ConnectionService } from "../../connection-service.ts";
 import type { ActionPolicySnapshot } from "../../core/action-policy.ts";
-import type { RuntimeConfigReader } from "../../core/types.ts";
-import type { Logger } from "../logger.ts";
+import type { RuntimeLogger } from "../../core/types.ts";
 import type { LocalAuthOptions } from "./auth.ts";
 import type { Context } from "hono";
 
@@ -16,9 +15,9 @@ export interface GitUploadPackDependencies {
   auth: LocalAuthOptions;
   connections: ConnectionService;
   getPolicy: () => Promise<ActionPolicySnapshot>;
-  logger?: Logger;
+  logger?: RuntimeLogger;
   fetcher?: typeof fetch;
-  runtimeConfig?: RuntimeConfigReader;
+  resolveInstallationToken?: (installationId: string, signal?: AbortSignal) => Promise<string>;
   /** The git-connections route accepts a Core-authorized connection. */
   selectedConnection?: boolean;
 }
@@ -127,13 +126,10 @@ export async function handleGitUploadPack(
   let token: string;
   if (credential.authType === "custom_credential") {
     try {
-      const { resolveGitHubAppInstallation } = await import("../../providers/github/app-auth.ts");
-      const installation = await resolveGitHubAppInstallation({
-        fetcher: input.fetcher ?? providerFetch,
-        installationId: credential.values.installationId ?? "",
-        runtimeConfig: input.runtimeConfig,
-      });
-      token = installation.accessToken;
+      if (!input.resolveInstallationToken) {
+        return jsonError(context, 503, "github_installation_unavailable", "The GitHub installation is unavailable.");
+      }
+      token = await input.resolveInstallationToken(credential.values.installationId ?? "", context.req.raw.signal);
     } catch {
       return jsonError(context, 503, "github_installation_unavailable", "The GitHub installation is unavailable.");
     }

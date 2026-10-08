@@ -1,8 +1,23 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import {
+  compactObject,
+  optionalBoolean,
+  optionalBooleanOrNull,
+  optionalInteger,
+  optionalRecord,
+  optionalString,
+  rawStringOrNull,
+} from "../../core/cast.ts";
 import {
   defineProviderExecutors,
+  defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
   requireApiKeyCredential,
@@ -35,10 +50,27 @@ interface MocoJsonResponse {
 }
 
 const service = "moco";
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  async baseUrl(context) {
+    const credential = await requireApiKeyCredential(context, service);
+    return (
+      optionalString(credential.metadata.apiBaseUrl) ??
+      buildMocoApiBaseUrl(normalizeMocoAccount(credential.values.account))
+    );
+  },
+  auth: { type: "api_key_authorization", prefix: "Token token=" },
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+    if (!headers.has("content-type")) headers.set("content-type", "application/json");
+  },
+});
+
 const mocoValidationPath = "/session";
 const mocoCredentialHelpUrl = "https://everii-group.github.io/mocoapp-api-docs/authentication.html";
 
-export const mocoActionHandlers: Record<string, MocoActionHandler> = {
+export const mocoActionHandlers: ProviderActionHandlers<"moco", MocoActionHandler> = {
   get_profile(_input, context) {
     return getProfile(context);
   },
@@ -290,16 +322,16 @@ function normalizeProfile(value: unknown): Record<string, unknown> {
   const profile = readRequiredObject(value, "profile");
   return {
     id: readRequiredInteger(profile.id, "profile.id"),
-    email: readNullableString(profile.email),
-    fullName: readNullableString(profile.full_name),
-    firstName: readNullableString(profile.first_name),
-    lastName: readNullableString(profile.last_name),
-    active: readNullableBoolean(profile.active),
-    external: readNullableBoolean(profile.external),
-    avatarUrl: readNullableString(profile.avatar_url),
+    email: rawStringOrNull(profile.email),
+    fullName: rawStringOrNull(profile.full_name),
+    firstName: rawStringOrNull(profile.first_name),
+    lastName: rawStringOrNull(profile.last_name),
+    active: optionalBooleanOrNull(profile.active),
+    external: optionalBooleanOrNull(profile.external),
+    avatarUrl: rawStringOrNull(profile.avatar_url),
     unit: normalizeShortReference(profile.unit),
-    createdAt: readNullableString(profile.created_at),
-    updatedAt: readNullableString(profile.updated_at),
+    createdAt: rawStringOrNull(profile.created_at),
+    updatedAt: rawStringOrNull(profile.updated_at),
     raw: profile,
   };
 }
@@ -308,39 +340,39 @@ function normalizeCompany(value: unknown): Record<string, unknown> {
   const company = readRequiredObject(value, "company");
   return {
     id: readRequiredInteger(company.id, "company.id"),
-    type: readNullableString(company.type),
+    type: rawStringOrNull(company.type),
     name: readRequiredString(company.name, "company.name"),
-    website: readNullableString(company.website),
-    email: readNullableString(company.email),
-    phone: readNullableString(company.phone),
+    website: rawStringOrNull(company.website),
+    email: rawStringOrNull(company.email),
+    phone: rawStringOrNull(company.phone),
     tags: readStringArray(company.tags),
-    identifier: readNullableString(company.identifier),
-    active: readNullableBoolean(company.active),
-    archivedOn: readNullableString(company.archived_on),
-    createdAt: readNullableString(company.created_at),
-    updatedAt: readNullableString(company.updated_at),
+    identifier: rawStringOrNull(company.identifier),
+    active: optionalBooleanOrNull(company.active),
+    archivedOn: rawStringOrNull(company.archived_on),
+    createdAt: rawStringOrNull(company.created_at),
+    updatedAt: rawStringOrNull(company.updated_at),
     raw: company,
   };
 }
 
 function normalizeContact(value: unknown): Record<string, unknown> {
   const contact = readRequiredObject(value, "contact");
-  const firstName = readNullableString(contact.firstname);
-  const lastName = readNullableString(contact.lastname);
+  const firstName = rawStringOrNull(contact.firstname);
+  const lastName = rawStringOrNull(contact.lastname);
   return {
     id: readRequiredInteger(contact.id, "contact.id"),
-    gender: readNullableString(contact.gender),
+    gender: rawStringOrNull(contact.gender),
     firstName,
     lastName,
     fullName: buildFullName(firstName, lastName),
-    jobPosition: readNullableString(contact.job_position),
-    mobilePhone: readNullableString(contact.mobile_phone),
-    workPhone: readNullableString(contact.work_phone),
-    workEmail: readNullableString(contact.work_email),
+    jobPosition: rawStringOrNull(contact.job_position),
+    mobilePhone: rawStringOrNull(contact.mobile_phone),
+    workPhone: rawStringOrNull(contact.work_phone),
+    workEmail: rawStringOrNull(contact.work_email),
     tags: readStringArray(contact.tags),
     company: normalizeShortCompany(contact.company),
-    createdAt: readNullableString(contact.created_at),
-    updatedAt: readNullableString(contact.updated_at),
+    createdAt: rawStringOrNull(contact.created_at),
+    updatedAt: rawStringOrNull(contact.updated_at),
     raw: contact,
   };
 }
@@ -363,7 +395,7 @@ function normalizeShortCompany(value: unknown): Record<string, unknown> | null {
   const object = readRequiredObject(value, "company");
   return {
     id: readRequiredInteger(object.id, "company.id"),
-    type: readNullableString(object.type),
+    type: rawStringOrNull(object.type),
     name: readRequiredString(object.name, "company.name"),
   };
 }
@@ -573,14 +605,6 @@ function readRequiredPositiveInteger(value: unknown, fieldName: string): number 
     throw new ProviderRequestError(400, `${fieldName} must be a positive integer`);
   }
   return numberValue;
-}
-
-function readNullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
-
-function readNullableBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
 }
 
 function readStringArray(value: unknown): string[] {

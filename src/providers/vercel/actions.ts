@@ -1,37 +1,15 @@
 import type { ActionDefinition, JsonSchema } from "../../core/types.ts";
 
+import { looseArray, optionalRecord } from "../../core/cast.ts";
 import { s } from "../../core/json-schema.ts";
 import { defineProviderAction } from "../../core/provider-definition.ts";
+import { deploymentActions } from "./deployment-actions.ts";
 
 const service = "vercel";
 
-export type VercelActionName =
-  | "get_auth_user"
-  | "list_teams"
-  | "get_team"
-  | "list_projects"
-  | "get_project"
-  | "create_project"
-  | "update_project"
-  | "list_deployments"
-  | "get_deployment"
-  | "get_deployment_events"
-  | "get_runtime_logs"
-  | "list_project_envs"
-  | "create_project_env"
-  | "update_project_env"
-  | "delete_project_env"
-  | "list_project_domains"
-  | "get_project_domain"
-  | "add_project_domain"
-  | "verify_project_domain"
-  | "get_domain_config"
-  | "list_webhooks"
-  | "get_webhook"
-  | "create_webhook";
-
 interface VercelActionSource {
-  name: VercelActionName;
+  name: string;
+  operationType: ActionDefinition["operationType"];
   description: string;
   inputSchema: JsonSchema;
   outputSchema: JsonSchema;
@@ -42,7 +20,7 @@ const pageSize = s.integer({ minimum: 1, maximum: 100, description: "Maximum num
 const since = s.integer({ description: "Pagination cursor for results created after this timestamp." });
 const until = s.integer({ description: "Pagination cursor for results created before this timestamp." });
 const projectIdOrName = s.string({ minLength: 1, description: "Vercel project ID or project name." });
-const deploymentIdOrUrl = s.string({ minLength: 1, description: "Vercel deployment ID or deployment URL." });
+
 const gitBranch = s.string({ minLength: 1, description: "Git branch name." });
 const customEnvironmentId = s.string({ minLength: 1, description: "Vercel custom environment ID." });
 const pagination = s.looseObject(
@@ -110,15 +88,6 @@ const project = s.object(
     latestDeployments: s.array(deployment, { description: "Most recent deployments attached to the project." }),
   },
   { required: ["id", "name"], description: "Vercel project." },
-);
-
-const deploymentEvent = s.object(
-  {
-    created: s.number({ description: "Deployment event timestamp in milliseconds." }),
-    type: s.string({ description: "Deployment event type." }),
-    payload: looseObject,
-  },
-  { required: ["created", "type", "payload"], description: "Vercel deployment event." },
 );
 
 const runtimeLog = s.object(
@@ -216,21 +185,43 @@ const envWriteFields = {
   customEnvironmentIds: s.stringArray("Custom environment IDs that should receive this environment variable."),
 };
 
-const emptyInput = s.object({}, { description: "Vercel action input." });
-const input = (properties: Record<string, JsonSchema>, required: string[] = []): JsonSchema =>
+const teamScopeFields = {
+  teamId: s.nonEmptyString(
+    "The Team identifier to perform the request on behalf of. Provide this or slug, not both. Defaults to the team configured on the connection.",
+  ),
+  slug: s.nonEmptyString(
+    "The Team slug to perform the request on behalf of. Provide this or teamId, not both. Defaults to the team configured on the connection.",
+  ),
+};
+
+const unscopedInput = (properties: Record<string, JsonSchema>, required: string[] = []): JsonSchema =>
   s.actionInput(properties, required, "Vercel action input.");
+
+const emptyInput = unscopedInput({});
+
+/**
+ * Action input with the optional team scope. The `not` clause rejects a contradictory
+ * `teamId` + `slug` pair during input validation instead of at request time.
+ */
+const input = (properties: Record<string, JsonSchema>, required: string[] = []): JsonSchema => {
+  const schema = unscopedInput({ ...teamScopeFields, ...properties }, required);
+  schema.not = { required: ["teamId", "slug"] };
+  return schema;
+};
 
 const actionSources: readonly VercelActionSource[] = [
   {
     name: "get_auth_user",
+    operationType: "read",
     description: "Get the authenticated Vercel user.",
     inputSchema: emptyInput,
     outputSchema: s.object({ user }, { required: ["user"] }),
   },
   {
     name: "list_teams",
+    operationType: "read",
     description: "List Vercel teams available to the authenticated user.",
-    inputSchema: input({ limit: pageSize, since }),
+    inputSchema: unscopedInput({ limit: pageSize, since }),
     outputSchema: s.object({
       teams: s.array(team, { description: "Vercel teams available to the authenticated user." }),
       pagination: pagination,
@@ -238,12 +229,14 @@ const actionSources: readonly VercelActionSource[] = [
   },
   {
     name: "get_team",
-    description: "Get a Vercel team by id or slug.",
-    inputSchema: input({ teamId: s.nonEmptyString("Vercel team ID or team slug.") }, ["teamId"]),
+    operationType: "read",
+    description: "Get a Vercel team by team ID or slug, defaulting to the team configured on the connection.",
+    inputSchema: input({}),
     outputSchema: s.object({ team }, { required: ["team"] }),
   },
   {
     name: "list_projects",
+    operationType: "read",
     description: "List Vercel projects.",
     inputSchema: input({ limit: pageSize, since, until, repoUrl: s.url("Repository URL used to filter projects.") }),
     outputSchema: s.object({
@@ -253,18 +246,21 @@ const actionSources: readonly VercelActionSource[] = [
   },
   {
     name: "get_project",
+    operationType: "read",
     description: "Get a Vercel project.",
     inputSchema: input({ idOrName: projectIdOrName }, ["idOrName"]),
     outputSchema: s.object({ project }, { required: ["project"] }),
   },
   {
     name: "create_project",
+    operationType: "write",
     description: "Create a Vercel project.",
     inputSchema: input({ name: s.nonEmptyString("Vercel project name."), ...projectMutationFields }, ["name"]),
     outputSchema: s.object({ project }, { required: ["project"] }),
   },
   {
     name: "update_project",
+    operationType: "write",
     description: "Update a Vercel project.",
     inputSchema: input(
       { idOrName: projectIdOrName, name: s.nonEmptyString("Vercel project name."), ...projectMutationFields },
@@ -273,57 +269,8 @@ const actionSources: readonly VercelActionSource[] = [
     outputSchema: s.object({ project }, { required: ["project"] }),
   },
   {
-    name: "list_deployments",
-    description: "List Vercel deployments.",
-    inputSchema: input({
-      projectId: s.nonEmptyString("Vercel project ID."),
-      limit: pageSize,
-      since,
-      until,
-      target: s.nonEmptyString("Deployment target such as production or preview."),
-      state: s.nonEmptyString("Deployment state to filter by."),
-    }),
-    outputSchema: s.object({
-      deployments: s.array(deployment, { description: "Vercel deployments." }),
-      pagination,
-    }),
-  },
-  {
-    name: "get_deployment",
-    description: "Get a Vercel deployment.",
-    inputSchema: input(
-      {
-        idOrUrl: deploymentIdOrUrl,
-        withGitRepoInfo: s.boolean({
-          description: "When true, include Git repository metadata in the deployment response.",
-        }),
-      },
-      ["idOrUrl"],
-    ),
-    outputSchema: s.object({ deployment }, { required: ["deployment"] }),
-  },
-  {
-    name: "get_deployment_events",
-    description: "Get Vercel deployment events.",
-    inputSchema: input(
-      {
-        idOrUrl: deploymentIdOrUrl,
-        limit: pageSize,
-        since,
-        until,
-        direction: s.stringEnum(["forward", "backward"], {
-          description: "Order in which to return deployment events.",
-        }),
-        builds: s.boolean({ description: "When true, include build events in the response." }),
-      },
-      ["idOrUrl"],
-    ),
-    outputSchema: s.object({
-      events: s.array(deploymentEvent, { description: "Deployment events returned by Vercel." }),
-    }),
-  },
-  {
     name: "get_runtime_logs",
+    operationType: "read",
     description: "Get runtime logs for a Vercel deployment.",
     inputSchema: input(
       {
@@ -336,12 +283,14 @@ const actionSources: readonly VercelActionSource[] = [
   },
   {
     name: "list_project_envs",
+    operationType: "read",
     description: "List environment variables for a Vercel project.",
     inputSchema: input({ idOrName: projectIdOrName, gitBranch, customEnvironmentId }, ["idOrName"]),
     outputSchema: s.object({ envs: s.array(env, { description: "Environment variables configured on the project." }) }),
   },
   {
     name: "create_project_env",
+    operationType: "write",
     description: "Create a Vercel project environment variable.",
     inputSchema: input({ idOrName: projectIdOrName, ...envWriteFields }, [
       "idOrName",
@@ -356,6 +305,7 @@ const actionSources: readonly VercelActionSource[] = [
   },
   {
     name: "update_project_env",
+    operationType: "write",
     description: "Update a Vercel project environment variable.",
     inputSchema: input(
       { idOrName: projectIdOrName, id: s.nonEmptyString("Vercel environment variable ID."), ...envWriteFields },
@@ -365,6 +315,7 @@ const actionSources: readonly VercelActionSource[] = [
   },
   {
     name: "delete_project_env",
+    operationType: "destructive",
     description: "Delete a Vercel project environment variable.",
     inputSchema: input({ idOrName: projectIdOrName, id: s.nonEmptyString("Vercel environment variable ID.") }, [
       "idOrName",
@@ -376,6 +327,7 @@ const actionSources: readonly VercelActionSource[] = [
   },
   {
     name: "list_project_domains",
+    operationType: "read",
     description: "List domains for a Vercel project.",
     inputSchema: input({ idOrName: projectIdOrName, limit: pageSize, since, until, gitBranch, customEnvironmentId }, [
       "idOrName",
@@ -387,12 +339,14 @@ const actionSources: readonly VercelActionSource[] = [
   },
   {
     name: "get_project_domain",
+    operationType: "read",
     description: "Get a Vercel project domain.",
     inputSchema: input({ idOrName: projectIdOrName, domain: s.nonEmptyString("Domain name.") }, ["idOrName", "domain"]),
     outputSchema: s.object({ domain }, { required: ["domain"] }),
   },
   {
     name: "add_project_domain",
+    operationType: "write",
     description: "Add a domain to a Vercel project.",
     inputSchema: input(
       {
@@ -408,30 +362,35 @@ const actionSources: readonly VercelActionSource[] = [
   },
   {
     name: "verify_project_domain",
+    operationType: "read",
     description: "Verify a Vercel project domain.",
     inputSchema: input({ idOrName: projectIdOrName, domain: s.nonEmptyString("Domain name.") }, ["idOrName", "domain"]),
     outputSchema: s.object({ domain }, { required: ["domain"] }),
   },
   {
     name: "get_domain_config",
+    operationType: "read",
     description: "Get domain configuration guidance from Vercel.",
     inputSchema: input({ domain: s.nonEmptyString("Domain name.") }, ["domain"]),
     outputSchema: domainConfig,
   },
   {
     name: "list_webhooks",
+    operationType: "read",
     description: "List Vercel webhooks.",
-    inputSchema: emptyInput,
+    inputSchema: input({}),
     outputSchema: s.object({ webhooks: s.array(webhook, { description: "Vercel webhooks." }) }),
   },
   {
     name: "get_webhook",
+    operationType: "read",
     description: "Get a Vercel webhook.",
     inputSchema: input({ id: s.nonEmptyString("Vercel webhook ID.") }, ["id"]),
     outputSchema: s.object({ webhook }, { required: ["webhook"] }),
   },
   {
     name: "create_webhook",
+    operationType: "write",
     description: "Create a Vercel webhook.",
     inputSchema: input(
       {
@@ -445,12 +404,37 @@ const actionSources: readonly VercelActionSource[] = [
     ),
     outputSchema: s.object({ webhook }, { required: ["webhook"] }),
   },
+  {
+    name: "delete_webhook",
+    operationType: "destructive",
+    description:
+      "Delete a Vercel webhook. The returned acknowledgement is generated locally because Vercel responds with 204 No Content.",
+    inputSchema: input({ id: s.nonEmptyString("Vercel webhook ID.") }, ["id"]),
+    outputSchema: s.object(
+      {
+        deleted: s.boolean({
+          description: "Whether Vercel accepted the deletion request. True when the API returns 204 No Content.",
+        }),
+      },
+      { required: ["deleted"], description: "A normalized Vercel webhook deletion response." },
+    ),
+  },
 ];
 
-export const vercelActions: ActionDefinition[] = actionSources.map((action) =>
-  defineProviderAction(service, {
+export const vercelActions: ActionDefinition[] = [
+  ...actionSources.map((action) =>
+    defineProviderAction(service, {
+      ...action,
+      requiredScopes: [],
+      providerPermissions: [],
+    }),
+  ),
+  ...deploymentActions.map((action) => ({
     ...action,
-    requiredScopes: [],
-    providerPermissions: [],
-  }),
-);
+    inputSchema: {
+      ...action.inputSchema,
+      properties: { ...teamScopeFields, ...optionalRecord(action.inputSchema.properties) },
+      allOf: [...looseArray(action.inputSchema.allOf), { not: { required: ["teamId", "slug"] } }],
+    },
+  })),
+];

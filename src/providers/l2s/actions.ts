@@ -45,11 +45,10 @@ const upsertOptionalFields = [
   "tags",
 ];
 
-export type L2sActionName = "shorten_url" | "get_url_details" | "update_url_details";
-
 export const l2sActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "shorten_url",
+    operationType: "write",
     description: "Create a shortened URL in L2S with optional custom key, UTM tags, and title.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for creating a shortened URL in L2S.", upsertUrlSharedFields, {
@@ -59,6 +58,7 @@ export const l2sActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_url_details",
+    operationType: "read",
     description: "Get the stored details for one shortened URL in L2S.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for retrieving one L2S shortened URL.", {
@@ -68,6 +68,7 @@ export const l2sActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_url_details",
+    operationType: "write",
     description: "Update the stored details for one shortened URL in L2S.",
     requiredScopes: [],
     inputSchema: s.object(

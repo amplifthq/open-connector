@@ -273,30 +273,10 @@ const phoneGatewaySchema = s.object(
   { optional: ["code", "location", "value", "geo"] },
 );
 
-export type ClickMeetingActionName =
-  | "ping"
-  | "list_conferences"
-  | "create_conference"
-  | "get_conference"
-  | "update_conference"
-  | "delete_conference"
-  | "generate_access_tokens"
-  | "list_access_tokens"
-  | "list_sessions"
-  | "get_session"
-  | "list_session_attendees"
-  | "list_registrations"
-  | "register_participant"
-  | "list_session_registrations"
-  | "list_time_zones"
-  | "list_phone_gateways"
-  | "list_all_recordings"
-  | "list_conference_recordings"
-  | "list_chats";
-
 export const clickMeetingActions: readonly ActionDefinition[] = [
   defineProviderAction(service, {
     name: "ping",
+    operationType: "read",
     description: "Check ClickMeeting API availability for the connected API key.",
     inputSchema: s.object("The input payload for checking ClickMeeting API status.", {}),
     outputSchema: s.object("The ClickMeeting ping response.", {
@@ -305,6 +285,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_conferences",
+    operationType: "read",
     description: "List active or inactive ClickMeeting rooms.",
     inputSchema: s.object(
       "The input payload for listing ClickMeeting rooms.",
@@ -320,6 +301,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_conference",
+    operationType: "write",
     description: "Create a ClickMeeting meeting or webinar room.",
     inputSchema: createConferenceInputSchema,
     outputSchema: s.object("The response returned after creating a ClickMeeting room.", {
@@ -328,6 +310,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_conference",
+    operationType: "read",
     description: "Get details for a ClickMeeting room.",
     inputSchema: s.object("The input payload for getting a ClickMeeting room.", {
       roomId: roomIdSchema,
@@ -338,6 +321,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_conference",
+    operationType: "write",
     description: "Update a ClickMeeting room.",
     inputSchema: updateConferenceInputSchema,
     outputSchema: s.object("The response returned after updating a ClickMeeting room.", {
@@ -346,6 +330,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_conference",
+    operationType: "destructive",
     description: "Delete a ClickMeeting room.",
     inputSchema: s.object("The input payload for deleting a ClickMeeting room.", {
       roomId: roomIdSchema,
@@ -356,6 +341,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "generate_access_tokens",
+    operationType: "write",
     description: "Generate access tokens for a token-protected ClickMeeting room.",
     inputSchema: s.object("The input payload for generating ClickMeeting access tokens.", {
       roomId: roomIdSchema,
@@ -370,6 +356,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_access_tokens",
+    operationType: "read",
     description: "List generated access tokens for a ClickMeeting room.",
     inputSchema: s.object("The input payload for listing ClickMeeting access tokens.", {
       roomId: roomIdSchema,
@@ -380,6 +367,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_sessions",
+    operationType: "read",
     description: "List sessions for a ClickMeeting room.",
     inputSchema: s.object("The input payload for listing ClickMeeting room sessions.", {
       roomId: roomIdSchema,
@@ -390,6 +378,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_session",
+    operationType: "read",
     description: "Get details for a ClickMeeting room session.",
     inputSchema: s.object("The input payload for getting a ClickMeeting room session.", {
       roomId: roomIdSchema,
@@ -401,6 +390,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_session_attendees",
+    operationType: "read",
     description: "List attendees for a ClickMeeting room session.",
     inputSchema: s.object("The input payload for listing ClickMeeting session attendees.", {
       roomId: roomIdSchema,
@@ -412,6 +402,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_registrations",
+    operationType: "read",
     description: "List registrations for a ClickMeeting room by registration status.",
     inputSchema: s.object("The input payload for listing ClickMeeting room registrations.", {
       roomId: roomIdSchema,
@@ -423,6 +414,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "register_participant",
+    operationType: "write",
     description: "Register a participant for a ClickMeeting room.",
     inputSchema: s.object(
       "The input payload for registering a ClickMeeting participant.",
@@ -454,6 +446,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_session_registrations",
+    operationType: "read",
     description: "List registrations for a specific ClickMeeting room session.",
     inputSchema: s.object("The input payload for listing ClickMeeting session registrations.", {
       roomId: roomIdSchema,
@@ -465,6 +458,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_time_zones",
+    operationType: "read",
     description: "List ClickMeeting time zones, optionally filtered by country code.",
     inputSchema: s.object(
       "The input payload for listing ClickMeeting time zones.",
@@ -482,6 +476,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_phone_gateways",
+    operationType: "read",
     description: "List ClickMeeting phone gateway numbers.",
     inputSchema: s.object("The input payload for listing ClickMeeting phone gateways.", {}),
     outputSchema: s.object("The response returned when listing ClickMeeting phone gateways.", {
@@ -490,6 +485,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_all_recordings",
+    operationType: "read",
     description: "List all ClickMeeting recordings for the connected account.",
     inputSchema: s.object("The input payload for listing all ClickMeeting recordings.", {}),
     outputSchema: s.object("The response returned when listing all ClickMeeting recordings.", {
@@ -498,6 +494,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_conference_recordings",
+    operationType: "read",
     description: "List recordings for a ClickMeeting room.",
     inputSchema: s.object("The input payload for listing ClickMeeting room recordings.", {
       roomId: roomIdSchema,
@@ -508,6 +505,7 @@ export const clickMeetingActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_chats",
+    operationType: "read",
     description: "List ClickMeeting chat archives available for download.",
     inputSchema: s.object("The input payload for listing ClickMeeting chat archives.", {}),
     outputSchema: s.object("The response returned when listing ClickMeeting chat archives.", {
