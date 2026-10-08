@@ -13,6 +13,7 @@ import {
   setEgressTrustedHosts,
   setPrivateNetworkAccessAllowed,
 } from "../core/request.ts";
+import { GitHubAppInstallationService } from "../providers/github/installation-service.ts";
 import { ProviderLoader } from "../providers/provider-loader.ts";
 import { executorModules } from "../providers/registry.cloudflare.generated.ts";
 import { SaasCleanupService } from "../saas/saas-cleanup-service.ts";
@@ -83,6 +84,7 @@ async function createCloudflareApp(env: CloudflareEnv, publicOrigin: string): Pr
   await preloadOptionalServerModules();
   const secretCodec = await createSecretCodec(env.OOMOL_CONNECT_ENCRYPTION_KEY);
   return await createConnectApp({
+    createGitHubAppInstallations: (options) => new GitHubAppInstallationService(options),
     catalog: await loadCatalogOnce(assets),
     providerLoader: new ProviderLoader(executorModules),
     runtimeDatabase: new D1RuntimeDatabase(env.DB, {

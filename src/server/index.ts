@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { defaultLazySchemaCacheFiles } from "../catalog-lazy-schemas.ts";
 import { parseActionPolicyList } from "../core/action-policy.ts";
 import { parseEgressTrustedHosts, parsePrivateNetworkAccessFlag } from "../core/request.ts";
+import { GitHubAppInstallationService } from "../providers/github/installation-service.ts";
 import { isConsoleShellRequest } from "./api/console-paths.ts";
 import { registerStaticRoutes } from "./api/static-routes.ts";
 import { createConnectorRuntime } from "./connector-runtime.ts";
@@ -70,6 +71,7 @@ async function main(): Promise<void> {
     assets,
     encryptionKey: process.env.OOMOL_CONNECT_ENCRYPTION_KEY,
     runtimeConfig: (name) => process.env[name],
+    createGitHubAppInstallations: (options) => new GitHubAppInstallationService(options),
     adminToken: optionalEnv("OOMOL_CONNECT_ADMIN_TOKEN"),
     runtimeToken: optionalEnv("OOMOL_CONNECT_RUNTIME_TOKEN"),
     jwt: {

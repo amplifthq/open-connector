@@ -4064,7 +4064,7 @@ interface CreateTestServerOptions {
   logger?: Logger;
   idempotency?: IIdempotencyStore;
   githubAppInstallations?: Pick<GitHubAppInstallationService, "complete"> &
-    Partial<Pick<GitHubAppInstallationService, "findAccessibleInstallation">>;
+    Partial<Pick<GitHubAppInstallationService, "findAccessibleInstallation" | "resolveInstallationToken">>;
   runtimeTokens?: RuntimeTokenService;
   runtimePolicyStore?: IRuntimePolicyStore;
   runs?: MemoryRunLogStore;

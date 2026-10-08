@@ -7,6 +7,7 @@ import { exportPKCS8, generateKeyPair } from "jose";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
 import { ActionPolicyService } from "../../core/action-policy.ts";
+import { GitHubAppInstallationService } from "../../providers/github/installation-service.ts";
 import { createLocalAuthMiddleware } from "./auth.ts";
 import { handleGitUploadPack } from "./git-upload-pack.ts";
 
@@ -37,6 +38,7 @@ function createApp(
   const app = new Hono();
   const auth = { adminToken: "admin-token", runtimeToken };
   const connections = { getCredential } as unknown as ConnectionService;
+  const githubAppInstallations = new GitHubAppInstallationService({ connections, fetcher, runtimeConfig });
   app.use("*", createLocalAuthMiddleware(auth));
   app.get("/v1/openmeld/git/:owner/:repo/info/refs", (context) =>
     handleGitUploadPack(context, {
@@ -70,7 +72,7 @@ function createApp(
           connections,
           getPolicy,
           fetcher,
-          runtimeConfig,
+          resolveInstallationToken: githubAppInstallations.resolveInstallationToken.bind(githubAppInstallations),
           selectedConnection: true,
           operation,
           owner: context.req.param("owner"),

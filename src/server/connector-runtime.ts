@@ -2,6 +2,7 @@ import type { ActionPolicyConfig } from "../core/action-policy.ts";
 import type { ProviderHttpDispatchOptions } from "../core/provider-http-dispatch.ts";
 import type { RuntimeConfigReader, RuntimeLogger } from "../core/types.ts";
 import type { RuntimeJwtConfig } from "./api/runtime-jwt.ts";
+import type { ConnectAppOptions } from "./connect-app.ts";
 import type { S3TransitClientOptions } from "./files/s3-transit-files.ts";
 import type { IStagedTransitFileService } from "./files/transit-file-store.ts";
 
@@ -85,6 +86,7 @@ export interface ConnectorRuntimeOptions {
   providerHttpDispatch?: ProviderHttpDispatchOptions;
   /** Host-owned provider configuration, including GitHub App credentials. */
   runtimeConfig?: RuntimeConfigReader;
+  createGitHubAppInstallations?: ConnectAppOptions["createGitHubAppInstallations"];
   /** Allow or block actions, proxies and Triggers by name. */
   actionPolicy?: ActionPolicyConfig;
   /** Services, or `*`, whose connections may carry their own OAuth client instead of the configured one. */
@@ -216,6 +218,7 @@ async function openRuntime(options: ConnectorRuntimeOptions): Promise<ConnectorR
       providerLoader: new ProviderLoader(executorModules),
       providerHttpDispatch: options.providerHttpDispatch,
       runtimeConfig: options.runtimeConfig,
+      createGitHubAppInstallations: options.createGitHubAppInstallations,
       runtimeDatabase: database,
       transitFiles,
       uploadTransitFile: createNodeTransitFileUpload({ transitFiles, tempDir }),

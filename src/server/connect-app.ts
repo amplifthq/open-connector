@@ -2,6 +2,7 @@ import type { CatalogStore } from "../catalog-store.ts";
 import type { ActionPolicyService } from "../core/action-policy.ts";
 import type { ProviderHttpDispatchOptions } from "../core/provider-http-dispatch.ts";
 import type { RuntimeConfigReader, RuntimeLogger, TransitFileUpload } from "../core/types.ts";
+import type { GitHubAppInstallationService } from "../providers/github/installation-service.ts";
 import type { IProviderLoader } from "../providers/provider-loader.ts";
 import type { RuntimeJwtVerifier } from "./api/runtime-jwt.ts";
 import type { ITransitFileService } from "./files/transit-file-store.ts";
@@ -15,7 +16,6 @@ import { MarketplaceService } from "../marketplace/marketplace-service.ts";
 import { OAuthClientConfigService } from "../oauth/oauth-client-config-service.ts";
 import { OAuthCredentialRefreshService } from "../oauth/oauth-credential-refresh-service.ts";
 import { OAuthFlowService } from "../oauth/oauth-flow-service.ts";
-import { GitHubAppInstallationService } from "../providers/github/installation-service.ts";
 import { SaasCleanupService } from "../saas/saas-cleanup-service.ts";
 import { SaasClient } from "../saas/saas-client.ts";
 import { SaasExecutionService } from "../saas/saas-execution-service.ts";
@@ -41,6 +41,10 @@ export interface ConnectAppOptions {
   runtimeToken?: string;
   allowedCustomOAuth?: string[];
   runtimeConfig?: RuntimeConfigReader;
+  /** Standalone hosts opt into GitHub App management; headless consumers may omit it. */
+  createGitHubAppInstallations?: (
+    options: ConstructorParameters<typeof GitHubAppInstallationService>[0],
+  ) => GitHubAppInstallationService;
   verifyRuntimeJwt?: RuntimeJwtVerifier;
   actionPolicy?: ActionPolicyService;
   registerStaticRoutes?: (app: Hono) => void;
@@ -142,7 +146,7 @@ export async function createConnectApp(options: ConnectAppOptions): Promise<Conn
       publicOrigin: options.publicOrigin,
       providerLoader: options.providerLoader,
       connections,
-      githubAppInstallations: new GitHubAppInstallationService({
+      githubAppInstallations: options.createGitHubAppInstallations?.({
         connections,
         runtimeConfig: options.runtimeConfig,
       }),

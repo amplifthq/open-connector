@@ -149,7 +149,7 @@ export interface IConnectServerOptions {
   oauthClientConfigs: OAuthClientConfigService;
   oauthFlow: OAuthFlowService;
   githubAppInstallations?: Pick<GitHubAppInstallationService, "complete"> &
-    Partial<Pick<GitHubAppInstallationService, "findAccessibleInstallation">>;
+    Partial<Pick<GitHubAppInstallationService, "findAccessibleInstallation" | "resolveInstallationToken">>;
   runtimeTokens: RuntimeTokenService;
   actions: ActionRunner;
   triggers?: TriggerRunner;
@@ -341,7 +341,9 @@ export class ConnectServer {
         handleGitUploadPack(context, {
           auth,
           connections: this.options.connections,
-          runtimeConfig: this.options.runtimeConfig,
+          resolveInstallationToken: this.options.githubAppInstallations?.resolveInstallationToken?.bind(
+            this.options.githubAppInstallations,
+          ),
           getPolicy: () => this.getPolicySnapshot(context),
           logger: this.options.logger,
           selectedConnection: true,
