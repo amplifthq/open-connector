@@ -1,6 +1,6 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { FullenrichActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -14,7 +14,6 @@ import {
 
 const service = "fullenrich";
 const fullenrichApiBaseUrl = "https://app.fullenrich.com/api/v2";
-const fullenrichRequestTimeoutMs = 30_000;
 
 type FullenrichPhase = "validate" | "execute";
 type FullenrichActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
@@ -28,7 +27,7 @@ interface FullenrichRequestOptions {
   phase: FullenrichPhase;
 }
 
-export const fullenrichActionHandlers: Record<FullenrichActionName, FullenrichActionHandler> = {
+export const fullenrichActionHandlers: ProviderActionHandlers<"fullenrich", FullenrichActionHandler> = {
   async get_credit_balance(_input, context) {
     const payload = await requestFullenrichJson({
       context,
@@ -145,7 +144,7 @@ function validateCompanyLookupInput(input: Record<string, unknown>): void {
 }
 
 async function requestFullenrichJson(options: FullenrichRequestOptions): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(options.context.signal, fullenrichRequestTimeoutMs);
+  const timeout = createProviderTimeout(options.context.signal);
   try {
     const headers: Record<string, string> = {
       accept: "application/json",

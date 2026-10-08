@@ -1,24 +1,23 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
   readProviderJsonBody,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 export const sportsdataApiBaseUrl = "https://api.sportsdata.io";
 
 const apiKeyHeader = "Ocp-Apim-Subscription-Key";
-const requestTimeoutMs = 30_000;
 
 type RequestPhase = "validate" | "execute";
 type SportsdataActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const sportsdataActionHandlers: Record<string, SportsdataActionHandler> = {
+export const sportsdataActionHandlers: ProviderActionHandlers<"sportsdata", SportsdataActionHandler> = {
   list_sports(_input, context) {
     return executeList("/sports", "sports", context);
   },
@@ -106,11 +105,10 @@ async function requestSportsdata(
   signal: AbortSignal | undefined,
   phase: RequestPhase,
 ): Promise<unknown[]> {
-  const timeout = createProviderTimeout(signal, requestTimeoutMs);
-  try {
+  return runProviderRequest({ signal, label: "SportsDataIO" }, async (signal) => {
     const response = await fetcher(new URL(path, sportsdataApiBaseUrl), {
       headers: { accept: "application/json", [apiKeyHeader]: apiKey, "user-agent": providerUserAgent },
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readProviderJsonBody(response, {
       emptyBody: null,
@@ -120,18 +118,7 @@ async function requestSportsdata(
     if (!response.ok) throw createSportsdataError(response.status, payload, phase);
     if (!Array.isArray(payload)) throw new ProviderRequestError(502, "SportsDataIO returned a non-array response");
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) throw error;
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "SportsDataIO request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `SportsDataIO request failed: ${error.message}` : "SportsDataIO request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function createSportsdataError(status: number, payload: unknown, phase: RequestPhase): ProviderRequestError {

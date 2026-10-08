@@ -5,16 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "ninjapear";
 
-export type NinjapearActionName =
-  | "get_credit_balance"
-  | "check_disposable_email"
-  | "lookup_company_website"
-  | "get_company_details"
-  | "get_employee_count"
-  | "list_customers"
-  | "list_competitors"
-  | "list_products";
-
 const websiteSchema = s.nonEmptyString(
   "The website URL or company name of the target company. A website URL is recommended for precision.",
 );
@@ -79,6 +69,7 @@ const productSchema = s.looseObject("A product or service returned by NinjaPear.
 
 const getCreditBalanceAction = defineProviderAction(service, {
   name: "get_credit_balance",
+  operationType: "read",
   description: "Get the current NinjaPear credit balance for the authenticated account.",
   inputSchema: s.object("Input parameters for getting the NinjaPear credit balance.", {}),
   outputSchema: s.looseObject("The current NinjaPear credit balance.", {
@@ -88,6 +79,7 @@ const getCreditBalanceAction = defineProviderAction(service, {
 
 const checkDisposableEmailAction = defineProviderAction(service, {
   name: "check_disposable_email",
+  operationType: "read",
   description: "Check whether an email address is disposable or from a free email provider.",
   inputSchema: s.object(
     "Input parameters for checking an email address.",
@@ -105,6 +97,7 @@ const checkDisposableEmailAction = defineProviderAction(service, {
 
 const lookupCompanyWebsiteAction = defineProviderAction(service, {
   name: "lookup_company_website",
+  operationType: "read",
   description: "Resolve a company name to its canonical website URL.",
   inputSchema: s.object(
     "Input parameters for resolving a company website.",
@@ -125,6 +118,7 @@ const lookupCompanyWebsiteAction = defineProviderAction(service, {
 
 const getCompanyDetailsAction = defineProviderAction(service, {
   name: "get_company_details",
+  operationType: "read",
   description: "Retrieve detailed company information such as description, industry, leadership, and addresses.",
   inputSchema: s.object(
     "Input parameters for retrieving company details.",
@@ -153,6 +147,7 @@ const getCompanyDetailsAction = defineProviderAction(service, {
 
 const getEmployeeCountAction = defineProviderAction(service, {
   name: "get_employee_count",
+  operationType: "read",
   description: "Get the estimated employee count for a company.",
   inputSchema: s.object(
     "Input parameters for getting a company employee count.",
@@ -169,6 +164,7 @@ const getEmployeeCountAction = defineProviderAction(service, {
 
 const listCustomersAction = defineProviderAction(service, {
   name: "list_customers",
+  operationType: "read",
   description: "List likely customers, investors, and partner platforms for a target company.",
   inputSchema: s.object(
     "Input parameters for listing likely customers and partners.",
@@ -194,6 +190,7 @@ const listCustomersAction = defineProviderAction(service, {
 
 const listCompetitorsAction = defineProviderAction(service, {
   name: "list_competitors",
+  operationType: "read",
   description: "Discover direct business competitors of a target company.",
   inputSchema: s.object(
     "Input parameters for listing competitors.",
@@ -210,6 +207,7 @@ const listCompetitorsAction = defineProviderAction(service, {
 
 const listProductsAction = defineProviderAction(service, {
   name: "list_products",
+  operationType: "read",
   description: "List products and services offered by a target company.",
   inputSchema: s.object(
     "Input parameters for listing products and services.",

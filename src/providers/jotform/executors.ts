@@ -1,15 +1,8 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { JotformActionName } from "./actions.ts";
 
-import {
-  compactObject,
-  optionalIntegerLike,
-  optionalRecord,
-  optionalString,
-  requiredRecord,
-  requiredString,
-} from "../../core/cast.ts";
+import { compactObject, optionalIntegerLike, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
@@ -17,11 +10,11 @@ import {
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 const service = "jotform";
 const jotformApiBaseUrl = "https://api.jotform.com";
-const jotformRequestTimeoutMs = 30_000;
 
 type JotformRequestPhase = "validate" | "execute";
 type JotformQueryValue = string | number | undefined;
@@ -82,7 +75,7 @@ type NormalizedJotformUserStringField =
   | "language"
   | "avatarUrl";
 
-export const jotformActionHandlers: Record<JotformActionName, JotformActionHandler> = {
+export const jotformActionHandlers: ProviderActionHandlers<"jotform", JotformActionHandler> = {
   async get_current_user(_input, context) {
     const envelope = await requestJotformEnvelope({
       ...context,
@@ -115,7 +108,7 @@ export const jotformActionHandlers: Record<JotformActionName, JotformActionHandl
     });
   },
   async get_form(input, context) {
-    const formId = readRequiredString(input.formId, "formId");
+    const formId = requiredInputString(input.formId, "formId");
     const envelope = await requestJotformEnvelope({
       ...context,
       path: `/form/${encodeURIComponent(formId)}`,
@@ -127,7 +120,7 @@ export const jotformActionHandlers: Record<JotformActionName, JotformActionHandl
     };
   },
   async list_form_questions(input, context) {
-    const formId = readRequiredString(input.formId, "formId");
+    const formId = requiredInputString(input.formId, "formId");
     const envelope = await requestJotformEnvelope({
       ...context,
       path: `/form/${encodeURIComponent(formId)}/questions`,
@@ -139,7 +132,7 @@ export const jotformActionHandlers: Record<JotformActionName, JotformActionHandl
     };
   },
   async list_form_submissions(input, context) {
-    const formId = readRequiredString(input.formId, "formId");
+    const formId = requiredInputString(input.formId, "formId");
     const envelope = await requestJotformEnvelope({
       ...context,
       path: `/form/${encodeURIComponent(formId)}/submissions`,
@@ -155,7 +148,7 @@ export const jotformActionHandlers: Record<JotformActionName, JotformActionHandl
     };
   },
   async get_submission(input, context) {
-    const submissionId = readRequiredString(input.submissionId, "submissionId");
+    const submissionId = requiredInputString(input.submissionId, "submissionId");
     const envelope = await requestJotformEnvelope({
       ...context,
       path: `/submission/${encodeURIComponent(submissionId)}`,
@@ -167,7 +160,7 @@ export const jotformActionHandlers: Record<JotformActionName, JotformActionHandl
     };
   },
   async create_submission(input, context) {
-    const formId = readRequiredString(input.formId, "formId");
+    const formId = requiredInputString(input.formId, "formId");
     const answers = requiredRecord(input.answers, "answers");
     if (Object.keys(answers).length === 0) {
       throw new ProviderRequestError(400, "At least one answer is required.");
@@ -263,7 +256,7 @@ async function requestJotformEnvelope(input: JotformRequestInput): Promise<Jotfo
     headers.set("content-type", "application/x-www-form-urlencoded;charset=UTF-8");
   }
 
-  const timeout = createProviderTimeout(input.signal, jotformRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   let response: Response;
   try {
     response = await input.fetcher(url, {
@@ -615,10 +608,6 @@ function readOptionalNonNegativeInteger(value: unknown, fieldName: string): numb
     throw new ProviderRequestError(400, `${fieldName} must be a non-negative integer`);
   }
   return parsed;
-}
-
-function readRequiredString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function appendSubmissionAnswer(body: URLSearchParams, questionId: string, value: unknown): void {

@@ -5,8 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "documenso";
 
-export type DocumensoActionName = "list_envelopes" | "get_envelope" | "list_templates" | "get_template";
-
 const nullableStringSchema = s.nullable(s.string("The string value returned by Documenso."));
 const nullableIntegerSchema = s.nullable(s.integer("The integer value returned by Documenso."));
 const loosePayloadSchema = s.looseObject("The raw Documenso object payload.");
@@ -56,6 +54,7 @@ const templateSummarySchema = s.object("A compact Documenso template summary.", 
 export const documensoActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_envelopes",
+    operationType: "read",
     description: "Find Documenso envelopes by query, status, type, source, template, folder, and pagination filters.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -108,6 +107,7 @@ export const documensoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_envelope",
+    operationType: "read",
     description: "Retrieve one Documenso envelope by envelope ID.",
     requiredScopes: [],
     inputSchema: s.object("The input for retrieving one Documenso envelope.", {
@@ -120,6 +120,7 @@ export const documensoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_templates",
+    operationType: "read",
     description: "Find Documenso templates by query, type, folder, and pagination filters.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -144,6 +145,7 @@ export const documensoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_template",
+    operationType: "read",
     description: "Retrieve one Documenso template by template ID.",
     requiredScopes: [],
     inputSchema: s.object("The input for retrieving one Documenso template.", {

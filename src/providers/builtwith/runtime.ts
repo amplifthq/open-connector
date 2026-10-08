@@ -1,18 +1,12 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { BuiltwithActionName } from "./actions.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  createProviderTimeout,
-  isAbortLikeError,
-  providerUserAgent,
-  ProviderRequestError,
-} from "../provider-runtime.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
 
-const builtwithApiBaseUrl = "https://api.builtwith.com";
+export const builtwithApiBaseUrl = "https://api.builtwith.com";
 const builtwithValidationPath = "/whoamiv1/api.json";
-const builtwithDefaultRequestTimeoutMs = 30_000;
 
 type BuiltwithActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
@@ -21,7 +15,7 @@ interface BuiltwithErrorEntry {
   code?: number;
 }
 
-export const builtwithActionHandlers: Record<BuiltwithActionName, BuiltwithActionHandler> = {
+export const builtwithActionHandlers: ProviderActionHandlers<"builtwith", BuiltwithActionHandler> = {
   lookup_domain_profile(input, context) {
     return executeLookupDomainProfile(input, context);
   },
@@ -166,16 +160,14 @@ async function builtwithRequest(
   context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
   phase: "validate" | "execute",
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, builtwithDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: context.signal, label: "BuiltWith" }, async (signal) => {
     const response = await context.fetcher(buildBuiltwithUrl(input, context.apiKey), {
       method: "GET",
       headers: {
         accept: "application/json",
         "user-agent": providerUserAgent,
       },
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readBuiltwithPayload(response);
 
@@ -189,20 +181,7 @@ async function builtwithRequest(
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "BuiltWith request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `BuiltWith request failed: ${error.message}` : "BuiltWith request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildBuiltwithUrl(

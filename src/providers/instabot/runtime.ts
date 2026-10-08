@@ -1,7 +1,8 @@
+import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-runtime.ts";
 import type { InstabotActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
 
 export interface InstabotCredentialCheck {
   providerAccountId?: string;
@@ -10,16 +11,7 @@ export interface InstabotCredentialCheck {
   providerMetadata: Record<string, unknown>;
 }
 
-interface ApiKeyProviderActionInput {
-  apiKey: string;
-  actionName: string;
-  input: Record<string, unknown>;
-  providerMetadata?: Record<string, unknown>;
-  values?: Record<string, string>;
-}
-
 const instabotApiBaseUrl = "https://api.instabot.io/v1";
-const instabotDefaultRequestTimeoutMs = 30_000;
 
 type InstabotPhase = "validate" | "execute";
 type InstabotCredential = {
@@ -41,7 +33,7 @@ type InstabotActionHandler = (
   fetcher: typeof fetch,
 ) => Promise<unknown>;
 
-export const instabotActionHandlers: Record<InstabotActionName, InstabotActionHandler> = {
+export const instabotActionHandlers: ProviderActionHandlers<"instabot", InstabotActionHandler> = {
   async create_user(input, credential, fetcher) {
     const payload = await requestInstabotJson({
       path: "/users",
@@ -139,7 +131,7 @@ export async function validateInstabotCredential(
 }
 
 export async function executeInstabotAction(
-  input: ApiKeyProviderActionInput & {
+  input: ApiKeyActionRequest & {
     actionName: InstabotActionName;
     input: Record<string, unknown>;
   },
@@ -191,8 +183,7 @@ async function listUsers(
 }
 
 async function requestInstabotJson(input: InstabotRequestInput) {
-  const timeoutHandle = createProviderTimeout(undefined, instabotDefaultRequestTimeoutMs);
-  try {
+  return runProviderRequest({ label: "Instabot" }, async (signal) => {
     const url = new URL(input.path.replace(/^\//, ""), `${instabotApiBaseUrl}/`);
     for (const [key, value] of Object.entries(input.query ?? {})) {
       if (value !== undefined) {
@@ -209,7 +200,7 @@ async function requestInstabotJson(input: InstabotRequestInput) {
         "x-instabot-api-key": input.credential.apiKey,
       },
       body: input.body ? JSON.stringify(input.body) : undefined,
-      signal: timeoutHandle.signal,
+      signal,
     });
     const payload = await readPayload(response);
     if (!response.ok) {
@@ -224,20 +215,7 @@ async function requestInstabotJson(input: InstabotRequestInput) {
       throw createInstabotError(response.status, record, input.phase);
     }
     return record;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeoutHandle.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Instabot request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Instabot request failed: ${error.message}` : "Instabot request failed",
-    );
-  } finally {
-    timeoutHandle.cleanup();
-  }
+  });
 }
 
 async function readPayload(response: Response) {
@@ -333,8 +311,4 @@ function requireObject(value: unknown, message: string) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return optionalRecord(value) !== undefined;
-}
-
-function isAbortLikeError(error: unknown) {
-  return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
 }

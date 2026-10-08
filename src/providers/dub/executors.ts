@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { DubActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -10,7 +10,12 @@ import {
   optionalString,
   requiredRecord,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "dub";
 export const dubApiBaseUrl = "https://api.dub.co";
@@ -24,7 +29,7 @@ const dubAnalyticsPath = "/analytics";
 type DubRequestPhase = "validate" | "execute";
 type DubActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const dubActionHandlers: Record<DubActionName, DubActionHandler> = {
+export const dubActionHandlers: ProviderActionHandlers<"dub", DubActionHandler> = {
   create_link(input, context) {
     return executeCreateLink(input, context);
   },
@@ -76,6 +81,16 @@ export const dubActionHandlers: Record<DubActionName, DubActionHandler> = {
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, dubActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: dubApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -380,7 +395,7 @@ function createDubError(response: Response, payload: unknown, phase: DubRequestP
   }
 
   if (phase === "execute" && (response.status === 401 || response.status === 403)) {
-    return new ProviderRequestError(409, message);
+    return new ProviderRequestError(401, message);
   }
 
   if (phase === "execute" && [400, 404, 409, 410, 422].includes(response.status)) {

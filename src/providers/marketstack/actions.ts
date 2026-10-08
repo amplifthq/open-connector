@@ -93,17 +93,10 @@ const currencySchema = s.object("Normalized currency returned by Marketstack.", 
   symbolNative: s.nullableString("Native currency symbol."),
 });
 
-export type MarketstackActionName =
-  | "list_tickers"
-  | "get_ticker_info"
-  | "get_latest_eod"
-  | "get_historical_eod"
-  | "list_exchanges"
-  | "list_currencies";
-
 export const marketstackActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_tickers",
+    operationType: "read",
     description: "List Marketstack tickers with optional search, exchange, and pagination filters.",
     inputSchema: s.object(
       "Input parameters for listing Marketstack tickers.",
@@ -119,6 +112,7 @@ export const marketstackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_ticker_info",
+    operationType: "read",
     description: "Get profile information for a single Marketstack ticker.",
     inputSchema: s.object("Input parameters for retrieving Marketstack ticker information.", {
       ticker: s.nonEmptyString("Ticker symbol used to retrieve company information."),
@@ -129,6 +123,7 @@ export const marketstackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_latest_eod",
+    operationType: "read",
     description: "Get the latest available end-of-day data for a single Marketstack symbol.",
     inputSchema: s.object(
       "Input parameters for retrieving the latest Marketstack EOD row.",
@@ -144,6 +139,7 @@ export const marketstackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_historical_eod",
+    operationType: "read",
     description: "Get historical end-of-day data from Marketstack for one or more comma-separated symbols.",
     inputSchema: s.object(
       "Input parameters for retrieving historical Marketstack EOD rows.",
@@ -165,6 +161,7 @@ export const marketstackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_exchanges",
+    operationType: "read",
     description: "List stock exchanges available through Marketstack.",
     inputSchema: s.object(
       "Input parameters for listing Marketstack exchanges.",
@@ -182,6 +179,7 @@ export const marketstackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_currencies",
+    operationType: "read",
     description: "List currencies available through Marketstack.",
     inputSchema: s.object(
       "Input parameters for listing Marketstack currencies.",

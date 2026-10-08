@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -14,12 +15,15 @@ import {
   requiredString,
   stringArray,
 } from "../../core/cast.ts";
-import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  createProviderTimeout,
+  providerInputError,
+  ProviderRequestError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 export const krispcallApiBaseUrl = "https://api.krispcall.com";
 export const krispcallTokenUrl = "https://app-login.krispcall.com/api/login/oauth/access_token";
-
-const krispcallRequestTimeoutMs = 30_000;
 
 export interface KrispCallCredential {
   readonly clientId: string;
@@ -49,7 +53,10 @@ interface KrispCallEnvelope {
   readonly raw: Record<string, unknown>;
 }
 
-export const krispcallActionHandlers: Record<string, ProviderRuntimeHandler<KrispCallActionContext>> = {
+export const krispcallActionHandlers: ProviderActionHandlers<
+  "krispcall",
+  ProviderRuntimeHandler<KrispCallActionContext>
+> = {
   async get_workspace(_input, context) {
     const payload = readEnvelope(
       await requestKrispCallJson({
@@ -88,7 +95,7 @@ export const krispcallActionHandlers: Record<string, ProviderRuntimeHandler<Kris
     const payload = readEnvelope(
       await requestKrispCallJson({
         accessToken: context.accessToken,
-        path: `/api/v1/contacts/${encodeURIComponent(requiredString(input.id, "id", inputError))}`,
+        path: `/api/v1/contacts/${encodeURIComponent(requiredString(input.id, "id", providerInputError))}`,
         fetcher: context.fetcher,
         signal: context.signal,
         operation: "get contact",
@@ -122,7 +129,7 @@ export const krispcallActionHandlers: Record<string, ProviderRuntimeHandler<Kris
     const payload = readEnvelope(
       await requestKrispCallJson({
         accessToken: context.accessToken,
-        path: `/api/v1/contacts/${encodeURIComponent(requiredString(input.id, "id", inputError))}`,
+        path: `/api/v1/contacts/${encodeURIComponent(requiredString(input.id, "id", providerInputError))}`,
         method: "PUT",
         body: buildContactBody(input, false),
         fetcher: context.fetcher,
@@ -140,7 +147,7 @@ export const krispcallActionHandlers: Record<string, ProviderRuntimeHandler<Kris
     const payload = readEnvelope(
       await requestKrispCallJson({
         accessToken: context.accessToken,
-        path: `/api/v1/contacts/${encodeURIComponent(requiredString(input.id, "id", inputError))}`,
+        path: `/api/v1/contacts/${encodeURIComponent(requiredString(input.id, "id", providerInputError))}`,
         method: "DELETE",
         fetcher: context.fetcher,
         signal: context.signal,
@@ -175,7 +182,7 @@ export const krispcallActionHandlers: Record<string, ProviderRuntimeHandler<Kris
     const payload = readEnvelope(
       await requestKrispCallJson({
         accessToken: context.accessToken,
-        path: `/api/v1/workspace/members/${encodeURIComponent(requiredString(input.id, "id", inputError))}`,
+        path: `/api/v1/workspace/members/${encodeURIComponent(requiredString(input.id, "id", providerInputError))}`,
         fetcher: context.fetcher,
         signal: context.signal,
         operation: "get member",
@@ -265,8 +272,8 @@ export async function exchangeKrispCallAccessToken(
 
 function readKrispCallCredential(input: Record<string, string>): KrispCallCredential {
   return {
-    clientId: requiredString(input.clientId, "clientId", inputError),
-    clientSecret: requiredString(input.clientSecret, "clientSecret", inputError),
+    clientId: requiredString(input.clientId, "clientId", providerInputError),
+    clientSecret: requiredString(input.clientSecret, "clientSecret", providerInputError),
   };
 }
 
@@ -311,7 +318,7 @@ async function fetchKrispCallResponse(input: {
   readonly init: RequestInit;
   readonly operation: string;
 }) {
-  const timeout = createProviderTimeout(input.init.signal ?? undefined, krispcallRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.init.signal ?? undefined);
   try {
     return await input.fetcher(input.url, { ...input.init, signal: timeout.signal });
   } catch (error) {
@@ -358,7 +365,7 @@ function normalizeWorkspace(input: Record<string, unknown>) {
     title: nullableString(input.title),
     name: nullableString(input.name),
     status: nullableString(input.status),
-    kycVerified: nullableBoolean(input.kyc_verified),
+    kycVerified: optionalBooleanOrNull(input.kyc_verified),
     raw: input,
   };
 }
@@ -374,8 +381,8 @@ function normalizeContact(input: Record<string, unknown>) {
     country: nullableString(input.country),
     status: nullableString(input.status),
     visibility: nullableString(input.visibility),
-    blocked: nullableBoolean(input.blocked),
-    favourite: nullableBoolean(input.favourite),
+    blocked: optionalBooleanOrNull(input.blocked),
+    favourite: optionalBooleanOrNull(input.favourite),
     secondaryPhone: stringList(input.secondary_phone),
     secondaryEmail: stringList(input.secondary_email),
     tags: stringList(input.tags),
@@ -410,7 +417,9 @@ function normalizeMetadata(input: Record<string, unknown> | null) {
 
 function buildContactBody(input: Record<string, unknown>, requireContact: boolean) {
   const body = compactObject({
-    contact: requireContact ? requiredString(input.contact, "contact", inputError) : optionalRawString(input.contact),
+    contact: requireContact
+      ? requiredString(input.contact, "contact", providerInputError)
+      : optionalRawString(input.contact),
     country: optionalRawString(input.country),
     name: optionalRawString(input.name),
     email: optionalRawString(input.email),
@@ -447,10 +456,6 @@ function nullableInteger(value: unknown) {
   return parsed ?? null;
 }
 
-function nullableBoolean(value: unknown) {
-  return optionalBooleanOrNull(value);
-}
-
 function stringList(value: unknown) {
   return Array.isArray(value) ? stringArray(value, "KrispCall string list") : [];
 }
@@ -485,8 +490,4 @@ function readErrorMessage(payload: unknown) {
     return error;
   }
   return undefined;
-}
-
-function inputError(message: string) {
-  return new ProviderRequestError(400, message);
 }

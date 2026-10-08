@@ -1,37 +1,38 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { Client } from "@modelcontextprotocol/client";
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
 import { createHash } from "node:crypto";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
-import { sellerspaceToolNameByAction } from "./actions.ts";
+import { withMcpClient } from "../mcp-client.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  getProviderActionHandler,
+  mapProviderActionHandlers,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
+import { sellerspaceActions, sellerspaceToolNameByAction } from "./actions.ts";
 
 const service = "sellerspace";
 const endpoint = "https://www.sellerspace.com/mcp/";
 const timeoutMs = 60_000;
-const validator = new CfWorkerJsonSchemaValidator();
 const approved = new Set([...Object.values(sellerspaceToolNameByAction), "discover_capabilities"]);
 type McpResult = Awaited<ReturnType<Client["callTool"]>>;
 
 async function withClient<T>(context: ApiKeyProviderContext, run: (client: Client) => Promise<T>): Promise<T> {
-  const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
-    fetch: context.fetcher,
-    requestInit: { headers: { "x-api-key": context.apiKey, "user-agent": providerUserAgent } },
-  });
-  const client = new Client(
-    { name: "oomol-connect-sellerspace", version: "1.0.0" },
-    { jsonSchemaValidator: validator },
+  return withMcpClient(
+    {
+      endpoint: new URL(endpoint),
+      transport: "streamable_http",
+      fetcher: context.fetcher,
+      headers: { "x-api-key": context.apiKey, "user-agent": providerUserAgent },
+      signal: context.signal,
+      mapError,
+    },
+    run,
   );
-  try {
-    await client.connect(transport, { timeout: timeoutMs, signal: context.signal });
-    return await run(client);
-  } catch (error) {
-    throw mapError(error);
-  } finally {
-    await client.close().catch(() => undefined);
-  }
 }
 
 function normalize(result: McpResult): unknown {
@@ -80,37 +81,66 @@ async function call(
         throw new ProviderRequestError(400, `SellerSpace MCP tool ${toolName} is not currently marked read-only`);
     }
     return normalize(
-      await client.callTool({ name: toolName, arguments: args }, undefined, {
-        timeout: timeoutMs,
-        signal: context.signal,
-      }),
+      await client.callTool(
+        { name: toolName, arguments: args },
+        {
+          timeout: timeoutMs,
+          signal: context.signal,
+        },
+      ),
     );
   });
 }
 
-const handlers: Record<string, (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>> =
-  {};
-for (const [action, tool] of Object.entries(sellerspaceToolNameByAction))
-  handlers[action] = async (input, context) => ({ result: await call(context, tool, input) });
-handlers.list_tools = async (_input, context) => ({
-  tools: (await listTools(context)).filter(
-    (tool) =>
-      approved.has(tool.name) && tool.annotations?.readOnlyHint === true && tool.annotations.destructiveHint !== true,
-  ),
-});
-handlers.call_tool = async (input, context) => {
-  const toolName = typeof input.toolName === "string" ? input.toolName.trim() : "";
-  if (!approved.has(toolName))
-    throw new ProviderRequestError(400, `SellerSpace MCP tool ${toolName} is not approved for read-only dynamic calls`);
-  const args =
-    input.arguments && typeof input.arguments === "object" && !Array.isArray(input.arguments)
-      ? (input.arguments as Record<string, unknown>)
-      : {};
-  return { result: await call(context, toolName, args, true) };
-};
+type SellerspaceHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
+
+const handlers: ProviderActionHandlers<"sellerspace", SellerspaceHandler> = mapProviderActionHandlers(
+  service,
+  sellerspaceActions,
+  (_action, name): SellerspaceHandler => {
+    if (name === "list_tools") {
+      return async (_input, context) => ({
+        tools: (await listTools(context)).filter(
+          (tool) =>
+            approved.has(tool.name) &&
+            tool.annotations?.readOnlyHint === true &&
+            tool.annotations.destructiveHint !== true,
+        ),
+      });
+    }
+    if (name === "call_tool") {
+      return async (input, context) => {
+        const toolName = typeof input.toolName === "string" ? input.toolName.trim() : "";
+        if (!approved.has(toolName)) {
+          throw new ProviderRequestError(
+            400,
+            `SellerSpace MCP tool ${toolName} is not approved for read-only dynamic calls`,
+          );
+        }
+        const args =
+          input.arguments && typeof input.arguments === "object" && !Array.isArray(input.arguments)
+            ? (input.arguments as Record<string, unknown>)
+            : {};
+        return { result: await call(context, toolName, args, true) };
+      };
+    }
+
+    const toolName = getProviderActionHandler(sellerspaceToolNameByAction, name);
+    return async (input, context) => ({ result: await call(context, toolName!, input) });
+  },
+);
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, handlers, {
   skipDnsValidation: true,
+});
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: endpoint,
+  auth: { type: "api_key_header", name: "x-api-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json, text/event-stream");
+  },
 });
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

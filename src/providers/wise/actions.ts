@@ -10,11 +10,10 @@ const upstreamCurrencySchema = s.looseObject("One currency object returned by th
 const upstreamRateSchema = s.looseObject("One rate object returned by the Wise Rates API.");
 const optionalQueryStringSchema = (description: string) => s.string(description, { minLength: 1, pattern: "\\S" });
 
-export type WiseActionName = "list_profiles" | "list_currencies" | "get_rates";
-
 export const wiseActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_profiles",
+    operationType: "read",
     description: "List Wise personal and business profiles available to the authenticated personal API token.",
     requiredScopes: [],
     inputSchema: s.object("No input parameters are required.", {}),
@@ -24,6 +23,7 @@ export const wiseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_currencies",
+    operationType: "read",
     description: "List currencies supported by Wise for transfers, including codes and names.",
     requiredScopes: [],
     inputSchema: s.object("No input parameters are required.", {}),
@@ -33,6 +33,7 @@ export const wiseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_rates",
+    operationType: "read",
     description: "Retrieve current or historical Wise exchange rates.",
     requiredScopes: [],
     inputSchema: s.object(

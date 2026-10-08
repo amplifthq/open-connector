@@ -1,9 +1,10 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 const apiPathPrefix = "/api/v4";
 const validationPath = "/users/me";
@@ -18,7 +19,7 @@ interface MattermostContext {
 type MattermostPhase = "validate" | "execute";
 type MattermostActionHandler = ProviderRuntimeHandler<MattermostContext>;
 
-export const mattermostActionHandlers: Record<string, MattermostActionHandler> = {
+export const mattermostActionHandlers: ProviderActionHandlers<"mattermost", MattermostActionHandler> = {
   async get_current_user(_input, context) {
     const payload = await requestMattermostJson({ path: validationPath, context, phase: "execute" });
     return { user: requireObject(payload, "Mattermost user"), raw: payload };
@@ -309,8 +310,4 @@ function trimTrailingSlashes(value: string): string {
     end -= 1;
   }
   return value.slice(0, end);
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

@@ -1,17 +1,17 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { BuildkiteActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
-const buildkiteApiBaseUrl = "https://api.buildkite.com/v2";
-const buildkiteDefaultRequestTimeoutMs = 30_000;
+export const buildkiteApiBaseUrl = "https://api.buildkite.com/v2";
 
 type BuildkiteRequestPhase = "validate" | "execute";
 type BuildkiteQueryValue = string | number | boolean | undefined;
@@ -24,7 +24,7 @@ interface PaginationLinks {
   last: string | null;
 }
 
-export const buildkiteActionHandlers: Record<BuildkiteActionName, BuildkiteActionHandler> = {
+export const buildkiteActionHandlers: ProviderActionHandlers<"buildkite", BuildkiteActionHandler> = {
   get_current_access_token(input, context) {
     return getCurrentAccessToken(input, context);
   },
@@ -147,7 +147,7 @@ async function listOrganizations(input: Record<string, unknown>, context: ApiKey
 }
 
 async function getOrganization(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const orgSlug = requireInputString(input.org_slug, "org_slug");
+  const orgSlug = requiredInputString(input.org_slug, "org_slug");
   return requestBuildkiteJson({
     apiKey: context.apiKey,
     path: `/organizations/${encodeURIComponent(orgSlug)}`,
@@ -159,7 +159,7 @@ async function getOrganization(input: Record<string, unknown>, context: ApiKeyPr
 }
 
 async function listPipelines(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const orgSlug = requireInputString(input.org_slug, "org_slug");
+  const orgSlug = requiredInputString(input.org_slug, "org_slug");
   const { items, links } = await requestBuildkiteList({
     apiKey: context.apiKey,
     path: `/organizations/${encodeURIComponent(orgSlug)}/pipelines`,
@@ -182,8 +182,8 @@ async function listPipelines(input: Record<string, unknown>, context: ApiKeyProv
 }
 
 async function getPipeline(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const orgSlug = requireInputString(input.org_slug, "org_slug");
-  const pipelineSlug = requireInputString(input.pipeline_slug, "pipeline_slug");
+  const orgSlug = requiredInputString(input.org_slug, "org_slug");
+  const pipelineSlug = requiredInputString(input.pipeline_slug, "pipeline_slug");
   return requestBuildkiteJson({
     apiKey: context.apiKey,
     path: `/organizations/${encodeURIComponent(orgSlug)}/pipelines/${encodeURIComponent(pipelineSlug)}`,
@@ -198,7 +198,7 @@ async function listBuildsForOrganization(
   input: Record<string, unknown>,
   context: ApiKeyProviderContext,
 ): Promise<unknown> {
-  const orgSlug = requireInputString(input.org_slug, "org_slug");
+  const orgSlug = requiredInputString(input.org_slug, "org_slug");
   const { items, links } = await requestBuildkiteList({
     apiKey: context.apiKey,
     path: `/organizations/${encodeURIComponent(orgSlug)}/builds`,
@@ -216,8 +216,8 @@ async function listBuildsForOrganization(
 }
 
 async function listBuildsForPipeline(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const orgSlug = requireInputString(input.org_slug, "org_slug");
-  const pipelineSlug = requireInputString(input.pipeline_slug, "pipeline_slug");
+  const orgSlug = requiredInputString(input.org_slug, "org_slug");
+  const pipelineSlug = requiredInputString(input.pipeline_slug, "pipeline_slug");
   const { items, links } = await requestBuildkiteList({
     apiKey: context.apiKey,
     path: `/organizations/${encodeURIComponent(orgSlug)}/pipelines/${encodeURIComponent(pipelineSlug)}/builds`,
@@ -235,8 +235,8 @@ async function listBuildsForPipeline(input: Record<string, unknown>, context: Ap
 }
 
 async function getBuild(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const orgSlug = requireInputString(input.org_slug, "org_slug");
-  const pipelineSlug = requireInputString(input.pipeline_slug, "pipeline_slug");
+  const orgSlug = requiredInputString(input.org_slug, "org_slug");
+  const pipelineSlug = requiredInputString(input.pipeline_slug, "pipeline_slug");
   const number = requirePositiveInteger(input.number, "number");
   return requestBuildkiteJson({
     apiKey: context.apiKey,
@@ -253,15 +253,15 @@ async function getBuild(input: Record<string, unknown>, context: ApiKeyProviderC
 }
 
 async function createBuild(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const orgSlug = requireInputString(input.org_slug, "org_slug");
-  const pipelineSlug = requireInputString(input.pipeline_slug, "pipeline_slug");
+  const orgSlug = requiredInputString(input.org_slug, "org_slug");
+  const pipelineSlug = requiredInputString(input.pipeline_slug, "pipeline_slug");
   return requestBuildkiteJson({
     apiKey: context.apiKey,
     path: `/organizations/${encodeURIComponent(orgSlug)}/pipelines/${encodeURIComponent(pipelineSlug)}/builds`,
     method: "POST",
     body: compactObject({
-      commit: requireInputString(input.commit, "commit"),
-      branch: requireInputString(input.branch, "branch"),
+      commit: requiredInputString(input.commit, "commit"),
+      branch: requiredInputString(input.branch, "branch"),
       message: optionalString(input.message),
       author: optionalRecord(input.author),
       env: optionalRecord(input.env),
@@ -284,8 +284,8 @@ async function createBuild(input: Record<string, unknown>, context: ApiKeyProvid
 }
 
 async function cancelBuild(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const orgSlug = requireInputString(input.org_slug, "org_slug");
-  const pipelineSlug = requireInputString(input.pipeline_slug, "pipeline_slug");
+  const orgSlug = requiredInputString(input.org_slug, "org_slug");
+  const pipelineSlug = requiredInputString(input.pipeline_slug, "pipeline_slug");
   const number = requirePositiveInteger(input.number, "number");
   return requestBuildkiteJson({
     apiKey: context.apiKey,
@@ -299,8 +299,8 @@ async function cancelBuild(input: Record<string, unknown>, context: ApiKeyProvid
 }
 
 async function rebuildBuild(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const orgSlug = requireInputString(input.org_slug, "org_slug");
-  const pipelineSlug = requireInputString(input.pipeline_slug, "pipeline_slug");
+  const orgSlug = requiredInputString(input.org_slug, "org_slug");
+  const pipelineSlug = requiredInputString(input.pipeline_slug, "pipeline_slug");
   const number = requirePositiveInteger(input.number, "number");
   return requestBuildkiteJson({
     apiKey: context.apiKey,
@@ -397,7 +397,7 @@ async function buildkiteFetch(input: {
     body = JSON.stringify(input.body);
   }
 
-  const timeout = createProviderTimeout(input.signal, buildkiteDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     return await input.fetcher(url, {
       method: input.method ?? "GET",
@@ -532,10 +532,6 @@ function readBuildListQuery(input: Record<string, unknown>): Record<string, Buil
     state: optionalString(input.state),
     include_retried_jobs: typeof input.include_retried_jobs === "boolean" ? input.include_retried_jobs : undefined,
   }) as Record<string, BuildkiteQueryValue>;
-}
-
-function requireInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function requirePositiveInteger(value: unknown, fieldName: string): number {

@@ -33,13 +33,24 @@ const profileSchema = s.looseObject("The detailed Bluesky profile object returne
   postsCount: s.integer("The number of posts by the actor."),
 });
 
-const postViewSchema = s.looseObject("The raw Bluesky post view returned by search.", {
+const postViewSchema = s.looseObject("The raw Bluesky post view returned by a feed or search.", {
   uri: postUriSchema,
   cid: cidSchema,
   author: s.looseObject("The Bluesky author view for the post."),
   record: compactRecordSchema,
-  indexedAt: s.string("The server timestamp when the post was indexed."),
+  indexedAt: s.dateTime("The server timestamp when the post was indexed."),
 });
+
+const feedViewPostSchema = s.object(
+  "A Bluesky timeline feed item containing a post and optional reply or repost context.",
+  {
+    post: postViewSchema,
+    reply: compactRecordSchema,
+    reason: compactRecordSchema,
+    feedContext: s.string("Opaque feed-specific context returned by Bluesky."),
+  },
+  { required: ["post"], optional: ["reply", "reason", "feedContext"] },
+);
 
 const strongRefSchema = s.object("A Bluesky strong reference to a post.", {
   uri: postUriSchema,
@@ -52,6 +63,7 @@ const selfLabelsSchema = s.looseObject("A Bluesky self-label object.");
 export const blueskyActions: ProviderActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_profile",
+    operationType: "read",
     description: "Get the detailed Bluesky profile for a handle or DID.",
     requiredScopes: [],
     inputSchema: s.object("Parameters for retrieving a Bluesky profile.", {
@@ -63,6 +75,7 @@ export const blueskyActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_posts",
+    operationType: "read",
     description: "Search Bluesky posts with common filters and pagination.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -95,7 +108,27 @@ export const blueskyActions: ProviderActionDefinition[] = [
     }),
   }),
   defineProviderAction(service, {
+    name: "get_timeline",
+    operationType: "read",
+    description: "Get the authenticated account's home timeline with cursor pagination.",
+    requiredScopes: [],
+    inputSchema: s.object(
+      "Parameters for retrieving the authenticated Bluesky timeline.",
+      {
+        algorithm: s.string("Optional Bluesky feed algorithm identifier.", { minLength: 1 }),
+        limit: s.integer("The maximum number of posts to return.", { minimum: 1, maximum: 100 }),
+        cursor: cursorSchema,
+      },
+      { optional: ["algorithm", "limit", "cursor"] },
+    ),
+    outputSchema: s.object("The authenticated Bluesky timeline response.", {
+      feed: s.array("Timeline feed items returned by Bluesky.", feedViewPostSchema),
+      cursor: s.nullable(cursorSchema),
+    }),
+  }),
+  defineProviderAction(service, {
     name: "create_text_post",
+    operationType: "write",
     description: "Create a Bluesky text post in the authenticated account's repository.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -128,10 +161,6 @@ export const blueskyActions: ProviderActionDefinition[] = [
     }),
   }),
 ];
-
-export const blueskyActionByName: ReadonlyMap<string, ProviderActionDefinition> = new Map(
-  blueskyActions.map((action) => [action.name, action] as const),
-);
 
 export function getBlueskyPostTextValidationIssues(text: string): string[] {
   const issues: string[] = [];

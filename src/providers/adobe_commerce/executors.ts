@@ -4,7 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { AdobeCommerceActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -47,7 +47,7 @@ type AdobeCommerceRequestMode = "validate" | "execute";
 type QueryValue = string | number | boolean | undefined;
 type AdobeCommerceActionHandler = (input: Record<string, unknown>, context: AdobeCommerceContext) => Promise<unknown>;
 
-export const adobeCommerceActionHandlers: Record<AdobeCommerceActionName, AdobeCommerceActionHandler> = {
+export const adobeCommerceActionHandlers: ProviderActionHandlers<"adobe_commerce", AdobeCommerceActionHandler> = {
   async list_products(input, context) {
     const payload = await requestAdobeCommerceJson({
       context: {
@@ -57,7 +57,7 @@ export const adobeCommerceActionHandlers: Record<AdobeCommerceActionName, AdobeC
       mode: "execute",
       pathSegments: ["products"],
       query: compactObject({
-        fields: readOptionalTrimmedString(input.fields),
+        fields: optionalString(input.fields),
       }),
       appendSearchCriteria(url) {
         appendSearchCriteria(url, input);
@@ -78,7 +78,7 @@ export const adobeCommerceActionHandlers: Record<AdobeCommerceActionName, AdobeC
         editMode: optionalBoolean(input.editMode),
         storeId: optionalInteger(input.storeId),
         forceReload: optionalBoolean(input.forceReload),
-        fields: readOptionalTrimmedString(input.fields),
+        fields: optionalString(input.fields),
       }),
     });
 
@@ -97,7 +97,7 @@ export const adobeCommerceActionHandlers: Record<AdobeCommerceActionName, AdobeC
       query: compactObject({
         rootCategoryId: optionalInteger(input.rootCategoryId),
         depth: optionalInteger(input.depth),
-        fields: readOptionalTrimmedString(input.fields),
+        fields: optionalString(input.fields),
       }),
     });
 
@@ -115,7 +115,7 @@ export const adobeCommerceActionHandlers: Record<AdobeCommerceActionName, AdobeC
       pathSegments: ["categories", String(readRequiredInteger(input.categoryId, "categoryId"))],
       query: compactObject({
         storeId: optionalInteger(input.storeId),
-        fields: readOptionalTrimmedString(input.fields),
+        fields: optionalString(input.fields),
       }),
     });
 
@@ -133,7 +133,7 @@ export const executors: ProviderExecutors = defineProviderExecutors<AdobeCommerc
     return {
       apiKey: credential.apiKey,
       baseUrl: normalizeAdobeCommerceBaseUrl(credential.metadata.baseUrl ?? credential.values.baseUrl),
-      storeCode: normalizeOptionalStoreCode(credential.metadata.storeCode ?? credential.values.storeCode),
+      storeCode: optionalString(credential.metadata.storeCode ?? credential.values.storeCode),
       fetcher,
       signal: context.signal,
     };
@@ -145,7 +145,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: async (context) => {
     const credential = await requireApiKeyCredential(context, service);
     const baseUrl = normalizeAdobeCommerceBaseUrl(credential.metadata.baseUrl ?? credential.values.baseUrl);
-    const storeCode = normalizeOptionalStoreCode(credential.metadata.storeCode ?? credential.values.storeCode);
+    const storeCode = optionalString(credential.metadata.storeCode ?? credential.values.storeCode);
     const url = new URL(baseUrl);
     const segments = [...splitPathSegments(url.pathname), "rest", ...(storeCode ? [storeCode] : []), "V1"];
     url.pathname = `/${segments.map((segment) => encodeURIComponent(segment)).join("/")}`;
@@ -157,7 +157,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const baseUrl = normalizeAdobeCommerceBaseUrl(input.values.baseUrl);
-    const storeCode = normalizeOptionalStoreCode(input.values.storeCode);
+    const storeCode = optionalString(input.values.storeCode);
 
     const payload = await requestAdobeCommerceJson({
       context: {
@@ -282,7 +282,7 @@ function mapAdobeCommerceError(status: number, payload: unknown, mode: AdobeComm
   if (status === 401 || status === 403) {
     return mode === "validate"
       ? new ProviderRequestError(400, message, payload)
-      : new ProviderRequestError(409, message, payload);
+      : new ProviderRequestError(401, message, payload);
   }
 
   if (status >= 400 && status < 500) {
@@ -333,7 +333,7 @@ function appendSearchCriteria(url: URL, input: Record<string, unknown>): void {
       const prefix = `searchCriteria[filter_groups][${groupIndex}][filters][${filterIndex}]`;
       url.searchParams.set(`${prefix}[field]`, requireRequiredString(filterRecord.field, "field"));
       url.searchParams.set(`${prefix}[value]`, requireRequiredString(filterRecord.value, "value"));
-      const conditionType = readOptionalTrimmedString(filterRecord.conditionType);
+      const conditionType = optionalString(filterRecord.conditionType);
       if (conditionType) {
         url.searchParams.set(`${prefix}[condition_type]`, conditionType);
       }
@@ -348,7 +348,7 @@ function appendSearchCriteria(url: URL, input: Record<string, unknown>): void {
     }
     const prefix = `searchCriteria[sortOrders][${index}]`;
     url.searchParams.set(`${prefix}[field]`, requireRequiredString(sortRecord.field, "field"));
-    const direction = readOptionalTrimmedString(sortRecord.direction);
+    const direction = optionalString(sortRecord.direction);
     if (direction) {
       url.searchParams.set(`${prefix}[direction]`, direction);
     }
@@ -429,7 +429,7 @@ function requireObject(value: unknown, fieldName: string): Record<string, unknow
 }
 
 function requireRequiredString(value: unknown, fieldName: string): string {
-  const trimmed = readOptionalTrimmedString(value);
+  const trimmed = optionalString(value);
   if (!trimmed) {
     throw new ProviderRequestError(400, `${fieldName} is required`);
   }
@@ -444,16 +444,8 @@ function readRequiredInteger(value: unknown, fieldName: string): number {
   return parsed;
 }
 
-function readOptionalTrimmedString(value: unknown): string | undefined {
-  return optionalString(value);
-}
-
-function normalizeOptionalStoreCode(value: unknown): string | undefined {
-  return readOptionalTrimmedString(value);
-}
-
 function resolveStoreCode(inputStoreCode: unknown, metadataStoreCode: string | undefined): string | undefined {
-  return normalizeOptionalStoreCode(inputStoreCode) ?? metadataStoreCode;
+  return optionalString(inputStoreCode) ?? metadataStoreCode;
 }
 
 function normalizeAdobeCommerceBaseUrl(rawValue: unknown): string {

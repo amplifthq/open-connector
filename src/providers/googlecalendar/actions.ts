@@ -15,8 +15,8 @@ const service = "googlecalendar";
 
 interface GooglecalendarActionSource {
   name: GooglecalendarActionName;
+  readonly operationType: ActionDefinition["operationType"];
   description: string;
-  effect: ActionDefinition["effect"];
   requiredScopes: string[];
   inputSchema: JsonSchema;
   outputSchema: JsonSchema;
@@ -39,6 +39,10 @@ const calendarId = nonEmptyStringWithDescription(
 );
 const eventId = nonEmptyStringWithDescription("Google Calendar event ID.");
 const ruleId = nonEmptyStringWithDescription("Google Calendar ACL rule ID.");
+const sendUpdates = s.stringEnum(
+  "Which guests receive notifications about this change. Omit it to keep Google Calendar's default notification behavior. none can stop the change from syncing to external calendars; use import_event for migrations.",
+  ["all", "externalOnly", "none"],
+);
 
 const eventDateTime = s.object(
   {
@@ -289,7 +293,7 @@ const actions: GooglecalendarActionSource[] = [
   ),
   action(
     "update_calendar_list_entry",
-    "write",
+    "destructive",
     "Replace writable fields on a Google Calendar list entry.",
     googlecalendarCalendarsWriteScopes,
     input({ calendarId, entry: calendarListEntryWritable }, ["calendarId", "entry"]),
@@ -329,7 +333,7 @@ const actions: GooglecalendarActionSource[] = [
   ),
   action(
     "update_calendar",
-    "write",
+    "destructive",
     "Replace writable fields on a Google Calendar resource.",
     googlecalendarCalendarsWriteScopes,
     input({ calendarId, calendar: calendarWritable }, ["calendarId", "calendar"]),
@@ -415,15 +419,15 @@ const actions: GooglecalendarActionSource[] = [
     "write",
     "Create a Google Calendar event.",
     googlecalendarEventsWriteScopes,
-    input({ calendarId, event: eventCreate }, ["calendarId", "event"]),
+    input({ calendarId, event: eventCreate, sendUpdates }, ["calendarId", "event"]),
     eventOutput,
   ),
   action(
     "update_event",
-    "write",
+    "destructive",
     "Replace writable fields on a Google Calendar event.",
     googlecalendarEventsWriteScopes,
-    input({ calendarId, eventId, event: eventWritable }, ["calendarId", "eventId", "event"]),
+    input({ calendarId, eventId, event: eventWritable, sendUpdates }, ["calendarId", "eventId", "event"]),
     eventOutput,
   ),
   action(
@@ -431,7 +435,7 @@ const actions: GooglecalendarActionSource[] = [
     "write",
     "Patch writable fields on a Google Calendar event.",
     googlecalendarEventsWriteScopes,
-    input({ calendarId, eventId, event: eventWritable }, ["calendarId", "eventId", "event"]),
+    input({ calendarId, eventId, event: eventWritable, sendUpdates }, ["calendarId", "eventId", "event"]),
     eventOutput,
   ),
   action(
@@ -439,7 +443,7 @@ const actions: GooglecalendarActionSource[] = [
     "destructive",
     "Delete a Google Calendar event.",
     googlecalendarEventsWriteScopes,
-    calendarEventIdInput(),
+    input({ calendarId, eventId, sendUpdates }, ["calendarId", "eventId"]),
     success,
   ),
   action(
@@ -452,14 +456,18 @@ const actions: GooglecalendarActionSource[] = [
   ),
   action(
     "move_event",
-    "write",
+    "destructive",
     "Move a Google Calendar event to another calendar.",
     googlecalendarEventsWriteScopes,
-    input({ calendarId, eventId, destinationCalendarId: nonEmptyStringWithDescription("Destination calendar ID.") }, [
-      "calendarId",
-      "eventId",
-      "destinationCalendarId",
-    ]),
+    input(
+      {
+        calendarId,
+        eventId,
+        destinationCalendarId: nonEmptyStringWithDescription("Destination calendar ID."),
+        sendUpdates,
+      },
+      ["calendarId", "eventId", "destinationCalendarId"],
+    ),
     eventOutput,
   ),
   action(
@@ -488,12 +496,19 @@ const actions: GooglecalendarActionSource[] = [
     "write",
     "Create a Google Calendar event with natural language text.",
     googlecalendarEventsWriteScopes,
-    input({ calendarId, text: nonEmptyStringWithDescription("Natural-language event text.") }, ["calendarId", "text"]),
+    input(
+      {
+        calendarId,
+        text: nonEmptyStringWithDescription("Natural-language event text."),
+        sendUpdates,
+      },
+      ["calendarId", "text"],
+    ),
     eventOutput,
   ),
   action(
     "sync_events",
-    "read",
+    "write",
     "Incrementally sync events from a Google Calendar.",
     googlecalendarReadScopes,
     input(listEventsInputProperties, ["calendarId"]),
@@ -586,7 +601,7 @@ const actions: GooglecalendarActionSource[] = [
   ),
   action(
     "update_acl_rule",
-    "write",
+    "destructive",
     "Replace writable fields on a Google Calendar ACL rule.",
     googlecalendarAclWriteScopes,
     input({ calendarId, ruleId, rule: aclRuleWritable }, ["calendarId", "ruleId", "rule"]),
@@ -632,15 +647,40 @@ const actions: GooglecalendarActionSource[] = [
     eventPage,
   ),
   action(
+    "add_attendee",
+    "write",
+    "Add one attendee to a Google Calendar event without replacing existing guests.",
+    googlecalendarEventsWriteScopes,
+    input(
+      {
+        eventId,
+        attendeeEmail: nonEmptyStringWithDescription("Attendee email address to add."),
+        calendarId: s.withDefault(calendarId, "primary"),
+        sendUpdates: s.withDefault(
+          s.stringEnum(
+            "Who should receive invitation or update emails. Defaults to all so the new guest is notified.",
+            ["all", "externalOnly", "none"],
+          ),
+          "all",
+        ),
+        displayName: schemaProperties(attendee).displayName,
+        optional: schemaProperties(attendee).optional,
+      },
+      ["eventId", "attendeeEmail"],
+    ),
+    eventOutput,
+  ),
+  action(
     "remove_attendee",
     "destructive",
-    "Remove one attendee email from a Google Calendar event.",
+    "Remove one attendee from a Google Calendar event without replacing the remaining guests.",
     googlecalendarEventsWriteScopes,
     input(
       {
         eventId,
         attendeeEmail: nonEmptyStringWithDescription("Attendee email address to remove."),
-        calendarId,
+        calendarId: s.withDefault(calendarId, "primary"),
+        sendUpdates,
       },
       ["eventId", "attendeeEmail"],
     ),
@@ -685,13 +725,14 @@ export type GooglecalendarActionName =
   | "patch_acl_rule"
   | "delete_acl_rule"
   | "find_event"
+  | "add_attendee"
   | "remove_attendee";
 
 export const googlecalendarActions: ActionDefinition[] = actions.map((source) =>
   defineProviderAction(service, {
     name: source.name,
+    operationType: source.operationType,
     description: source.description,
-    effect: source.effect,
     requiredScopes: source.requiredScopes,
     inputSchema: source.inputSchema,
     outputSchema: source.outputSchema,
@@ -700,13 +741,13 @@ export const googlecalendarActions: ActionDefinition[] = actions.map((source) =>
 
 function action(
   name: GooglecalendarActionName,
-  effect: ActionDefinition["effect"],
+  operationType: ActionDefinition["operationType"],
   description: string,
   requiredScopes: string[],
   inputSchema: JsonSchema,
   outputSchema: JsonSchema,
 ): GooglecalendarActionSource {
-  return { name, description, effect, requiredScopes, inputSchema, outputSchema };
+  return { name, operationType, description, requiredScopes, inputSchema, outputSchema };
 }
 
 function input(properties: Record<string, JsonSchema>, required: string[] = []): JsonSchema {

@@ -1,10 +1,12 @@
+import type { ProviderActionHandlerSubset } from "../provider-runtime.ts";
 import type { MondayProviderActionInput } from "./runtime-common.ts";
 import type { MondayActionHandler } from "./runtime-common.ts";
 
 import { compactObject, optionalRecord as asOptionalObject } from "../../core/cast.ts";
-import { asArray, mondayGraphqlRequest, mondayProviderError } from "./runtime-common.ts";
+import { ProviderRequestError } from "../provider-runtime.ts";
+import { asArray, mondayGraphqlRequest } from "./runtime-common.ts";
 
-export const mondayFormsActionHandlers: Record<string, MondayActionHandler> = {
+export const mondayFormsActionHandlers: ProviderActionHandlerSubset<"monday", MondayActionHandler> = {
   get_form(input, fetcher) {
     return mondayGetForm(input, fetcher);
   },
@@ -291,7 +293,7 @@ async function mondayDeactivateForm(input: MondayProviderActionInput, fetcher: t
 function normalizeCreatedMondayForm(value: unknown) {
   const record = asOptionalObject(value);
   if (!record) {
-    throw mondayProviderError("provider_error", "monday created form payload is missing", 502);
+    throw new ProviderRequestError(502, "monday created form payload is missing");
   }
 
   return {
@@ -303,7 +305,7 @@ function normalizeCreatedMondayForm(value: unknown) {
 function normalizeMondayForm(value: unknown) {
   const record = asOptionalObject(value);
   if (!record) {
-    throw mondayProviderError("provider_error", "monday form payload is missing", 502);
+    throw new ProviderRequestError(502, "monday form payload is missing");
   }
 
   return compactObject({
@@ -327,7 +329,7 @@ function normalizeMondayForm(value: unknown) {
 function normalizeMondayFormTag(value: unknown) {
   const record = asOptionalObject(value);
   if (!record) {
-    throw mondayProviderError("provider_error", "monday form tag payload is missing", 502);
+    throw new ProviderRequestError(502, "monday form tag payload is missing");
   }
 
   return compactObject({
@@ -341,7 +343,7 @@ function normalizeMondayFormTag(value: unknown) {
 function normalizeMondayFormQuestion(value: unknown) {
   const record = asOptionalObject(value);
   if (!record) {
-    throw mondayProviderError("provider_error", "monday form question payload is missing", 502);
+    throw new ProviderRequestError(502, "monday form question payload is missing");
   }
 
   return compactObject({
@@ -360,7 +362,7 @@ function normalizeMondayFormQuestion(value: unknown) {
 function normalizeMondayFormQuestionOption(value: unknown) {
   const record = asOptionalObject(value);
   if (!record) {
-    throw mondayProviderError("provider_error", "monday form question option payload is missing", 502);
+    throw new ProviderRequestError(502, "monday form question option payload is missing");
   }
 
   return {
@@ -392,7 +394,7 @@ function toNullableObject(value: unknown) {
 function normalizeString(value: unknown, fieldName: string) {
   const normalized = toOptionalString(value);
   if (!normalized) {
-    throw mondayProviderError("provider_error", `${fieldName} is missing`, 502);
+    throw new ProviderRequestError(502, `${fieldName} is missing`);
   }
   return normalized;
 }
@@ -400,14 +402,14 @@ function normalizeString(value: unknown, fieldName: string) {
 function normalizeId(value: unknown, fieldName: string) {
   const normalized = toOptionalId(value);
   if (!normalized) {
-    throw mondayProviderError("provider_error", `${fieldName} is missing`, 502);
+    throw new ProviderRequestError(502, `${fieldName} is missing`);
   }
   return normalized;
 }
 
 function normalizeBoolean(value: unknown, fieldName: string) {
   if (typeof value !== "boolean") {
-    throw mondayProviderError("provider_error", `${fieldName} is missing`, 502);
+    throw new ProviderRequestError(502, `${fieldName} is missing`);
   }
   return value;
 }

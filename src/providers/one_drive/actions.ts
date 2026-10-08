@@ -8,6 +8,7 @@ const service = "one_drive";
 
 interface OneDriveActionSource {
   name: string;
+  operationType: ActionDefinition["operationType"];
   description: string;
   requiredScopes: string[];
   providerPermissions: string[];
@@ -36,6 +37,13 @@ const identity = s.looseObject(
   {
     id: s.string({ description: "Unique identifier for the identity." }),
     displayName: s.string({ description: "Display name for the identity." }),
+    // Not in the documented identity resource, but sharing responses carry them.
+    // Under `siteUser` the `id` is a SharePoint site-local index, so `email` is
+    // the only identifier that matches the same person elsewhere.
+    email: s.string({ description: "Email address for the identity, when Graph supplies one." }),
+    loginName: s.string({
+      description: "SharePoint claims login name for the identity, when Graph supplies one.",
+    }),
   },
   { description: "Identity information returned by Microsoft Graph." },
 );
@@ -55,6 +63,8 @@ const driveItemReference = s.looseObject(
     path: s.string({ description: "Percent-encoded path of the referenced item." }),
     driveType: s.string({ description: "Drive type of the referenced item." }),
     siteId: s.string({ description: "Site ID of the referenced item." }),
+    shareId: s.string({ description: "Sharing ID of the referenced item, when Graph supplies one." }),
+    sharepointIds: rawObject,
   },
   { description: "Reference to another drive item." },
 );
@@ -115,21 +125,80 @@ const listDriveItemsOutput = s.object(
   },
   { required: ["items", "nextLink"], description: "OneDrive list response." },
 );
-const downloadedFile = s.object(
+const sharePointIdentitySet = s.looseObject(
   {
-    name: nonEmptyString("The downloaded file name."),
-    mimeType: nonEmptyString("The MIME type of the downloaded file."),
-    contentBase64: nonEmptyString("The downloaded file content encoded as base64."),
+    user: identity,
+    application: identity,
+    device: identity,
+    group: identity,
+    siteUser: identity,
+    siteGroup: identity,
   },
-  { required: ["name", "mimeType", "contentBase64"], description: "A downloaded OneDrive file." },
+  { description: "SharePoint identity set returned by Microsoft Graph sharing responses." },
 );
-const downloadOutput = s.object(
+const sharingLink = s.looseObject(
   {
-    content: s.nullable(downloadedFile),
-    notModified: s.boolean({ description: "Whether the OneDrive server returned HTTP 304 Not Modified." }),
+    type: s.string({ description: "Link type, such as view, edit, or embed." }),
+    scope: s.string({ description: "Link scope, such as anonymous, organization, or users." }),
+    webUrl: s.string({ description: "URL that opens the shared item." }),
+    preventsDownload: s.boolean({ description: "Whether the link blocks downloading." }),
   },
-  { required: ["content", "notModified"], description: "OneDrive download response." },
+  { description: "Sharing link facet of a permission." },
 );
+const sharingInvitation = s.looseObject(
+  {
+    email: s.string({ description: "Email address the invitation was sent to." }),
+    signInRequired: s.boolean({ description: "Whether the invitee must sign in to use it." }),
+    invitedBy: identitySet,
+  },
+  { description: "Sharing invitation facet of a permission." },
+);
+const permission = s.looseObject(
+  {
+    id: nonEmptyString("Permission ID."),
+    roles: s.array(s.string({ description: "A role this permission grants." }), {
+      description: "Roles the permission grants, such as read, write, or owner.",
+    }),
+    // Both spellings are declared: `grantedTo` is deprecated but still sent, and
+    // the two do not always carry the same members (`user` vs `siteUser`).
+    grantedTo: identitySet,
+    grantedToV2: sharePointIdentitySet,
+    grantedToIdentities: s.array(identitySet, {
+      description: "Identities a specific-people link was shared with (deprecated spelling).",
+    }),
+    grantedToIdentitiesV2: s.array(sharePointIdentitySet, {
+      description: "Identities a specific-people link was shared with.",
+    }),
+    link: sharingLink,
+    invitation: sharingInvitation,
+    // Present only when the permission is inherited from an ancestor.
+    inheritedFrom: driveItemReference,
+    shareId: s.string({ description: "Opaque sharing ID for this permission." }),
+    hasPassword: s.boolean({ description: "Whether a link permission is password protected." }),
+    expirationDateTime: s.string({ description: "When this permission expires, if it does." }),
+  },
+  { description: "OneDrive permission resource." },
+);
+const listPermissionsOutput = s.object(
+  {
+    items: s.array(permission, { description: "Permissions returned by Microsoft Graph." }),
+    nextLink: s.nullableString("Opaque nextLink for fetching the next page, if any."),
+  },
+  { required: ["items", "nextLink"], description: "OneDrive permission list response." },
+);
+const downloadOutput = s.requiredObject("A OneDrive file downloaded into local transit storage.", {
+  fileId: nonEmptyString("The unique identifier of the downloaded OneDrive item."),
+  name: nonEmptyString("The downloaded file name."),
+  mimeType: nonEmptyString("The MIME type of the downloaded file."),
+  sizeBytes: s.nonNegativeInteger("The downloaded file size in bytes."),
+  file: s.requiredObject("The downloaded file in local transit storage.", {
+    fileId: nonEmptyString("The local transit file identifier."),
+    downloadUrl: s.url("The local transit URL for downloading the stored file."),
+    sizeBytes: s.nonNegativeInteger("The stored transit file size in bytes."),
+    name: nonEmptyString("The stored transit file name."),
+    mimeType: nonEmptyString("The stored transit file MIME type."),
+  }),
+});
 const fileSystemInfo = s.object(
   {
     createdDateTime: s.dateTime("Client-side creation timestamp."),
@@ -170,6 +239,12 @@ const actions: OneDriveActionSource[] = [
     "Get metadata for a drive item by item ID or path.",
     input({ driveId, itemId, itemPath, select, expand }),
     driveItem,
+  ),
+  read(
+    "list_item_permissions",
+    "List the permissions on a OneDrive item, naming who may read or write it.",
+    input({ driveId, itemId, itemPath, select, nextLink }),
+    listPermissionsOutput,
   ),
   read(
     "list_folder_children",
@@ -225,7 +300,7 @@ const actions: OneDriveActionSource[] = [
     ),
     driveItem,
   ),
-  write(
+  destructive(
     "delete_item",
     "Delete a drive item from OneDrive and move it to the recycle bin.",
     input({ driveId, itemId, ifMatch: nonEmptyString("Optional eTag used for conditional delete requests.") }, [
@@ -238,7 +313,7 @@ const actions: OneDriveActionSource[] = [
   ),
   read(
     "download_file",
-    "Download one file from OneDrive by item ID and return its content encoded as base64.",
+    "Download one file from OneDrive by item ID into local transit file storage.",
     input(
       {
         driveId,
@@ -246,8 +321,7 @@ const actions: OneDriveActionSource[] = [
         format: s.stringEnum(["pdf", "html"], {
           description: "Optional format to convert the file into before download.",
         }),
-        fileName: nonEmptyString("Optional file name to use for the downloaded file."),
-        ifNoneMatch: nonEmptyString("Optional eTag or cTag used for conditional download requests."),
+        fileName: nonEmptyString("Optional file name to use for the local transit file."),
       },
       ["itemId"],
     ),
@@ -255,13 +329,12 @@ const actions: OneDriveActionSource[] = [
   ),
   read(
     "download_file_by_path",
-    "Download one file from OneDrive by path and return its content encoded as base64.",
+    "Download one file from OneDrive by path into local transit file storage.",
     input(
       {
         driveId,
         itemPath: flexibleItemPath,
-        fileName: nonEmptyString("Optional file name to use for the downloaded file."),
-        ifNoneMatch: nonEmptyString("Optional eTag or cTag used for conditional download requests."),
+        fileName: nonEmptyString("Optional file name to use for the local transit file."),
       },
       ["itemPath"],
     ),
@@ -269,14 +342,14 @@ const actions: OneDriveActionSource[] = [
   ),
   read(
     "download_item_as_format",
-    "Download one drive item after converting it to a supported Microsoft Graph format.",
+    "Download one drive item into local transit storage after converting it to a supported Microsoft Graph format.",
     input(
       {
         driveId,
         format: s.stringEnum(["pdf", "html"], { description: "Format to convert the drive item into." }),
         itemId,
         pathAndFilename: flexibleItemPath,
-        fileName: nonEmptyString("Optional file name to use for the downloaded file."),
+        fileName: nonEmptyString("Optional file name to use for the local transit file."),
       },
       ["format"],
     ),
@@ -295,7 +368,7 @@ const actions: OneDriveActionSource[] = [
     ),
     driveItem,
   ),
-  write(
+  destructive(
     "update_file_content",
     "Replace the content of one existing OneDrive file.",
     input(
@@ -338,6 +411,7 @@ function read(
 ): OneDriveActionSource {
   return {
     name,
+    operationType: "read",
     description,
     requiredScopes: oneDriveReadScopes,
     providerPermissions: [oneDriveProviderScopes.filesRead],
@@ -354,6 +428,24 @@ function write(
 ): OneDriveActionSource {
   return {
     name,
+    operationType: "write",
+    description,
+    requiredScopes: oneDriveWriteScopes,
+    providerPermissions: [oneDriveProviderScopes.filesReadWrite],
+    inputSchema,
+    outputSchema,
+  };
+}
+
+function destructive(
+  name: string,
+  description: string,
+  inputSchema: JsonSchema,
+  outputSchema: JsonSchema,
+): OneDriveActionSource {
+  return {
+    name,
+    operationType: "destructive",
     description,
     requiredScopes: oneDriveWriteScopes,
     providerPermissions: [oneDriveProviderScopes.filesReadWrite],

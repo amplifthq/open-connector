@@ -4,11 +4,11 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { FeishuCustomBotActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import { createHash, createHmac } from "node:crypto";
-import { compactObject, optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
+import { compactObject, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
 import {
   createProviderFetch,
   createProviderProxyUrl,
@@ -19,6 +19,7 @@ import {
   readProviderProxyErrorMessage,
   readProviderProxyResponse,
   requireApiKeyCredential,
+  requiredInputString,
   toProviderProxyError,
 } from "../provider-runtime.ts";
 
@@ -79,61 +80,62 @@ type FeishuCustomBotActionHandler = (
   context: FeishuCustomBotActionContext,
 ) => Promise<unknown>;
 
-export const feishuCustomBotActionHandlers: Record<FeishuCustomBotActionName, FeishuCustomBotActionHandler> = {
-  send_text_message(input, context) {
-    return sendFeishuCustomBotMessage(
-      {
-        msg_type: "text",
-        content: {
-          text: requiredFeishuCustomBotString(input.text, "text"),
+export const feishuCustomBotActionHandlers: ProviderActionHandlers<"feishu_custom_bot", FeishuCustomBotActionHandler> =
+  {
+    send_text_message(input, context) {
+      return sendFeishuCustomBotMessage(
+        {
+          msg_type: "text",
+          content: {
+            text: requiredInputString(input.text, "text"),
+          },
         },
-      },
-      context,
-    );
-  },
-  send_post_message(input, context) {
-    return sendFeishuCustomBotMessage(
-      {
-        msg_type: "post",
-        content: {
-          post: requiredFeishuCustomBotObject(input.post, "post"),
+        context,
+      );
+    },
+    send_post_message(input, context) {
+      return sendFeishuCustomBotMessage(
+        {
+          msg_type: "post",
+          content: {
+            post: requiredFeishuCustomBotObject(input.post, "post"),
+          },
         },
-      },
-      context,
-    );
-  },
-  send_image_message(input, context) {
-    return sendFeishuCustomBotMessage(
-      {
-        msg_type: "image",
-        content: {
-          image_key: requiredFeishuCustomBotString(input.imageKey, "imageKey"),
+        context,
+      );
+    },
+    send_image_message(input, context) {
+      return sendFeishuCustomBotMessage(
+        {
+          msg_type: "image",
+          content: {
+            image_key: requiredInputString(input.imageKey, "imageKey"),
+          },
         },
-      },
-      context,
-    );
-  },
-  send_share_chat_message(input, context) {
-    return sendFeishuCustomBotMessage(
-      {
-        msg_type: "share_chat",
-        content: {
-          share_chat_id: requiredFeishuCustomBotString(input.shareChatId, "shareChatId"),
+        context,
+      );
+    },
+    send_share_chat_message(input, context) {
+      return sendFeishuCustomBotMessage(
+        {
+          msg_type: "share_chat",
+          content: {
+            share_chat_id: requiredInputString(input.shareChatId, "shareChatId"),
+          },
         },
-      },
-      context,
-    );
-  },
-  send_interactive_message(input, context) {
-    return sendFeishuCustomBotMessage(
-      {
-        msg_type: "interactive",
-        card: requiredFeishuCustomBotObject(input.card, "card"),
-      },
-      context,
-    );
-  },
-};
+        context,
+      );
+    },
+    send_interactive_message(input, context) {
+      return sendFeishuCustomBotMessage(
+        {
+          msg_type: "interactive",
+          card: requiredFeishuCustomBotObject(input.card, "card"),
+        },
+        context,
+      );
+    },
+  };
 
 export const executors: ProviderExecutors = defineProviderExecutors<FeishuCustomBotActionContext>({
   service,
@@ -143,7 +145,7 @@ export const executors: ProviderExecutors = defineProviderExecutors<FeishuCustom
     const credential = await requireApiKeyCredential(context, service);
     return {
       apiKey: credential.apiKey,
-      signingSecret: readOptionalFeishuCustomBotField(credential.values.signingSecret),
+      signingSecret: optionalString(credential.values.signingSecret),
       fetcher,
       signal: context.signal,
     };
@@ -173,7 +175,7 @@ export const proxy: ProviderProxyExecutor = async (input, context) => {
     }
 
     const requestBody = JSON.stringify(
-      buildFeishuCustomBotRequestPayload(payload, readOptionalFeishuCustomBotField(credential.values.signingSecret)),
+      buildFeishuCustomBotRequestPayload(payload, optionalString(credential.values.signingSecret)),
     );
     if (Buffer.byteLength(requestBody, "utf8") > feishuCustomBotMaxPayloadBytes) {
       throw new ProviderRequestError(400, "Feishu custom bot request body must not exceed 20 KB");
@@ -230,7 +232,7 @@ export const credentialValidators: CredentialValidators = {
     const credential = resolveFeishuCustomBotApiKey(input.apiKey);
     await validateFeishuCustomBotCredential({
       webhookUrl: credential.webhookUrl,
-      signingSecret: readOptionalFeishuCustomBotField(input.values.signingSecret),
+      signingSecret: optionalString(input.values.signingSecret),
       fetcher,
       signal,
     });
@@ -244,7 +246,7 @@ export const credentialValidators: CredentialValidators = {
       metadata: compactObject({
         webhookHost: new URL(credential.webhookUrl).host,
         webhookPathSuffix: maskFeishuCustomBotToken(credential.webhookToken),
-        securityMode: readOptionalFeishuCustomBotField(input.values.signingSecret) ? "signed" : "unsigned",
+        securityMode: optionalString(input.values.signingSecret) ? "signed" : "unsigned",
         validationMode: "invalid_msg_type_probe",
         credentialKind: "webhook_token",
       }),
@@ -428,7 +430,7 @@ function normalizeFeishuCustomBotError(
 }
 
 function resolveFeishuCustomBotApiKey(apiKey: string): FeishuCustomBotCredential {
-  const trimmed = requiredFeishuCustomBotString(apiKey, "apiKey");
+  const trimmed = requiredInputString(apiKey, "apiKey");
   if (trimmed.includes("://")) {
     const webhook = parseFeishuCustomBotWebhookUrl(trimmed);
     return {
@@ -475,7 +477,7 @@ function extractFeishuCustomBotToken(webhook: URL): string {
 }
 
 function normalizeFeishuCustomBotWebhookToken(value: string): string {
-  const trimmed = requiredFeishuCustomBotString(value, "apiKey");
+  const trimmed = requiredInputString(value, "apiKey");
   if (trimmed.includes("/")) {
     throw new ProviderRequestError(400, "apiKey must be a Feishu webhook token or webhook URL");
   }
@@ -515,16 +517,8 @@ function readFeishuCustomBotFallbackMessage(rawText: string): string | undefined
   return optionalString(rawText);
 }
 
-function requiredFeishuCustomBotString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function requiredFeishuCustomBotObject(value: unknown, fieldName: string): Record<string, unknown> {
   return requiredRecord(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
-function readOptionalFeishuCustomBotField(value: unknown): string | undefined {
-  return optionalString(value);
 }
 
 function createFeishuCustomBotRequestSignal(parent?: AbortSignal): FeishuCustomBotRequestSignal {

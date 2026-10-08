@@ -27,11 +27,10 @@ const getMultiTestInputSchema = s.object(
   { optional: ["populateTests"] },
 );
 
-export type BlazeMeterFunctionalActionName = "list_multi_tests" | "get_multi_test" | "get_active_sessions";
-
 export const blazeMeterFunctionalActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_multi_tests",
+    operationType: "read",
     description: "List BlazeMeter Functional multi-tests in a workspace.",
     requiredScopes: [],
     inputSchema: listMultiTestsInputSchema,
@@ -39,6 +38,7 @@ export const blazeMeterFunctionalActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_multi_test",
+    operationType: "read",
     description: "Get one BlazeMeter Functional multi-test by collection ID.",
     requiredScopes: [],
     inputSchema: getMultiTestInputSchema,
@@ -46,6 +46,7 @@ export const blazeMeterFunctionalActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_active_sessions",
+    operationType: "read",
     description: "Get the active BlazeMeter sessions for the configured API key.",
     requiredScopes: [],
     inputSchema: s.object("Input for getting active BlazeMeter sessions.", {}),

@@ -93,11 +93,10 @@ const researchOutputSchema = s.object("The research answer and its supporting so
   raw: rawObjectSchema,
 });
 
-export type YouActionName = "search" | "fetch_contents" | "research" | "finance_research" | "get_account_balance";
-
 export const youActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "search",
+    operationType: "read",
     description: "Search web and news sources with the You.com Search API.",
     inputSchema: s.object(
       "The input payload for searching You.com.",
@@ -146,6 +145,7 @@ export const youActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "fetch_contents",
+    operationType: "read",
     description: "Fetch HTML, Markdown, or metadata for one or more webpages with You.com.",
     inputSchema: s.object(
       "The input payload for fetching webpage contents.",
@@ -169,6 +169,7 @@ export const youActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "research",
+    operationType: "write",
     description: "Generate a cited research answer with the You.com Research API.",
     inputSchema: s.object(
       "The input payload for You.com research.",
@@ -192,6 +193,7 @@ export const youActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "finance_research",
+    operationType: "write",
     description: "Generate a cited finance-grade answer with the You.com Finance Research API.",
     inputSchema: s.object(
       "The input payload for You.com finance research.",
@@ -214,6 +216,7 @@ export const youActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_account_balance",
+    operationType: "read",
     description: "Get the remaining You.com credit balance for the API key account.",
     inputSchema: s.object("The input payload for getting the account balance.", {}),
     outputSchema: s.object("The normalized You.com account balance response.", {

@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { CrustdataActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -13,7 +13,14 @@ import {
   requiredString,
   stringArray,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerInputError,
+  providerResponseError,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 import { crustdataApiVersion } from "./actions.ts";
 
 const service = "crustdata";
@@ -23,7 +30,7 @@ const validatePath = "/company/identify";
 type CrustdataPhase = "validate" | "execute";
 type CrustdataActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const crustdataActionHandlers: Record<CrustdataActionName, CrustdataActionHandler> = {
+export const crustdataActionHandlers: ProviderActionHandlers<"crustdata", CrustdataActionHandler> = {
   identify_companies(input, context) {
     return executeIdentifyLikeAction("/company/identify", input, context);
   },
@@ -38,7 +45,7 @@ export const crustdataActionHandlers: Record<CrustdataActionName, CrustdataActio
       body: compactObject({
         filters: optionalRecord(input.filters),
         fields: optionalStringArray(input.fields),
-        sorts: Array.isArray(input.sorts) ? objectArray(input.sorts, "sort", providerError) : undefined,
+        sorts: Array.isArray(input.sorts) ? objectArray(input.sorts, "sort", providerResponseError) : undefined,
         limit: optionalInteger(input.limit),
         cursor: optionalString(input.cursor),
       }),
@@ -62,6 +69,16 @@ export const crustdataActionHandlers: Record<CrustdataActionName, CrustdataActio
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, crustdataActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: crustdataApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("x-api-version", crustdataApiVersion);
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -202,7 +219,7 @@ function normalizeCompanyResults(
     }
     return {
       matchedOn: normalizeMatchedOn(result.matched_on),
-      matchType: requiredString(result.match_type, "match_type", providerError),
+      matchType: requiredString(result.match_type, "match_type", providerResponseError),
       matches: result.matches.map((match) => normalizeMatch(match)),
     };
   });
@@ -235,7 +252,7 @@ function normalizeAutocompleteResponse(payload: unknown): unknown {
   return {
     suggestions: response.suggestions.map((suggestion) => {
       const entry = requireProviderObject(suggestion, "suggestion");
-      return { value: requiredString(entry.value, "value", providerError) };
+      return { value: requiredString(entry.value, "value", providerResponseError) };
     }),
   };
 }
@@ -245,7 +262,7 @@ function requireProviderObject(value: unknown, label: string): Record<string, un
 }
 
 function optionalStringArray(value: unknown): string[] | undefined {
-  return Array.isArray(value) ? stringArray(value, "array item", providerError) : undefined;
+  return Array.isArray(value) ? stringArray(value, "array item", providerResponseError) : undefined;
 }
 
 function optionalIntegerArray(value: unknown): number[] | undefined {
@@ -278,12 +295,4 @@ function normalizeMatchedOn(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   throw new ProviderRequestError(502, "matched_on must be a string-compatible value");
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

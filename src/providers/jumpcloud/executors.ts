@@ -4,7 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { JumpcloudActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -12,6 +12,7 @@ import {
   defineProviderExecutors,
   normalizeProviderProxyHeaders,
   providerFetch,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
   readProviderProxyErrorMessage,
@@ -51,7 +52,7 @@ interface JumpcloudActionContext {
 
 type JumpcloudActionHandler = (input: Record<string, unknown>, context: JumpcloudActionContext) => Promise<unknown>;
 
-export const jumpcloudActionHandlers: Record<JumpcloudActionName, JumpcloudActionHandler> = {
+export const jumpcloudActionHandlers: ProviderActionHandlers<"jumpcloud", JumpcloudActionHandler> = {
   list_system_users(input, context) {
     return listSystemUsers(input, context);
   },
@@ -162,7 +163,7 @@ async function getSystemUser(input: Record<string, unknown>, context: JumpcloudA
   return {
     systemUser: await jumpcloudGetJson(
       buildReadRequest(
-        `/systemusers/${encodeURIComponent(requiredString(input.id, "id", jumpcloudInputError))}`,
+        `/systemusers/${encodeURIComponent(requiredString(input.id, "id", providerInputError))}`,
         input,
         context,
         "execute",
@@ -179,7 +180,7 @@ async function getSystem(input: Record<string, unknown>, context: JumpcloudActio
   return {
     system: await jumpcloudGetJson(
       buildReadRequest(
-        `/systems/${encodeURIComponent(requiredString(input.id, "id", jumpcloudInputError))}`,
+        `/systems/${encodeURIComponent(requiredString(input.id, "id", providerInputError))}`,
         input,
         context,
         "execute",
@@ -389,8 +390,4 @@ function readJumpcloudRegion(value: unknown): JumpcloudRegion {
     return defaultJumpcloudRegion;
   }
   throw new ProviderRequestError(400, "region must be one of us, eu, or in");
-}
-
-function jumpcloudInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

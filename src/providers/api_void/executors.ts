@@ -1,6 +1,6 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ApiVoidActionName } from "./actions.ts";
 
 import { isIP } from "node:net";
 import { compactObject, optionalBoolean, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -10,13 +10,13 @@ import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
 const service = "api_void";
 const apiVoidApiBaseUrl = "https://api.apivoid.com";
-const apiVoidRequestTimeoutMs = 30_000;
 
 type ApiVoidRequestPhase = "validate" | "execute";
 
@@ -48,7 +48,7 @@ type ApiVoidActionHandler = (
   context: ApiKeyProviderContext,
 ) => Promise<ApiVoidActionOutput>;
 
-export const apiVoidActionHandlers: Record<ApiVoidActionName, ApiVoidActionHandler> = {
+export const apiVoidActionHandlers: ProviderActionHandlers<"api_void", ApiVoidActionHandler> = {
   get_account_info(_input, context) {
     return requestApiVoidForAction(context, "/v2/account-info");
   },
@@ -154,7 +154,7 @@ function requestApiVoidForAction(
 }
 
 async function requestApiVoid(input: ApiVoidRequestInput): Promise<ApiVoidActionOutput> {
-  const timeout = createProviderTimeout(input.context.signal, apiVoidRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   let response: Response;
   let payload: unknown;
   try {
@@ -275,10 +275,6 @@ function readNestedNumber(input: Record<string, unknown>, objectKey: string, chi
   const object = optionalRecord(input[objectKey]);
   const value = object?.[childKey];
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function normalizePublicUrl(value: unknown, fieldName: string): string {

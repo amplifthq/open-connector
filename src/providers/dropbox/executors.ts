@@ -1,13 +1,22 @@
-import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+  TransitFileWriter,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { OAuthProviderContext } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import {
   compactObject,
+  optionalBoolean,
+  optionalNumber,
   optionalRecord as asOptionalObject,
   optionalString as asOptionalString,
   requiredRecord,
 } from "../../core/cast.ts";
+import { storeResponseInTransit } from "../../core/request.ts";
 import {
   createProviderFetch,
   createProviderProxyUrl,
@@ -23,7 +32,7 @@ import {
 
 const dropboxApiBaseUrl = "https://api.dropboxapi.com/2";
 const dropboxContentBaseUrl = "https://content.dropboxapi.com/2";
-const dropboxFetch = createProviderFetch({ skipDnsValidation: true });
+const dropboxFetch = createProviderFetch();
 const dropboxMaxSimpleUploadBytes = 150 * 1024 * 1024;
 const dropboxContentEndpointPrefixes = [
   "/files/download",
@@ -50,7 +59,7 @@ type SharedLinkFileArg = {
   path?: string;
 };
 
-export const dropboxActionHandlers: Record<string, ActionHandler> = {
+export const dropboxActionHandlers: ProviderActionHandlers<"dropbox", ActionHandler> = {
   get_current_account(_input, { accessToken, fetcher }) {
     return getCurrentAccount(accessToken, fetcher);
   },
@@ -125,9 +134,7 @@ export const dropboxActionHandlers: Record<string, ActionHandler> = {
   },
 };
 
-export const executors: ProviderExecutors = defineOAuthProviderExecutors("dropbox", dropboxActionHandlers, {
-  skipDnsValidation: true,
-});
+export const executors: ProviderExecutors = defineOAuthProviderExecutors("dropbox", dropboxActionHandlers);
 
 export const proxy: ProviderProxyExecutor = async (input, context) => {
   try {
@@ -199,8 +206,8 @@ async function getCurrentAccount(accessToken: string, fetcher: typeof fetch) {
     givenName: optionalString(name.given_name) ?? null,
     surname: optionalString(name.surname) ?? null,
     email: optionalString(payload.email) ?? null,
-    emailVerified: readBoolean(payload.email_verified),
-    disabled: readBoolean(payload.disabled) ?? false,
+    emailVerified: optionalBoolean(payload.email_verified),
+    disabled: optionalBoolean(payload.disabled) ?? false,
     locale: optionalString(payload.locale) ?? null,
     country: optionalString(payload.country) ?? null,
     accountType: optionalString(accountType[".tag"]) ?? null,
@@ -215,11 +222,11 @@ async function listFolder(input: Record<string, unknown>, accessToken: string, f
     fetcher,
     body: compactObject({
       path: optionalString(input.path) ?? "",
-      recursive: readBoolean(input.recursive),
-      include_deleted: readBoolean(input.includeDeleted),
-      include_mounted_folders: readBoolean(input.includeMountedFolders),
-      include_has_explicit_shared_members: readBoolean(input.includeHasExplicitSharedMembers),
-      limit: readNumber(input.limit),
+      recursive: optionalBoolean(input.recursive),
+      include_deleted: optionalBoolean(input.includeDeleted),
+      include_mounted_folders: optionalBoolean(input.includeMountedFolders),
+      include_has_explicit_shared_members: optionalBoolean(input.includeHasExplicitSharedMembers),
+      limit: optionalNumber(input.limit),
     }),
   });
 
@@ -242,7 +249,7 @@ function normalizeListFolderResult(payload: Record<string, unknown>) {
   return {
     entries: readObjectArray(payload.entries).map(mapDropboxMetadata),
     cursor: requireString(payload.cursor, "dropbox cursor"),
-    hasMore: readBoolean(payload.has_more) ?? false,
+    hasMore: optionalBoolean(payload.has_more) ?? false,
   };
 }
 
@@ -252,8 +259,8 @@ async function getMetadata(input: Record<string, unknown>, accessToken: string, 
     fetcher,
     body: compactObject({
       path: requireString(input.path, "dropbox metadata path"),
-      include_deleted: readBoolean(input.includeDeleted),
-      include_has_explicit_shared_members: readBoolean(input.includeHasExplicitSharedMembers),
+      include_deleted: optionalBoolean(input.includeDeleted),
+      include_has_explicit_shared_members: optionalBoolean(input.includeHasExplicitSharedMembers),
     }),
   });
 
@@ -262,43 +269,46 @@ async function getMetadata(input: Record<string, unknown>, accessToken: string, 
   };
 }
 
+/**
+ * Serialize a `Dropbox-API-Arg` header value.
+ *
+ * Dropbox requires this header to be ASCII: its own docs say `0x7F` and every
+ * non-ASCII character must be escaped as `\uXXXX`, which is also the range the
+ * official JS SDK escapes. `JSON.stringify` does not escape, and Node's `Headers`
+ * refuses a value outside ByteString, so a path containing any non-ASCII
+ * character threw `TypeError: Cannot convert argument to a ByteString` inside
+ * the runtime BEFORE the request was made. `provider-runtime.ts`'s fallback
+ * then reported it as a bare `internal_error`, discarding the cause.
+ *
+ * Measured 2026-09-18 against a real account: `/kkndme 天涯.pdf` failed in 1ms
+ * with no network call, while ASCII-path siblings downloaded in ~400ms. Dropbox
+ * itself accepts either spelling on the wire; only the header build was broken.
+ */
+function dropboxApiArg(arg: unknown): string {
+  return JSON.stringify(arg).replace(/[\u007f-\uffff]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
 async function downloadFile(input: Record<string, unknown>, context: ActionContext) {
-  const { accessToken, fetcher } = context;
+  const { accessToken, fetcher, transitFiles } = context;
+  if (!transitFiles) {
+    throw new ProviderRequestError(400, "dropbox download_file requires local transit file storage");
+  }
   const response = await fetcher(`${dropboxContentBaseUrl}/files/download`, {
     method: "POST",
     headers: {
       ...dropboxAuthHeaders(accessToken),
-      "Dropbox-API-Arg": JSON.stringify({
+      "Dropbox-API-Arg": dropboxApiArg({
         path: requireString(input.path, "dropbox download path"),
       }),
     },
+    signal: context.signal,
   });
 
   if (!response.ok) {
     throw await normalizeDropboxHttpError(response, "dropbox download failed");
   }
 
-  const metadata = parseDropboxApiResultHeader(response);
-  const normalizedMetadata = mapDropboxMetadata(metadata);
-  if (normalizedMetadata.tag !== "file") {
-    throw new ProviderRequestError(400, "dropbox download_file requires a file path");
-  }
-
-  const name = optionalString(input.fileName) ?? normalizedMetadata.name;
-  const mimeType = optionalString(response.headers.get("content-type")) ?? "application/octet-stream";
-  const fileId = normalizedMetadata.id;
-  if (!fileId) {
-    throw new ProviderRequestError(502, "dropbox download metadata is missing file id");
-  }
-  const bytes = Buffer.from(await response.arrayBuffer());
-
-  return {
-    fileId,
-    name,
-    mimeType,
-    sizeBytes: normalizedMetadata.sizeBytes,
-    contentBase64: bytes.toString("base64"),
-  };
+  return storeDropboxDownload(input, response, transitFiles, "download_file");
 }
 
 async function uploadFile(input: Record<string, unknown>, accessToken: string, fetcher: typeof fetch) {
@@ -313,10 +323,10 @@ async function uploadFile(input: Record<string, unknown>, accessToken: string, f
   const arg = compactObject({
     path,
     mode: normalizeWriteMode(mode, updateRev),
-    autorename: readBoolean(input.autorename),
+    autorename: optionalBoolean(input.autorename),
     client_modified: optionalString(input.clientModified),
-    mute: readBoolean(input.mute),
-    strict_conflict: readBoolean(input.strictConflict),
+    mute: optionalBoolean(input.mute),
+    strict_conflict: optionalBoolean(input.strictConflict),
     content_hash: optionalString(input.contentHash),
   });
 
@@ -325,7 +335,7 @@ async function uploadFile(input: Record<string, unknown>, accessToken: string, f
     headers: {
       ...dropboxAuthHeaders(accessToken),
       "Content-Type": source.mimeType || "application/octet-stream",
-      "Dropbox-API-Arg": JSON.stringify(arg),
+      "Dropbox-API-Arg": dropboxApiArg(arg),
     },
     body: Buffer.from(source.bytes),
   });
@@ -346,7 +356,7 @@ async function createFolder(input: Record<string, unknown>, accessToken: string,
     fetcher,
     body: compactObject({
       path: requireString(input.path, "dropbox folder path"),
-      autorename: readBoolean(input.autorename),
+      autorename: optionalBoolean(input.autorename),
     }),
   });
 
@@ -367,8 +377,8 @@ async function relocate(
     body: compactObject({
       from_path: requireString(input.fromPath, "dropbox fromPath"),
       to_path: requireString(input.toPath, "dropbox toPath"),
-      autorename: readBoolean(input.autorename),
-      allow_ownership_transfer: readBoolean(input.allowOwnershipTransfer),
+      autorename: optionalBoolean(input.autorename),
+      allow_ownership_transfer: optionalBoolean(input.allowOwnershipTransfer),
     }),
   });
 
@@ -397,7 +407,7 @@ async function createSharedLink(input: Record<string, unknown>, accessToken: str
     requested_visibility: optionalString(input.requestedVisibility),
     audience: optionalString(input.audience),
     access: optionalString(input.access),
-    allow_download: readBoolean(input.allowDownload),
+    allow_download: optionalBoolean(input.allowDownload),
     password: optionalString(input.password),
     expires: optionalString(input.expiresAt),
   });
@@ -423,23 +433,23 @@ async function listSharedLinks(input: Record<string, unknown>, accessToken: stri
     body: compactObject({
       path: optionalString(input.path),
       cursor: optionalString(input.cursor),
-      direct_only: readBoolean(input.directOnly),
+      direct_only: optionalBoolean(input.directOnly),
     }),
   });
 
   return {
     links: readObjectArray(payload.links).map(mapDropboxMetadata),
     cursor: optionalString(payload.cursor) ?? null,
-    hasMore: readBoolean(payload.has_more) ?? false,
+    hasMore: optionalBoolean(payload.has_more) ?? false,
   };
 }
 
 async function searchFiles(input: Record<string, unknown>, accessToken: string, fetcher: typeof fetch) {
   const options = compactObject({
     path: optionalString(input.path),
-    max_results: readNumber(input.maxResults),
+    max_results: optionalNumber(input.maxResults),
     file_status: optionalString(input.fileStatus),
-    filename_only: readBoolean(input.filenameOnly),
+    filename_only: optionalBoolean(input.filenameOnly),
     file_categories: readStringArray(input.fileCategories),
     file_extensions: readStringArray(input.fileExtensions),
     order_by: optionalString(input.orderBy),
@@ -452,7 +462,7 @@ async function searchFiles(input: Record<string, unknown>, accessToken: string, 
       query: requireString(input.query, "dropbox search query"),
       options: Object.keys(options).length > 0 ? options : undefined,
       match_field_options:
-        readBoolean(input.includeHighlights) === true
+        optionalBoolean(input.includeHighlights) === true
           ? {
               include_highlights: true,
             }
@@ -486,7 +496,7 @@ function normalizeSearchResult(payload: Record<string, unknown>) {
       };
     }),
     cursor: optionalString(payload.cursor) ?? null,
-    hasMore: readBoolean(payload.has_more) ?? false,
+    hasMore: optionalBoolean(payload.has_more) ?? false,
   };
 }
 
@@ -550,15 +560,15 @@ async function listRevisions(input: Record<string, unknown>, accessToken: string
       path: requireString(input.path, "dropbox list_revisions path"),
       mode: optionalString(input.mode),
       before_rev: optionalString(input.beforeRev),
-      limit: readNumber(input.limit),
+      limit: optionalNumber(input.limit),
     }),
   });
 
   return {
     entries: readObjectArray(payload.entries).map(mapDropboxMetadata),
-    isDeleted: readBoolean(payload.is_deleted) ?? false,
+    isDeleted: optionalBoolean(payload.is_deleted) ?? false,
     serverDeleted: optionalString(payload.server_deleted) ?? null,
-    hasMore: readBoolean(payload.has_more) ?? false,
+    hasMore: optionalBoolean(payload.has_more) ?? false,
   };
 }
 
@@ -593,7 +603,10 @@ async function getSharedLinkMetadata(input: Record<string, unknown>, accessToken
 }
 
 async function getSharedLinkFile(input: Record<string, unknown>, context: ActionContext) {
-  const { accessToken, fetcher } = context;
+  const { accessToken, fetcher, transitFiles } = context;
+  if (!transitFiles) {
+    throw new ProviderRequestError(400, "dropbox get_shared_link_file requires local transit file storage");
+  }
 
   const arg = compactObject({
     url: requireString(input.url, "dropbox shared link url"),
@@ -603,34 +616,56 @@ async function getSharedLinkFile(input: Record<string, unknown>, context: Action
     method: "POST",
     headers: {
       ...dropboxAuthHeaders(accessToken),
-      "Dropbox-API-Arg": JSON.stringify(arg),
+      "Dropbox-API-Arg": dropboxApiArg(arg),
     },
+    signal: context.signal,
   });
 
   if (!response.ok) {
     throw await normalizeDropboxHttpError(response, "dropbox shared link file download failed");
   }
 
-  const metadata = parseDropboxApiResultHeader(response);
-  const normalizedMetadata = mapDropboxMetadata(metadata);
+  return storeDropboxDownload(input, response, transitFiles, "get_shared_link_file");
+}
+
+async function storeDropboxDownload(
+  input: Record<string, unknown>,
+  response: Response,
+  transitFiles: TransitFileWriter,
+  actionName: "download_file" | "get_shared_link_file",
+): Promise<unknown> {
+  const normalizedMetadata = mapDropboxMetadata(parseDropboxApiResultHeader(response));
   if (normalizedMetadata.tag !== "file") {
-    throw new ProviderRequestError(400, "dropbox get_shared_link_file requires a file");
+    throw new ProviderRequestError(400, `dropbox ${actionName} requires a file`);
   }
 
-  const name = optionalString(input.fileName) ?? normalizedMetadata.name;
-  const mimeType = optionalString(response.headers.get("content-type")) ?? "application/octet-stream";
   const fileId = normalizedMetadata.id;
   if (!fileId) {
-    throw new ProviderRequestError(502, "dropbox shared-link metadata is missing file id");
+    throw new ProviderRequestError(502, "dropbox download metadata is missing file id");
   }
-  const bytes = Buffer.from(await response.arrayBuffer());
+  const remoteName = normalizedMetadata.name;
+  if (!remoteName) {
+    throw new ProviderRequestError(502, "dropbox download metadata is missing file name");
+  }
+  const transitName = optionalString(input.fileName) ?? remoteName;
+  if (normalizedMetadata.sizeBytes !== null && normalizedMetadata.sizeBytes > transitFiles.maxBytes) {
+    throw new ProviderRequestError(413, `Dropbox download exceeds ${transitFiles.maxBytes} bytes`);
+  }
+
+  const mimeType = optionalString(response.headers.get("content-type")) ?? "application/octet-stream";
+  const file = await storeResponseInTransit(response, transitFiles, {
+    name: transitName,
+    mimeType,
+    fieldName: "Dropbox download",
+    createError: (message) => new ProviderRequestError(413, message),
+  });
 
   return {
     fileId,
-    name,
+    name: remoteName,
     mimeType,
-    sizeBytes: normalizedMetadata.sizeBytes,
-    contentBase64: bytes.toString("base64"),
+    sizeBytes: file.sizeBytes,
+    file,
   };
 }
 
@@ -639,7 +674,7 @@ async function modifySharedLink(input: Record<string, unknown>, accessToken: str
     requested_visibility: optionalString(input.requestedVisibility),
     audience: optionalString(input.audience),
     access: optionalString(input.access),
-    allow_download: readBoolean(input.allowDownload),
+    allow_download: optionalBoolean(input.allowDownload),
     link_password: optionalString(input.password),
     expires: optionalString(input.expiresAt),
   });
@@ -650,7 +685,7 @@ async function modifySharedLink(input: Record<string, unknown>, accessToken: str
     body: compactObject({
       url: requireString(input.url, "dropbox shared link url"),
       settings,
-      remove_expiration: readBoolean(input.removeExpiration),
+      remove_expiration: optionalBoolean(input.removeExpiration),
     }),
   });
 
@@ -735,47 +770,42 @@ function dropboxAuthHeaders(accessToken: string) {
 
 async function normalizeDropboxHttpError(response: Response, fallbackMessage: string) {
   const contentType = response.headers.get("content-type") ?? "";
-  let payload: Record<string, unknown> | null = null;
-  let message = "";
+  const responseText = await response.text();
+  let body: unknown = responseText;
 
   if (contentType.includes("application/json")) {
-    payload = await readJsonRecord(response);
-    message = resolveDropboxErrorMessage(payload) ?? fallbackMessage;
-  } else {
-    const text = (await response.text()).trim();
-    message = text || fallbackMessage;
+    try {
+      body = JSON.parse(responseText) as unknown;
+    } catch {
+      // Dropbox error bodies may not match their declared Content-Type, so preserve the raw text.
+    }
   }
 
-  if (response.status === 401) {
-    return new ProviderRequestError(401, message);
-  }
-  if (response.status === 403) {
-    return new ProviderRequestError(403, message);
-  }
-  if (response.status === 429) {
-    return new ProviderRequestError(429, message);
-  }
-
-  return new ProviderRequestError(response.status >= 500 ? 502 : response.status, message);
+  return new ProviderRequestError(
+    response.status >= 500 ? 502 : response.status,
+    resolveDropboxErrorMessage(body, fallbackMessage),
+    {
+      upstreamStatus: response.status,
+      requestId: response.headers.get("x-dropbox-request-id"),
+      body,
+    },
+  );
 }
 
-function resolveDropboxErrorMessage(payload: Record<string, unknown>) {
-  const errorSummary = optionalString(payload.error_summary);
+function resolveDropboxErrorMessage(body: unknown, fallbackMessage: string) {
+  const payload = asOptionalObject(body);
+  const errorSummary = asOptionalString(payload?.error_summary);
   if (errorSummary) {
-    return trimDropboxErrorSummary(errorSummary);
+    return errorSummary;
   }
 
-  const error = asOptionalObject(payload.error);
-  const errorTag = optionalString(error?.[".tag"]);
+  const errorTag = asOptionalString(asOptionalObject(payload?.error)?.[".tag"]);
   if (errorTag) {
     return errorTag;
   }
 
-  return undefined;
-}
-
-function trimDropboxErrorSummary(value: string) {
-  return value.endsWith("/...") ? value.slice(0, -4) : value;
+  if (typeof body === "string" && body.trim()) return body.trim();
+  return fallbackMessage;
 }
 
 function parseDropboxApiResultHeader(response: Response) {
@@ -805,8 +835,8 @@ function mapDropboxMetadata(value: unknown) {
     clientModified: optionalString(record.client_modified) ?? null,
     serverModified: optionalString(record.server_modified) ?? null,
     rev: optionalString(record.rev) ?? null,
-    sizeBytes: readNumber(record.size) ?? null,
-    isDownloadable: readBoolean(record.is_downloadable) ?? null,
+    sizeBytes: optionalNumber(record.size) ?? null,
+    isDownloadable: optionalBoolean(record.is_downloadable) ?? null,
     contentHash: optionalString(record.content_hash) ?? null,
     url: optionalString(record.url) ?? null,
     expiresAt: optionalString(record.expires) ?? null,
@@ -821,10 +851,10 @@ function resolveDropboxMetadataTag(record: Record<string, unknown>) {
     return explicitTag;
   }
   if (
-    readBoolean(record.is_downloadable) !== undefined ||
+    optionalBoolean(record.is_downloadable) !== undefined ||
     optionalString(record.rev) ||
     optionalString(record.content_hash) ||
-    readNumber(record.size) !== undefined
+    optionalNumber(record.size) !== undefined
   ) {
     return "file";
   }
@@ -875,14 +905,6 @@ function asObject(value: unknown): Record<string, unknown> {
 
 function optionalString(value: unknown) {
   return asOptionalString(value);
-}
-
-function readBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
-}
-
-function readNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function readObjectArray(value: unknown) {

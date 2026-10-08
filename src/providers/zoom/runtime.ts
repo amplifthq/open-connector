@@ -1,19 +1,12 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { OAuthProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { ZoomActionName } from "./actions.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
-import {
-  createProviderTimeout,
-  isAbortLikeError,
-  ProviderRequestError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
 
 export const zoomApiBaseUrl = "https://api.zoom.us/v2";
-
-const zoomDefaultRequestTimeoutMs = 30_000;
 
 type ZoomRequestPhase = "validate" | "execute";
 type ZoomActionHandler = ProviderRuntimeHandler<OAuthProviderContext>;
@@ -27,7 +20,7 @@ interface ZoomRequestInput {
   body?: Record<string, unknown>;
 }
 
-export const zoomActionHandlers: Record<ZoomActionName, ZoomActionHandler> = {
+export const zoomActionHandlers: ProviderActionHandlers<"zoom", ZoomActionHandler> = {
   async get_user(input, context) {
     const payload = await requestZoomJson({
       context,
@@ -122,8 +115,7 @@ export async function fetchZoomCurrentAccount(
 }
 
 async function requestZoomJson(input: ZoomRequestInput): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(input.context.signal, zoomDefaultRequestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "Zoom" }, async (signal) => {
     const headers: Record<string, string> = {
       accept: "application/json",
       authorization: `Bearer ${input.context.accessToken}`,
@@ -137,7 +129,7 @@ async function requestZoomJson(input: ZoomRequestInput): Promise<Record<string, 
       method: input.method ?? "GET",
       headers,
       body: input.body ? JSON.stringify(input.body) : undefined,
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readZoomPayload(response);
 
@@ -154,22 +146,7 @@ async function requestZoomJson(input: ZoomRequestInput): Promise<Record<string, 
     }
 
     return record;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Zoom request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Zoom request failed: ${error.message}` : "Zoom request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildZoomUrl(path: string, query?: Record<string, string | undefined>): URL {
@@ -207,7 +184,7 @@ function createZoomError(status: number, payload: unknown, phase: ZoomRequestPha
     return new ProviderRequestError(400, message, payload);
   }
   if (status === 401 || status === 403) {
-    return new ProviderRequestError(409, message, payload);
+    return new ProviderRequestError(401, message, payload);
   }
   if (status >= 400 && status < 500) {
     return new ProviderRequestError(400, message, payload);

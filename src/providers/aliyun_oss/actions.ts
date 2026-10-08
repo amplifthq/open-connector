@@ -36,6 +36,20 @@ const objectSchema = s.object("An OSS object summary.", {
   owner: s.nullable(ownerSchema),
 });
 
+const downloadedObjectSchema = s.requiredObject("A downloaded OSS object stored in local transit storage.", {
+  objectKey: objectKeySchema,
+  name: s.nonEmptyString("The filename used for the local transit file."),
+  mimeType: s.nonEmptyString("The downloaded object MIME type."),
+  sizeBytes: s.nonNegativeInteger("The downloaded object size in bytes."),
+  file: s.requiredObject("The downloaded object in local transit file storage.", {
+    fileId: s.nonEmptyString("The local transit file identifier."),
+    downloadUrl: s.url("The local transit URL for downloading the stored object."),
+    sizeBytes: s.nonNegativeInteger("The stored transit file size in bytes."),
+    name: s.nonEmptyString("The stored transit file name."),
+    mimeType: s.nonEmptyString("The stored transit file MIME type."),
+  }),
+});
+
 const objectMetadataSchema = s.object("Structured OSS object metadata.", {
   bucket: s.string("The bucket that stores the object."),
   objectKey: s.string("The object key."),
@@ -59,6 +73,7 @@ const objectMetadataSchema = s.object("Structured OSS object metadata.", {
 export const aliyunOssActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_buckets",
+    operationType: "read",
     description: "List OSS buckets visible to the connected Alibaba Cloud credential.",
     inputSchema: s.object(
       "The input payload for this action.",
@@ -79,6 +94,7 @@ export const aliyunOssActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_objects",
+    operationType: "read",
     description: "List objects in an OSS bucket with the ListObjectsV2 API.",
     inputSchema: s.object(
       "The input payload for this action.",
@@ -109,6 +125,7 @@ export const aliyunOssActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "head_object",
+    operationType: "read",
     description: "Fetch structured metadata for one OSS object.",
     inputSchema: s.object(
       "The input payload for this action.",
@@ -125,7 +142,25 @@ export const aliyunOssActions: ActionDefinition[] = [
     }),
   }),
   defineProviderAction(service, {
+    name: "download_object",
+    operationType: "read",
+    description: "Download one OSS object into local transit file storage.",
+    inputSchema: s.object(
+      "The input payload for downloading one OSS object.",
+      {
+        bucket: bucketNameSchema,
+        objectKey: s.nonEmptyString("The complete OSS object key. Slashes are preserved as key delimiters."),
+        endpoint: endpointSchema,
+        versionId: s.string("The optional object version ID."),
+        fileName: s.nonEmptyString("An optional filename override for the local transit file."),
+      },
+      { optional: ["bucket", "endpoint", "versionId", "fileName"] },
+    ),
+    outputSchema: downloadedObjectSchema,
+  }),
+  defineProviderAction(service, {
     name: "put_object",
+    operationType: "destructive",
     description: "Upload one object to OSS from a public URL, plain text, or base64-encoded content.",
     inputSchema: {
       ...s.object(
@@ -158,7 +193,7 @@ export const aliyunOssActions: ActionDefinition[] = [
           ],
         },
       ),
-      anyOf: [{ required: ["sourceUrl"] }, { required: ["contentText"] }, { required: ["contentBase64"] }],
+      oneOf: [{ required: ["sourceUrl"] }, { required: ["contentText"] }, { required: ["contentBase64"] }],
     },
     outputSchema: s.object("The output payload for this action.", {
       bucket: s.string("The bucket that received the object."),
@@ -169,6 +204,7 @@ export const aliyunOssActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_object",
+    operationType: "destructive",
     description: "Delete one OSS object.",
     inputSchema: s.object(
       "The input payload for this action.",
@@ -188,6 +224,7 @@ export const aliyunOssActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "generate_presigned_url",
+    operationType: "read",
     description: "Generate a pre-signed OSS URL for reading, uploading, or deleting one object.",
     inputSchema: s.object(
       "The input payload for this action.",

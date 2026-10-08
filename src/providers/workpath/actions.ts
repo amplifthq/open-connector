@@ -67,19 +67,10 @@ const workpathObjectSchema = (description: string): JsonSchema => s.unknownObjec
 const workpathArraySchema = (description: string, itemDescription: string): JsonSchema =>
   s.array(description, workpathObjectSchema(itemDescription));
 
-export type WorkpathActionName =
-  | "list_goals"
-  | "get_goal"
-  | "list_goal_key_results"
-  | "get_goal_key_result"
-  | "list_users"
-  | "get_user"
-  | "list_teams"
-  | "get_team";
-
 export const workpathActions: readonly ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_goals",
+    operationType: "read",
     description: "List Workpath goals visible to the API client, optionally filtered by an overlapping date range.",
     inputSchema: listGoalsInputSchema,
     outputSchema: s.object(
@@ -93,6 +84,7 @@ export const workpathActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_goal",
+    operationType: "read",
     description: "Get one Workpath goal by its unique identifier.",
     inputSchema: idInputSchema("goal"),
     outputSchema: s.object(
@@ -105,6 +97,7 @@ export const workpathActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_goal_key_results",
+    operationType: "read",
     description: "List all key results associated with a specific Workpath goal.",
     inputSchema: goalIdInputSchema,
     outputSchema: s.object(
@@ -120,6 +113,7 @@ export const workpathActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_goal_key_result",
+    operationType: "read",
     description: "Get one Workpath key result by its unique identifier using the official convenience endpoint.",
     inputSchema: idInputSchema("key result"),
     outputSchema: s.object(
@@ -132,6 +126,7 @@ export const workpathActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List Workpath users visible to the API client.",
     inputSchema: pagedListInputSchema,
     outputSchema: s.object(
@@ -145,6 +140,7 @@ export const workpathActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Get one Workpath user by their unique identifier.",
     inputSchema: idInputSchema("user"),
     outputSchema: s.object(
@@ -157,6 +153,7 @@ export const workpathActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_teams",
+    operationType: "read",
     description: "List Workpath teams visible to the API client.",
     inputSchema: pagedListInputSchema,
     outputSchema: s.object(
@@ -170,6 +167,7 @@ export const workpathActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_team",
+    operationType: "read",
     description: "Get one Workpath team by its unique identifier.",
     inputSchema: idInputSchema("team"),
     outputSchema: s.object(

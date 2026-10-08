@@ -5,20 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "griptape";
 
-export type GriptapeActionName =
-  | "list_organizations"
-  | "get_organization"
-  | "list_assistants"
-  | "create_assistant"
-  | "get_assistant"
-  | "update_assistant"
-  | "delete_assistant"
-  | "list_assistant_runs"
-  | "create_assistant_run"
-  | "get_assistant_run"
-  | "cancel_assistant_run"
-  | "list_assistant_events";
-
 const rawObjectSchema = s.looseObject("A raw Griptape Cloud object.");
 const rawValueSchema = s.unknown("A raw Griptape Cloud JSON value.");
 const idArraySchema = (description: string) =>
@@ -133,6 +119,7 @@ const assistantRunInputProperties = {
 export const griptapeActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_organizations",
+    operationType: "read",
     description: "List Griptape Cloud organizations accessible to the API key.",
     inputSchema: s.object("The input payload for listing Griptape Cloud organizations.", {}),
     outputSchema: s.object("The response returned when listing Griptape Cloud organizations.", {
@@ -142,6 +129,7 @@ export const griptapeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_organization",
+    operationType: "read",
     description: "Retrieve one Griptape Cloud organization by ID.",
     inputSchema: s.object("The input payload for retrieving a Griptape Cloud organization.", {
       organization_id: s.string("The Griptape Cloud organization ID.", { minLength: 1 }),
@@ -153,6 +141,7 @@ export const griptapeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_assistants",
+    operationType: "read",
     description: "List Griptape Cloud assistants with optional pagination.",
     inputSchema: s.object("The input payload for listing Griptape Cloud assistants.", paginationInputSchema, {
       optional: ["page", "page_size"],
@@ -165,6 +154,7 @@ export const griptapeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_assistant",
+    operationType: "write",
     description: "Create a Griptape Cloud assistant.",
     inputSchema: s.object("The input payload for creating a Griptape Cloud assistant.", assistantInputProperties, {
       optional: [
@@ -185,6 +175,7 @@ export const griptapeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_assistant",
+    operationType: "read",
     description: "Retrieve one Griptape Cloud assistant by ID.",
     inputSchema: s.object("The input payload for retrieving a Griptape Cloud assistant.", {
       assistant_id: s.string("The Griptape Cloud assistant ID.", { minLength: 1 }),
@@ -196,6 +187,7 @@ export const griptapeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_assistant",
+    operationType: "write",
     description: "Update a Griptape Cloud assistant.",
     inputSchema: s.object(
       "The input payload for updating a Griptape Cloud assistant.",
@@ -224,6 +216,7 @@ export const griptapeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_assistant",
+    operationType: "destructive",
     description: "Delete a Griptape Cloud assistant.",
     inputSchema: s.object("The input payload for deleting a Griptape Cloud assistant.", {
       assistant_id: s.string("The Griptape Cloud assistant ID.", { minLength: 1 }),
@@ -234,6 +227,7 @@ export const griptapeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_assistant_runs",
+    operationType: "read",
     description: "List runs for a Griptape Cloud assistant.",
     inputSchema: s.object(
       "The input payload for listing Griptape Cloud assistant runs.",
@@ -252,6 +246,7 @@ export const griptapeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_assistant_run",
+    operationType: "write",
     description: "Create a run for a Griptape Cloud assistant.",
     inputSchema: s.object(
       "The input payload for creating a Griptape Cloud assistant run.",
@@ -286,6 +281,7 @@ export const griptapeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_assistant_run",
+    operationType: "read",
     description: "Retrieve one Griptape Cloud assistant run by ID.",
     inputSchema: s.object("The input payload for retrieving a Griptape Cloud assistant run.", {
       assistant_run_id: s.string("The Griptape Cloud assistant run ID.", { minLength: 1 }),
@@ -297,6 +293,7 @@ export const griptapeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "cancel_assistant_run",
+    operationType: "destructive",
     description: "Cancel a Griptape Cloud assistant run.",
     inputSchema: s.object("The input payload for cancelling a Griptape Cloud assistant run.", {
       assistant_run_id: s.string("The Griptape Cloud assistant run ID.", { minLength: 1 }),
@@ -308,6 +305,7 @@ export const griptapeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_assistant_events",
+    operationType: "read",
     description: "List non-streaming events for a Griptape Cloud assistant run.",
     inputSchema: s.object(
       "The input payload for listing Griptape Cloud assistant run events.",

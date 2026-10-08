@@ -5,8 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "braze";
 
-export type BrazeActionName = "list_campaigns" | "get_campaign_details" | "list_canvases" | "get_canvas_details";
-
 const sortDirectionSchema = s.stringEnum("The creation-time sort direction to send to Braze.", ["asc", "desc"]);
 
 const listInputSchema = s.object(
@@ -192,6 +190,7 @@ const getCanvasDetailsOutputSchema = s.object(
 export const brazeActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_campaigns",
+    operationType: "read",
     description: "List Braze campaigns with optional archived, sort, page, and last-edited filters.",
     requiredScopes: ["campaigns.list"],
     inputSchema: listInputSchema,
@@ -199,6 +198,7 @@ export const brazeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_campaign_details",
+    operationType: "read",
     description: "Fetch Braze metadata and message details for one campaign.",
     requiredScopes: ["campaigns.details"],
     inputSchema: s.object(
@@ -213,6 +213,7 @@ export const brazeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_canvases",
+    operationType: "read",
     description: "List Braze Canvases with optional archived, sort, page, and last-edited filters.",
     requiredScopes: ["canvas.list"],
     inputSchema: listInputSchema,
@@ -220,6 +221,7 @@ export const brazeActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_canvas_details",
+    operationType: "read",
     description: "Fetch Braze metadata, variants, steps, and message details for one Canvas.",
     requiredScopes: ["canvas.details"],
     inputSchema: s.object(

@@ -204,11 +204,10 @@ const paginatedTaskOutputSchema = s.object("A page of Jamie tasks.", {
   nextCursor: s.nullable(s.string("Cursor for the next page, or null if there are no more pages.")),
 });
 
-export type JamieActionName = "list_meetings" | "get_meeting" | "list_tasks" | "search_meetings" | "list_tags";
-
 export const jamieActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_meetings",
+    operationType: "read",
     description: "List Jamie meetings for a personal or workspace API key with optional pagination and filters.",
     requiredScopes: [],
     inputSchema: listMeetingsInputSchema,
@@ -216,6 +215,7 @@ export const jamieActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_meeting",
+    operationType: "read",
     description: "Get full Jamie meeting details, including summary, transcript, tasks, and tags.",
     requiredScopes: [],
     inputSchema: getMeetingInputSchema,
@@ -225,6 +225,7 @@ export const jamieActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tasks",
+    operationType: "read",
     description: "List Jamie action items for a personal or workspace API key.",
     requiredScopes: [],
     inputSchema: listTasksInputSchema,
@@ -232,6 +233,7 @@ export const jamieActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_meetings",
+    operationType: "read",
     description: "Search Jamie meeting content with a personal API key.",
     requiredScopes: [],
     inputSchema: searchMeetingsInputSchema,
@@ -241,6 +243,7 @@ export const jamieActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tags",
+    operationType: "read",
     description: "List Jamie tags available to a personal API key.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for listing Jamie tags.", {}),

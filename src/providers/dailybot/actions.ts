@@ -36,33 +36,24 @@ function output(properties: Record<string, JsonSchema>, description: string): Js
   return s.actionOutput(properties, description);
 }
 
-export type DailybotActionName =
-  | "get_me"
-  | "get_organization"
-  | "list_users"
-  | "get_user"
-  | "list_teams"
-  | "get_team"
-  | "list_team_members"
-  | "send_message"
-  | "send_email"
-  | "open_conversation";
-
 export const dailybotActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_me",
+    operationType: "read",
     description: "Get the authenticated Dailybot user context and linked organization.",
     inputSchema: emptyInput,
     outputSchema: output({ profile }, "The authenticated user context returned by Dailybot."),
   }),
   defineProviderAction(service, {
     name: "get_organization",
+    operationType: "read",
     description: "Get the Dailybot organization details for the authenticated API key.",
     inputSchema: emptyInput,
     outputSchema: output({ organization }, "The organization details returned by Dailybot."),
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List users in the authenticated Dailybot organization.",
     inputSchema: s.object(
       {
@@ -80,12 +71,14 @@ export const dailybotActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Get a specific user from the authenticated Dailybot organization.",
     inputSchema: s.actionInput({ user_uuid: userUuid }, ["user_uuid"]),
     outputSchema: output({ user }, "The user details returned by Dailybot."),
   }),
   defineProviderAction(service, {
     name: "list_teams",
+    operationType: "read",
     description: "List teams in the authenticated Dailybot organization.",
     inputSchema: s.object({ limit, offset }, { optional: ["limit", "offset"], description: "The input payload." }),
     outputSchema: output(
@@ -95,12 +88,14 @@ export const dailybotActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_team",
+    operationType: "read",
     description: "Get a specific team from the authenticated Dailybot organization.",
     inputSchema: s.actionInput({ team_id: teamId }, ["team_id"]),
     outputSchema: output({ team }, "The team details returned by Dailybot."),
   }),
   defineProviderAction(service, {
     name: "list_team_members",
+    operationType: "read",
     description: "List members of a specific Dailybot team.",
     inputSchema: s.actionInput({ team_id: teamId }, ["team_id"]),
     outputSchema: output(
@@ -110,6 +105,7 @@ export const dailybotActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "send_message",
+    operationType: "write",
     description: "Send a chat message to a Dailybot user, team, or channel.",
     inputSchema: s.actionInput(
       {
@@ -126,6 +122,7 @@ export const dailybotActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "send_email",
+    operationType: "write",
     description: "Send an email notification through Dailybot.",
     inputSchema: s.actionInput(
       {
@@ -139,6 +136,7 @@ export const dailybotActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "open_conversation",
+    operationType: "write",
     description: "Open a direct Dailybot conversation with a user.",
     inputSchema: s.object(
       {

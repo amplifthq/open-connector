@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
 
 import {
@@ -9,14 +10,21 @@ import {
   optionalRecord,
   optionalString,
   optionalStringArray,
-  requiredRecord,
   requiredString,
   requiredStringArray,
 } from "../../core/cast.ts";
 import { compactJson, encodePathSegment } from "../../core/request.ts";
-import { readProviderJsonBody, ProviderRequestError, providerUserAgent, setSearchParams } from "../provider-runtime.ts";
+import {
+  providerInputError,
+  providerResponseError,
+  readProviderJsonBody,
+  ProviderRequestError,
+  providerUserAgent,
+  requiredResponseRecord,
+  setSearchParams,
+} from "../provider-runtime.ts";
 
-const resendApiBaseUrl = "https://api.resend.com";
+export const resendApiBaseUrl = "https://api.resend.com";
 const resendCredentialValidationErrors = new Set(["validation_error", "missing_required_field"]);
 
 type ResendActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -35,7 +43,7 @@ interface ResendRequestOptions {
   headers?: Record<string, string>;
 }
 
-export const resendActionHandlers: Record<string, ResendActionHandler> = {
+export const resendActionHandlers: ProviderActionHandlers<"resend", ResendActionHandler> = {
   send_email: sendEmail,
   send_batch_emails: sendBatchEmails,
   list_sent_emails: listSentEmails,
@@ -121,9 +129,9 @@ async function sendEmail(input: Record<string, unknown>, context: ResendRequestC
     {
       method: "POST",
       body: compactJson({
-        from: requiredString(input.from, "from", inputError),
-        to: requiredString(input.to, "to", inputError),
-        subject: requiredString(input.subject, "subject", inputError),
+        from: requiredString(input.from, "from", providerInputError),
+        to: requiredString(input.to, "to", providerInputError),
+        subject: requiredString(input.subject, "subject", providerInputError),
         html: optionalRawString(input.html),
         text: optionalRawString(input.text),
       }),
@@ -135,7 +143,7 @@ async function sendEmail(input: Record<string, unknown>, context: ResendRequestC
 }
 
 async function sendBatchEmails(input: Record<string, unknown>, context: ResendRequestContext): Promise<unknown> {
-  const emails = objectArray(input.emails, "emails", inputError).map(buildBatchEmailBody);
+  const emails = objectArray(input.emails, "emails", providerInputError).map(buildBatchEmailBody);
   const idempotencyKey = optionalString(input.idempotencyKey);
   const payload = await resendRequestJson(
     "/emails/batch",
@@ -150,7 +158,7 @@ async function sendBatchEmails(input: Record<string, unknown>, context: ResendRe
   const data = readRequiredArray(payload, "data", "Resend batch send response");
   return {
     emailIds: data.map((item) =>
-      readRequiredString(requireResponseObject(item, "Resend batch item"), "id", "Resend batch item"),
+      readRequiredString(requiredResponseRecord(item, "Resend batch item"), "id", "Resend batch item"),
     ),
   };
 }
@@ -172,7 +180,7 @@ async function updateScheduledEmail(input: Record<string, unknown>, context: Res
     {
       method: "PATCH",
       body: {
-        scheduled_at: requiredString(input.scheduledAt, "scheduledAt", inputError),
+        scheduled_at: requiredString(input.scheduledAt, "scheduledAt", providerInputError),
       },
     },
     "execute",
@@ -290,7 +298,7 @@ async function resendRequestJson(
   if (!response.ok) {
     throw createResendError(response.status, payload, phase);
   }
-  return requireResponseObject(payload, "Resend response");
+  return requiredResponseRecord(payload, "Resend response");
 }
 
 function resendHeaders(apiKey: string): Record<string, string> {
@@ -367,19 +375,19 @@ function buildBatchEmailBody(input: Record<string, unknown>): unknown {
   const text = optionalRawString(input.text);
   const template = optionalRecord(input.template);
   if (html === undefined && text === undefined && template === undefined) {
-    throw inputError("each batch email requires html, text, or template");
+    throw providerInputError("each batch email requires html, text, or template");
   }
   if (template !== undefined && (html !== undefined || text !== undefined)) {
-    throw inputError("template cannot be used with html or text");
+    throw providerInputError("template cannot be used with html or text");
   }
 
   const headers = optionalRecord(input.headers);
   const tags =
-    input.tags === undefined ? undefined : objectArray(input.tags, "tags", inputError).map(normalizeTagInput);
+    input.tags === undefined ? undefined : objectArray(input.tags, "tags", providerInputError).map(normalizeTagInput);
   return compactJson({
-    from: requiredString(input.from, "from", inputError),
-    to: requiredStringArray(input.to, "to", inputError),
-    subject: requiredString(input.subject, "subject", inputError),
+    from: requiredString(input.from, "from", providerInputError),
+    to: requiredStringArray(input.to, "to", providerInputError),
+    subject: requiredString(input.subject, "subject", providerInputError),
     html,
     text,
     cc: readOptionalStringArrayInput(input.cc, "cc"),
@@ -394,7 +402,7 @@ function buildBatchEmailBody(input: Record<string, unknown>): unknown {
 function buildTemplateInput(input: Record<string, unknown>): Record<string, unknown> {
   const variables = optionalRecord(input.variables);
   const output: Record<string, unknown> = {
-    id: requiredString(input.id, "template.id", inputError),
+    id: requiredString(input.id, "template.id", providerInputError),
   };
   if (variables !== undefined) {
     output.variables = variables;
@@ -404,20 +412,20 @@ function buildTemplateInput(input: Record<string, unknown>): Record<string, unkn
 
 function normalizeTagInput(input: Record<string, unknown>): Record<string, string> {
   return {
-    name: requiredString(input.name, "tags.name", inputError),
-    value: requiredString(input.value, "tags.value", inputError),
+    name: requiredString(input.name, "tags.name", providerInputError),
+    value: requiredString(input.value, "tags.value", providerInputError),
   };
 }
 
 function readOptionalStringArrayInput(value: unknown, fieldName: string): string[] | undefined {
-  return value === undefined ? undefined : requiredStringArray(value, fieldName, inputError);
+  return value === undefined ? undefined : requiredStringArray(value, fieldName, providerInputError);
 }
 
 function readStringRecordInput(input: Record<string, unknown>, fieldName: string): Record<string, string> {
   const output: Record<string, string> = {};
   for (const [key, value] of Object.entries(input)) {
     if (typeof value !== "string") {
-      throw inputError(`${fieldName}.${key} must be a string`);
+      throw providerInputError(`${fieldName}.${key} must be a string`);
     }
     output[key] = value;
   }
@@ -436,7 +444,7 @@ function normalizeEmailList(
 }
 
 function normalizeSentEmailSummary(value: unknown): Record<string, unknown> {
-  const email = requireResponseObject(value, "Resend sent email");
+  const email = requiredResponseRecord(value, "Resend sent email");
   return {
     ...normalizeEmailEnvelope(email, "Resend sent email"),
     subject: readRequiredString(email, "subject", "Resend sent email"),
@@ -446,7 +454,7 @@ function normalizeSentEmailSummary(value: unknown): Record<string, unknown> {
 }
 
 function normalizeSentEmail(value: unknown): Record<string, unknown> {
-  const email = requireResponseObject(value, "Resend sent email");
+  const email = requiredResponseRecord(value, "Resend sent email");
   return {
     ...normalizeEmailEnvelope(email, "Resend sent email"),
     subject: readRequiredString(email, "subject", "Resend sent email"),
@@ -454,23 +462,23 @@ function normalizeSentEmail(value: unknown): Record<string, unknown> {
     text: readNullableString(email.text, "text"),
     lastEvent: readNullableString(email.last_event, "last_event"),
     scheduledAt: readNullableString(email.scheduled_at, "scheduled_at"),
-    tags: optionalObjectArray(email.tags, "Resend email tag", responseError).map(normalizeTagOutput),
+    tags: optionalObjectArray(email.tags, "Resend email tag", providerResponseError).map(normalizeTagOutput),
   };
 }
 
 function normalizeReceivedEmailSummary(value: unknown): Record<string, unknown> {
-  const email = requireResponseObject(value, "Resend received email");
+  const email = requiredResponseRecord(value, "Resend received email");
   return {
     ...normalizeEmailEnvelope(email, "Resend received email"),
     subject: readNullableString(email.subject, "subject"),
-    attachments: optionalObjectArray(email.attachments, "Resend attachment", responseError).map(
+    attachments: optionalObjectArray(email.attachments, "Resend attachment", providerResponseError).map(
       normalizeAttachmentReference,
     ),
   };
 }
 
 function normalizeReceivedEmail(value: unknown): Record<string, unknown> {
-  const email = requireResponseObject(value, "Resend received email");
+  const email = requiredResponseRecord(value, "Resend received email");
   const raw = email.raw;
   return {
     ...normalizeEmailEnvelope(email, "Resend received email"),
@@ -479,7 +487,7 @@ function normalizeReceivedEmail(value: unknown): Record<string, unknown> {
     text: readNullableString(email.text, "text"),
     headers: email.headers == null ? null : normalizeResponseStringRecord(email.headers, "headers"),
     raw: raw == null ? null : normalizeRawEmail(raw),
-    attachments: optionalObjectArray(email.attachments, "Resend attachment", responseError).map(
+    attachments: optionalObjectArray(email.attachments, "Resend attachment", providerResponseError).map(
       normalizeAttachmentReference,
     ),
   };
@@ -499,7 +507,7 @@ function normalizeEmailEnvelope(email: Record<string, unknown>, label: string): 
 }
 
 function normalizeRawEmail(value: unknown): Record<string, unknown> {
-  const raw = requireResponseObject(value, "Resend raw email");
+  const raw = requiredResponseRecord(value, "Resend raw email");
   return {
     downloadUrl: readRequiredString(raw, "download_url", "Resend raw email"),
     expiresAt: readRequiredString(raw, "expires_at", "Resend raw email"),
@@ -521,7 +529,7 @@ function normalizeAttachmentList(payload: Record<string, unknown>): Record<strin
 }
 
 function normalizeAttachment(value: unknown): Record<string, unknown> {
-  const attachment = requireResponseObject(value, "Resend attachment");
+  const attachment = requiredResponseRecord(value, "Resend attachment");
   return {
     ...normalizeAttachmentReference(attachment),
     size: readRequiredInteger(attachment, "size", "Resend attachment"),
@@ -532,7 +540,7 @@ function normalizeAttachment(value: unknown): Record<string, unknown> {
 }
 
 function normalizeAttachmentReference(value: unknown): Record<string, unknown> {
-  const attachment = requireResponseObject(value, "Resend attachment");
+  const attachment = requiredResponseRecord(value, "Resend attachment");
   return {
     id: readRequiredString(attachment, "id", "Resend attachment"),
     filename: readNullableString(attachment.filename, "filename"),
@@ -544,11 +552,7 @@ function normalizeAttachmentReference(value: unknown): Record<string, unknown> {
 }
 
 function readPathId(input: Record<string, unknown>, fieldName: string): string {
-  return encodePathSegment(requiredString(input[fieldName], fieldName, inputError));
-}
-
-function requireResponseObject(value: unknown, label: string): Record<string, unknown> {
-  return requiredRecord(value, label, responseError);
+  return encodePathSegment(requiredString(input[fieldName], fieldName, providerInputError));
 }
 
 function readRequiredString(input: Record<string, unknown>, key: string, label: string): string {
@@ -556,7 +560,7 @@ function readRequiredString(input: Record<string, unknown>, key: string, label: 
   if (typeof value === "string") {
     return value;
   }
-  throw responseError(`${label} field ${key} must be a string`);
+  throw providerResponseError(`${label} field ${key} must be a string`);
 }
 
 function readRequiredBoolean(input: Record<string, unknown>, key: string, label: string): boolean {
@@ -564,7 +568,7 @@ function readRequiredBoolean(input: Record<string, unknown>, key: string, label:
   if (typeof value === "boolean") {
     return value;
   }
-  throw responseError(`${label} field ${key} must be a boolean`);
+  throw providerResponseError(`${label} field ${key} must be a boolean`);
 }
 
 function readRequiredInteger(input: Record<string, unknown>, key: string, label: string): number {
@@ -572,7 +576,7 @@ function readRequiredInteger(input: Record<string, unknown>, key: string, label:
   if (typeof value === "number" && Number.isInteger(value)) {
     return value;
   }
-  throw responseError(`${label} field ${key} must be an integer`);
+  throw providerResponseError(`${label} field ${key} must be an integer`);
 }
 
 function readRequiredArray(input: Record<string, unknown>, key: string, label: string): unknown[] {
@@ -580,7 +584,7 @@ function readRequiredArray(input: Record<string, unknown>, key: string, label: s
   if (Array.isArray(value)) {
     return value;
   }
-  throw responseError(`${label} field ${key} must be an array`);
+  throw providerResponseError(`${label} field ${key} must be an array`);
 }
 
 function readRequiredStringArray(input: Record<string, unknown>, key: string, label: string): string[] {
@@ -588,7 +592,7 @@ function readRequiredStringArray(input: Record<string, unknown>, key: string, la
   if (value) {
     return value;
   }
-  throw responseError(`${label} field ${key} must be an array of strings`);
+  throw providerResponseError(`${label} field ${key} must be an array of strings`);
 }
 
 function readNullableString(value: unknown, fieldName: string): string | null {
@@ -598,7 +602,7 @@ function readNullableString(value: unknown, fieldName: string): string | null {
   if (typeof value === "string") {
     return value;
   }
-  throw responseError(`Resend response field ${fieldName} must be a string or null`);
+  throw providerResponseError(`Resend response field ${fieldName} must be a string or null`);
 }
 
 function readNullableStringArray(value: unknown, fieldName: string): string[] | null {
@@ -609,7 +613,7 @@ function readNullableStringArray(value: unknown, fieldName: string): string[] | 
   if (strings) {
     return strings;
   }
-  throw responseError(`Resend response field ${fieldName} must be an array of strings or null`);
+  throw providerResponseError(`Resend response field ${fieldName} must be an array of strings or null`);
 }
 
 function readNullableInteger(value: unknown, fieldName: string): number | null {
@@ -619,28 +623,20 @@ function readNullableInteger(value: unknown, fieldName: string): number | null {
   if (typeof value === "number" && Number.isInteger(value)) {
     return value;
   }
-  throw responseError(`Resend response field ${fieldName} must be an integer or null`);
+  throw providerResponseError(`Resend response field ${fieldName} must be an integer or null`);
 }
 
 function normalizeResponseStringRecord(value: unknown, fieldName: string): Record<string, string> {
   const input = optionalRecord(value);
   if (!input) {
-    throw responseError(`Resend response field ${fieldName} must be an object`);
+    throw providerResponseError(`Resend response field ${fieldName} must be an object`);
   }
   const output: Record<string, string> = {};
   for (const [key, item] of Object.entries(input)) {
     if (typeof item !== "string") {
-      throw responseError(`Resend response field ${fieldName}.${key} must be a string`);
+      throw providerResponseError(`Resend response field ${fieldName}.${key} must be a string`);
     }
     output[key] = item;
   }
   return output;
-}
-
-function inputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function responseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

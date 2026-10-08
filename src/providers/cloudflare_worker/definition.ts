@@ -77,11 +77,11 @@ export const provider: ProviderDefinition = {
       tokenUrl: "https://dash.cloudflare.com/oauth2/token",
       refreshTokenUrl: "https://dash.cloudflare.com/oauth2/token",
       scopes: [
+        "offline_access",
         "workers-scripts.read",
         "workers-scripts.write",
         "workers-ci.read",
         "workers-ci.write",
-        "offline_access",
       ],
       tokenEndpointAuthMethod: "client_secret_basic",
     },

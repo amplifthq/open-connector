@@ -7,9 +7,8 @@ const service = "tinypng";
 const nonEmptyString = (description: string) => s.string(description, { minLength: 1 });
 const downloadableFileSchema = s.object("A downloadable TinyPNG output file.", {
   name: s.string("The filename of the transformed image."),
-  mimetype: s.string("The MIME type of the transformed image."),
+  mimeType: s.string("The MIME type of the transformed image."),
   downloadUrl: s.string("The transit URL for downloading the transformed image."),
-  fileId: s.string("The local transit file identifier."),
   sizeBytes: s.integer("The transformed image size in bytes."),
 });
 const tinypngMimeTypeSchema = s.stringEnum("One TinyPNG output MIME type.", [
@@ -85,6 +84,7 @@ const outputImageInputSchema = s.object(
 export const tinypngActions: ProviderActionDefinition[] = [
   defineProviderAction(service, {
     name: "shrink_image",
+    operationType: "write",
     description: "Create a TinyPNG compressed image resource from a public URL or base64-encoded image bytes.",
     requiredScopes: [],
     inputSchema: shrinkImageInputSchema,
@@ -108,6 +108,7 @@ export const tinypngActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "output_image",
+    operationType: "read",
     description: "Transform a TinyPNG output image and return a transit URL for the resulting file.",
     requiredScopes: [],
     inputSchema: outputImageInputSchema,

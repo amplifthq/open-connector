@@ -1,7 +1,15 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ShipBobActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { optionalBoolean, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
+import {
+  optionalBoolean,
+  optionalBooleanOrNull,
+  optionalRawString,
+  optionalRecord,
+  optionalString,
+  rawStringOrNull,
+  requiredRecord,
+} from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
@@ -13,7 +21,6 @@ import {
 const service = "ship_bob";
 const shipBobApiBaseUrl = "https://api.shipbob.com";
 const shipBobApiVersionPath = "/2026-01";
-const shipBobRequestTimeoutMs = 30_000;
 
 type ShipBobRequestPhase = "validate" | "execute";
 type QueryValue = string | number | boolean | readonly (string | number | boolean)[] | undefined;
@@ -34,7 +41,7 @@ interface ShipBobRequestOptions {
 
 type ShipBobActionHandler = (input: Record<string, unknown>, context: ShipBobActionContext) => Promise<unknown>;
 
-export const shipBobActionHandlers: Record<ShipBobActionName, ShipBobActionHandler> = {
+export const shipBobActionHandlers: ProviderActionHandlers<"ship_bob", ShipBobActionHandler> = {
   async list_channels(_input, context): Promise<unknown> {
     const payload = await requestShipBobJson({
       context,
@@ -52,12 +59,12 @@ export const shipBobActionHandlers: Record<ShipBobActionName, ShipBobActionHandl
       context,
       path: "/inventory-level",
       query: compactDefined({
-        SearchBy: optionalQueryString(input.searchBy),
+        SearchBy: optionalRawString(input.searchBy),
         InventoryIds: joinValues(input.inventoryIds),
         IsActive: optionalBoolean(input.isActive),
         IsDigital: optionalBoolean(input.isDigital),
         PageSize: optionalQueryNumber(input.pageSize),
-        SortBy: optionalQueryString(input.sortBy),
+        SortBy: optionalRawString(input.sortBy),
       }),
       phase: "execute",
     });
@@ -84,8 +91,8 @@ export const shipBobActionHandlers: Record<ShipBobActionName, ShipBobActionHandl
       context,
       path: "/product",
       query: compactDefined({
-        Search: optionalQueryString(input.search),
-        Barcode: optionalQueryString(input.barcode),
+        Search: optionalRawString(input.search),
+        Barcode: optionalRawString(input.barcode),
         Barcodes: joinValues(input.barcodes),
         CategoryIds: joinValues(input.categoryIds),
         ChannelIds: joinValues(input.channelIds),
@@ -93,18 +100,18 @@ export const shipBobActionHandlers: Record<ShipBobActionName, ShipBobActionHandl
         HasVariants: booleanAsString(input.hasVariants),
         InventoryId: optionalQueryNumber(input.inventoryId),
         IsInventorySyncEnabled: booleanAsString(input.isInventorySyncEnabled),
-        LastUpdatedTimestamp: optionalQueryString(input.lastUpdatedTimestamp),
-        Name: optionalQueryString(input.name),
+        LastUpdatedTimestamp: optionalRawString(input.lastUpdatedTimestamp),
+        Name: optionalRawString(input.name),
         OnHand: booleanAsString(input.onHand),
         ProductId: optionalQueryNumber(input.productId),
-        ProductType: optionalQueryString(input.productType),
-        SellerSKU: optionalQueryString(input.sellerSku),
-        SKU: optionalQueryString(input.sku),
+        ProductType: optionalRawString(input.productType),
+        SellerSKU: optionalRawString(input.sellerSku),
+        SKU: optionalRawString(input.sku),
         VariantId: optionalQueryNumber(input.variantId),
-        VariantStatus: optionalQueryString(input.variantStatus),
+        VariantStatus: optionalRawString(input.variantStatus),
         PageSize: optionalQueryNumber(input.pageSize),
-        SortBy: optionalQueryString(input.sortBy),
-        SortOrder: optionalQueryString(input.sortOrder),
+        SortBy: optionalRawString(input.sortBy),
+        SortOrder: optionalRawString(input.sortOrder),
       }),
       phase: "execute",
     });
@@ -170,7 +177,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestShipBobJson(options: ShipBobRequestOptions): Promise<unknown> {
-  const timeout = createProviderTimeout(options.context.signal, shipBobRequestTimeoutMs);
+  const timeout = createProviderTimeout(options.context.signal);
   const url = new URL(`${shipBobApiBaseUrl}${shipBobApiVersionPath}${options.path}`);
   appendQuery(url, options.query);
 
@@ -293,10 +300,10 @@ function normalizePagedResponse<T>(
   const record = readObject(payload, "ShipBob paged response");
   const items = Array.isArray(record.items) ? record.items : [];
   return {
-    first: nullableString(record.first),
-    last: nullableString(record.last),
-    next: nullableString(record.next),
-    prev: nullableString(record.prev),
+    first: rawStringOrNull(record.first),
+    last: rawStringOrNull(record.last),
+    next: rawStringOrNull(record.next),
+    prev: rawStringOrNull(record.prev),
     items: items.map((item) => normalizeItem(readObject(item, "ShipBob paged response item"))),
   };
 }
@@ -316,8 +323,8 @@ function normalizeChannels(payload: unknown): Array<{
 function normalizeChannel(record: Record<string, unknown>) {
   return {
     id: readInteger(record.id, "channel id"),
-    name: nullableString(record.name),
-    applicationName: nullableString(record.application_name),
+    name: rawStringOrNull(record.name),
+    applicationName: rawStringOrNull(record.application_name),
     scopes: Array.isArray(record.scopes)
       ? record.scopes.filter((scope): scope is string => typeof scope === "string")
       : [],
@@ -328,8 +335,8 @@ function normalizeChannel(record: Record<string, unknown>) {
 function normalizeInventoryQuantity(record: Record<string, unknown>) {
   return {
     inventoryId: readInteger(record.inventory_id, "inventory id"),
-    name: nullableString(record.name),
-    sku: nullableString(record.sku),
+    name: rawStringOrNull(record.name),
+    sku: rawStringOrNull(record.sku),
     totalAwaitingQuantity: nullableInteger(record.total_awaiting_quantity),
     totalBackorderedQuantity: nullableInteger(record.total_backordered_quantity),
     totalCommittedQuantity: nullableInteger(record.total_committed_quantity),
@@ -345,12 +352,12 @@ function normalizeInventoryQuantity(record: Record<string, unknown>) {
 function normalizeLocation(record: Record<string, unknown>) {
   return {
     id: readInteger(record.id, "location id"),
-    name: nullableString(record.name),
-    abbreviation: nullableString(record.abbreviation),
-    isActive: nullableBoolean(record.is_active),
-    accessGranted: nullableBoolean(record.access_granted),
-    isReceivingEnabled: nullableBoolean(record.is_receiving_enabled),
-    isShippingEnabled: nullableBoolean(record.is_shipping_enabled),
+    name: rawStringOrNull(record.name),
+    abbreviation: rawStringOrNull(record.abbreviation),
+    isActive: optionalBooleanOrNull(record.is_active),
+    accessGranted: optionalBooleanOrNull(record.access_granted),
+    isReceivingEnabled: optionalBooleanOrNull(record.is_receiving_enabled),
+    isShippingEnabled: optionalBooleanOrNull(record.is_shipping_enabled),
     raw: record,
   };
 }
@@ -383,20 +390,8 @@ function nullableInteger(value: unknown): number | null {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
-function nullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
-
-function nullableBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
-}
-
 function joinValues(value: unknown): string | undefined {
   return Array.isArray(value) ? value.join(",") : undefined;
-}
-
-function optionalQueryString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
 }
 
 function optionalQueryNumber(value: unknown): number | undefined {

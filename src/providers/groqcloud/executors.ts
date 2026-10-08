@@ -1,18 +1,17 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { GroqcloudActionName } from "./actions.ts";
 
 import { createHash } from "node:crypto";
-import {
-  base64Bytes,
-  compactObject,
-  optionalRecord,
-  optionalScalarString,
-  optionalString,
-  requiredString,
-} from "../../core/cast.ts";
+import { base64Bytes, compactObject, optionalRecord, optionalScalarString, optionalString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  ProviderRequestError,
+  providerUserAgent,
+  requiredInputString,
+} from "../provider-runtime.ts";
 
 const service = "groqcloud";
 const groqcloudApiBaseUrl = "https://api.groq.com/openai/v1";
@@ -22,7 +21,7 @@ const groqcloudAudioAttachmentMaxBytes = 25 * 1024 * 1024;
 type GroqcloudRequestPhase = "validate" | "execute";
 type GroqcloudActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const groqcloudActionHandlers: Record<GroqcloudActionName, GroqcloudActionHandler> = {
+export const groqcloudActionHandlers: ProviderActionHandlers<"groqcloud", GroqcloudActionHandler> = {
   list_models(_input, context) {
     return groqcloudRequest({
       context,
@@ -33,7 +32,7 @@ export const groqcloudActionHandlers: Record<GroqcloudActionName, GroqcloudActio
   get_model(input, context) {
     return groqcloudRequest({
       context,
-      path: `/models/${encodeURIComponent(readInputString(input.model, "model"))}`,
+      path: `/models/${encodeURIComponent(requiredInputString(input.model, "model"))}`,
       phase: "execute",
     });
   },
@@ -68,6 +67,13 @@ export const groqcloudActionHandlers: Record<GroqcloudActionName, GroqcloudActio
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, groqcloudActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: groqcloudApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -195,10 +201,6 @@ function tryParseJson(raw: string): unknown | undefined {
   }
 }
 
-function readInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function buildGroqcloudAudioFormData(input: Record<string, unknown>): FormData {
   const file = optionalRecord(input.file);
   if (!file) {
@@ -216,7 +218,7 @@ function buildGroqcloudAudioFormData(input: Record<string, unknown>): FormData {
 
   const formData = new FormData();
   if (contentBase64) {
-    const name = readInputString(file.name, "file.name");
+    const name = requiredInputString(file.name, "file.name");
     const bytes = base64Bytes(
       contentBase64,
       "file.content_base64",

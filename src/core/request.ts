@@ -1,3 +1,5 @@
+import type { TransitFileUpload, TransitFileWriter } from "./types.ts";
+
 /**
  * Query parameter values accepted by provider HTTP helpers.
  */
@@ -71,6 +73,7 @@ export interface BoundedResponseBytesOptions {
   maxBytes: number;
   fieldName: string;
   createError: (message: string) => Error;
+  signal?: AbortSignal;
 }
 
 /**
@@ -80,8 +83,12 @@ export async function readBoundedResponseBytes(
   response: Response,
   options: BoundedResponseBytesOptions,
 ): Promise<Uint8Array> {
+  options.signal?.throwIfAborted();
   const contentLength = parseContentLength(response.headers.get("content-length"));
   if (contentLength !== undefined) {
+    if (contentLength > options.maxBytes) {
+      void response.body?.cancel().catch(() => undefined);
+    }
     assertMaxBytes(contentLength, options);
   }
 
@@ -92,22 +99,28 @@ export async function readBoundedResponseBytes(
   }
 
   const reader = response.body.getReader();
+  const abort = (): void => {
+    void reader.cancel().catch(() => undefined);
+  };
+  options.signal?.addEventListener("abort", abort, { once: true });
   const chunks: Uint8Array[] = [];
   let totalBytes = 0;
   try {
     while (true) {
       const { done, value } = await reader.read();
+      options.signal?.throwIfAborted();
       if (done) {
         break;
       }
       totalBytes += value.byteLength;
       if (totalBytes > options.maxBytes) {
-        await reader.cancel().catch(() => undefined);
+        void reader.cancel().catch(() => undefined);
         throw options.createError(`${options.fieldName} exceeds ${options.maxBytes} bytes`);
       }
       chunks.push(value);
     }
   } finally {
+    options.signal?.removeEventListener("abort", abort);
     reader.releaseLock();
   }
 
@@ -118,6 +131,63 @@ export async function readBoundedResponseBytes(
     offset += chunk.byteLength;
   }
   return bytes;
+}
+
+export interface TransitResponseOptions {
+  /** Name the stored transit file carries. */
+  name: string;
+  mimeType: string;
+  /** Used in the size-limit error, as in {@link readBoundedResponseBytes}. */
+  fieldName: string;
+  createError: (message: string) => Error;
+  signal?: AbortSignal;
+}
+
+/**
+ * Store a provider download in transit storage without holding it in memory.
+ *
+ * A backend that accepts unknown-length streams (the filesystem store) gets the
+ * response body piped straight to disk, so memory stays flat whatever the file
+ * size or the number of concurrent downloads; the store enforces `maxBytes` as
+ * the bytes arrive. Any other backend keeps the buffered path, bounded exactly
+ * as before.
+ */
+export async function storeResponseInTransit(
+  response: Response,
+  transitFiles: TransitFileWriter,
+  options: TransitResponseOptions,
+): Promise<TransitFileUpload> {
+  const limits: BoundedResponseBytesOptions = {
+    maxBytes: transitFiles.maxBytes,
+    fieldName: options.fieldName,
+    createError: options.createError,
+    signal: options.signal,
+  };
+  if (!transitFiles.createFromStream || !response.body) {
+    const bytes = await readBoundedResponseBytes(response, limits);
+    return await transitFiles.create(new File([Uint8Array.from(bytes)], options.name, { type: options.mimeType }));
+  }
+  options.signal?.throwIfAborted();
+  const contentLength = parseContentLength(response.headers.get("content-length"));
+  if (contentLength !== undefined && contentLength > limits.maxBytes) {
+    void response.body.cancel().catch(() => undefined);
+    assertMaxBytes(contentLength, limits);
+  }
+  try {
+    return await transitFiles.createFromStream({
+      body: response.body,
+      name: options.name.toWellFormed(),
+      mimeType: options.mimeType,
+      signal: options.signal,
+    });
+  } catch (error) {
+    // The store reports an over-limit stream as its own `file_too_large`;
+    // callers keep seeing the error they chose, as on the buffered path.
+    if ((error as { code?: unknown } | null)?.code === "file_too_large") {
+      throw options.createError(`${options.fieldName} exceeds ${limits.maxBytes} bytes`);
+    }
+    throw error;
+  }
 }
 
 // Egress targets are classified into three tiers for the SSRF guard:
@@ -141,7 +211,12 @@ export async function readBoundedResponseBytes(
 // Always blocked: names that resolve to loopback, regardless of the flag.
 const localHostnames = new Set(["localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback"]);
 // Always blocked: cloud instance-metadata endpoints (prime SSRF escalation targets).
-const cloudMetadataHostnames = new Set(["instance-data.ec2.internal", "metadata.google.internal", "metadata.goog"]);
+const cloudMetadataHostnames = new Set([
+  "instance-data.ec2.internal",
+  "metadata",
+  "metadata.google.internal",
+  "metadata.goog",
+]);
 // Always blocked: .localhost (RFC 6761 loopback) and the localhost.localdomain alias.
 const localHostnameSuffixes = [".localhost", ".localdomain"];
 // Flag-gated: private hostname suffixes with mixed standards status — .local (mDNS special-use,
@@ -175,8 +250,9 @@ const reservedIpv4Cidrs: Array<[number, number]> = [
 // Trusted-host only: RFC 2544 benchmark space used by aTrust/EasyConnect-class VPNs to map
 // public SaaS hostnames into locally routed addresses.
 const vpnMappedIpv4Cidrs: Array<[number, number]> = [[ipv4ToNumber("198.18.0.0"), 15]];
-// Always blocked: unspecified/loopback (::, ::1), link-local (fe80::/10), multicast (ff00::/8),
-// plus discard, documentation, benchmark, and other special-purpose IPv6 ranges (RFC 6890 registry).
+// Always blocked: unspecified/loopback (::, ::1), link-local (fe80::/10), AWS IMDSv2 IPv6
+// (fd00:ec2::254), multicast (ff00::/8), plus discard, documentation, benchmark, and other
+// special-purpose IPv6 ranges (RFC 6890 registry).
 const reservedIpv6Cidrs: Array<[Uint8Array, number]> = [
   [ipv6ToBytes("::"), 128],
   [ipv6ToBytes("::1"), 128],
@@ -187,6 +263,7 @@ const reservedIpv6Cidrs: Array<[Uint8Array, number]> = [
   [ipv6ToBytes("2001:db8::"), 32],
   [ipv6ToBytes("3fff::"), 20],
   [ipv6ToBytes("5f00::"), 16],
+  [ipv6ToBytes("fd00:ec2::254"), 128],
   [ipv6ToBytes("fe80::"), 10],
   [ipv6ToBytes("ff00::"), 8],
 ];
@@ -359,8 +436,8 @@ export type IpAddressClass = "public" | "private" | "vpn-mapped" | "always-block
 /**
  * Classify one resolved IPv4 or IPv6 address for the shared egress policy.
  *
- * IPv6 ranges that embed an IPv4 address (v4-mapped, NAT64, 6to4) inherit the
- * embedded IPv4 classification. Unparseable input fails closed.
+ * IPv6 ranges that embed an IPv4 address (v4-mapped, NAT64, 6to4, Teredo)
+ * inherit the embedded IPv4 classification. Unparseable input fails closed.
  */
 export function classifyIpAddress(address: string): IpAddressClass {
   const ipv4 = parseIpv4(address);
@@ -380,10 +457,12 @@ export function classifyIpAddress(address: string): IpAddressClass {
   }
   for (const [network, bits, offset] of ipv4EmbeddedIpv6Cidrs) {
     if (ipv6InCidr(ipv6, network, bits)) {
-      const embedded =
-        ((ipv6[offset]! << 24) | (ipv6[offset + 1]! << 16) | (ipv6[offset + 2]! << 8) | ipv6[offset + 3]!) >>> 0;
-      return classifyIpv4(embedded);
+      return classifyIpv4(readIpv4At(ipv6, offset));
     }
+  }
+  const teredo = classifyTeredoIpv6(ipv6);
+  if (teredo !== undefined) {
+    return teredo;
   }
   return "public";
 }
@@ -420,6 +499,33 @@ export function isIpv4Address(hostname: string): boolean {
  */
 export function isIpAddress(value: string): boolean {
   return parseIpv4(value) !== undefined || parseIpv6(value) !== undefined;
+}
+
+function readIpv4At(bytes: Uint8Array, offset: number): number {
+  return ((bytes[offset]! << 24) | (bytes[offset + 1]! << 16) | (bytes[offset + 2]! << 8) | bytes[offset + 3]!) >>> 0;
+}
+
+/**
+ * Teredo (RFC 4380, `2001:0000::/32`) embeds a server IPv4 and an obfuscated
+ * client IPv4 (last 32 bits XOR `0xffffffff`). Classify as the stricter of the
+ * two so a crafted Teredo address cannot hide IMDS or RFC 1918 behind a public
+ * 6-in-4 prefix.
+ */
+function classifyTeredoIpv6(ipv6: Uint8Array): IpAddressClass | undefined {
+  if (ipv6[0] !== 0x20 || ipv6[1] !== 0x01 || ipv6[2] !== 0x00 || ipv6[3] !== 0x00) {
+    return undefined;
+  }
+  return stricterIpAddressClass(classifyIpv4(readIpv4At(ipv6, 4)), classifyIpv4(readIpv4At(ipv6, 12) ^ 0xffffffff));
+}
+
+function stricterIpAddressClass(left: IpAddressClass, right: IpAddressClass): IpAddressClass {
+  const rank: Record<IpAddressClass, number> = {
+    public: 0,
+    private: 1,
+    "vpn-mapped": 2,
+    "always-blocked": 3,
+  };
+  return rank[left] >= rank[right] ? left : right;
 }
 
 function classifyIpv4(value: number): IpAddressClass {

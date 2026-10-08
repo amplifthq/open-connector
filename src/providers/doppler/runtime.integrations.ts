@@ -1,4 +1,6 @@
-import { nullableString, optionalRecord, optionalString, compactObject } from "../../core/cast.ts";
+import type { ProviderActionHandlerSubset } from "../provider-runtime.ts";
+
+import { nullableString, optionalBoolean, optionalRecord, optionalString, compactObject } from "../../core/cast.ts";
 import { ProviderRequestError } from "../provider-runtime.ts";
 import { dopplerRequest, readArray, readObject } from "./runtime.shared.ts";
 
@@ -15,7 +17,8 @@ type DopplerIntegrationActionHandler = (
 export const dopplerIntegrationActionHandlers: Record<
   "list_integrations" | "get_integration" | "get_sync" | "create_sync" | "delete_sync",
   DopplerIntegrationActionHandler
-> = {
+> &
+  ProviderActionHandlerSubset<"doppler", DopplerIntegrationActionHandler> = {
   list_integrations(input, context) {
     return dopplerListIntegrations(input, context.accessToken, context.fetcher);
   },
@@ -31,10 +34,7 @@ export const dopplerIntegrationActionHandlers: Record<
   delete_sync(input, context) {
     return dopplerDeleteSync(input, context.accessToken, context.fetcher);
   },
-} satisfies Record<
-  "list_integrations" | "get_integration" | "get_sync" | "create_sync" | "delete_sync",
-  DopplerIntegrationActionHandler
->;
+};
 
 async function dopplerListIntegrations(_input: Record<string, unknown>, accessToken: string, fetcher: typeof fetch) {
   const payload = await dopplerRequest(
@@ -48,7 +48,7 @@ async function dopplerListIntegrations(_input: Record<string, unknown>, accessTo
   const record = readObject(payload, "integrations");
 
   return compactObject({
-    success: asOptionalBoolean(record.success),
+    success: optionalBoolean(record.success),
     integrations: readArray(record.integrations, "integrations").map((integration) =>
       normalizeIntegration(readObject(integration, "integration")),
     ),
@@ -109,7 +109,7 @@ async function dopplerCreateSync(input: Record<string, unknown>, accessToken: st
         integration: asRequiredString(input.integration, "integration"),
         data: asRequiredObject(input.data, "data"),
         import_option: optionalString(input.importOption),
-        await_initial_sync: asOptionalBoolean(input.awaitInitialSync),
+        await_initial_sync: optionalBoolean(input.awaitInitialSync),
       }),
     },
     fetcher,
@@ -149,7 +149,7 @@ function normalizeIntegration(record: Record<string, unknown>) {
     name: optionalString(record.name),
     type: optionalString(record.type),
     kind: optionalString(record.kind),
-    enabled: asOptionalBoolean(record.enabled),
+    enabled: optionalBoolean(record.enabled),
     syncs: Array.isArray(record.syncs)
       ? record.syncs.map((sync) => normalizeSync(readObject(sync, "sync")))
       : undefined,
@@ -162,7 +162,7 @@ function normalizeSync(record: Record<string, unknown>) {
     integration: optionalString(record.integration),
     project: optionalString(record.project),
     config: optionalString(record.config),
-    enabled: asOptionalBoolean(record.enabled),
+    enabled: optionalBoolean(record.enabled),
     lastSyncedAt: nullableString(record.lastSyncedAt),
   });
 }
@@ -188,8 +188,4 @@ function asRequiredBoolean(value: unknown, fieldName: string) {
     throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return value;
-}
-
-function asOptionalBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
 }

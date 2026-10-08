@@ -5,17 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "make";
 
-export type MakeActionName =
-  | "get_current_user"
-  | "get_current_authorization"
-  | "list_teams"
-  | "list_scenarios"
-  | "get_scenario"
-  | "activate_scenario"
-  | "deactivate_scenario"
-  | "run_scenario_once"
-  | "get_scenario_usage";
-
 const makeIdField = s.positiveInteger("Make resource ID.");
 const scenarioIdField = s.positiveInteger("Make scenario ID.");
 const teamIdField = s.positiveInteger("Make team ID.");
@@ -232,54 +221,63 @@ const scenarioUsageOutputSchema = s.object("Normalized Make scenario usage respo
 export const makeActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Get the authenticated Make user profile.",
     inputSchema: currentUserInputSchema,
     outputSchema: currentUserOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_current_authorization",
+    operationType: "read",
     description: "Get the current Make credential authorization details and scopes.",
     inputSchema: s.object("Input for retrieving Make authorization details.", {}),
     outputSchema: authorizationOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_teams",
+    operationType: "read",
     description: "List Make teams visible to the authenticated credential.",
     inputSchema: listTeamsInputSchema,
     outputSchema: listTeamsOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_scenarios",
+    operationType: "read",
     description: "List Make scenarios for one team or organization.",
     inputSchema: listScenariosInputSchema,
     outputSchema: listScenariosOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_scenario",
+    operationType: "read",
     description: "Get details for one Make scenario.",
     inputSchema: getScenarioInputSchema,
     outputSchema: scenarioOutputSchema,
   }),
   defineProviderAction(service, {
     name: "activate_scenario",
+    operationType: "write",
     description: "Activate a Make scenario.",
     inputSchema: scenarioIdInputSchema,
     outputSchema: successOutputSchema,
   }),
   defineProviderAction(service, {
     name: "deactivate_scenario",
+    operationType: "destructive",
     description: "Deactivate a Make scenario.",
     inputSchema: scenarioIdInputSchema,
     outputSchema: successOutputSchema,
   }),
   defineProviderAction(service, {
     name: "run_scenario_once",
+    operationType: "write",
     description: "Run a Make scenario once on demand.",
     inputSchema: runScenarioInputSchema,
     outputSchema: runScenarioOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_scenario_usage",
+    operationType: "read",
     description: "Get daily usage for a Make scenario over the previous 30 days.",
     inputSchema: getScenarioUsageInputSchema,
     outputSchema: scenarioUsageOutputSchema,

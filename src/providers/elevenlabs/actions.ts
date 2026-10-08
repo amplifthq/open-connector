@@ -409,25 +409,10 @@ const characterAlignmentSchema = s.object("Character-level timing information fo
   ),
 });
 
-export type ElevenlabsActionName =
-  | "get_user_info"
-  | "get_user_subscription_info"
-  | "get_models"
-  | "get_voices"
-  | "get_voice"
-  | "search_voices"
-  | "get_voice_settings"
-  | "get_generated_items"
-  | "get_history_item_by_id"
-  | "text_to_speech"
-  | "text_to_speech_with_timestamps"
-  | "create_sound_effect"
-  | "get_audio_from_history_item"
-  | "delete_history_item";
-
 export const elevenlabsActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_user_info",
+    operationType: "read",
     description: "Get the current ElevenLabs user profile together with the embedded subscription snapshot.",
     requiredScopes: [],
     inputSchema: emptyInputSchema,
@@ -437,6 +422,7 @@ export const elevenlabsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user_subscription_info",
+    operationType: "read",
     description: "Get the current ElevenLabs subscription details for the authenticated user.",
     requiredScopes: [],
     inputSchema: emptyInputSchema,
@@ -446,6 +432,7 @@ export const elevenlabsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_models",
+    operationType: "read",
     description: "List the available ElevenLabs models and their text-to-speech capabilities.",
     requiredScopes: [],
     inputSchema: emptyInputSchema,
@@ -455,6 +442,7 @@ export const elevenlabsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_voices",
+    operationType: "read",
     description: "List the available ElevenLabs voices with their key metadata and settings.",
     requiredScopes: [],
     inputSchema: emptyInputSchema,
@@ -464,6 +452,7 @@ export const elevenlabsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_voice",
+    operationType: "read",
     description: "Get one ElevenLabs voice by voice ID, with optional settings included.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -480,6 +469,7 @@ export const elevenlabsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_voices",
+    operationType: "read",
     description: "Search ElevenLabs voices with v2 pagination, filtering, sorting, and optional total count.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -531,6 +521,7 @@ export const elevenlabsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_voice_settings",
+    operationType: "read",
     description: "Get the synthesis settings configured for one ElevenLabs voice.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for this action.", {
@@ -542,6 +533,7 @@ export const elevenlabsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_generated_items",
+    operationType: "read",
     description: "List generated ElevenLabs history items with pagination and optional voice filtering.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -569,6 +561,7 @@ export const elevenlabsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_history_item_by_id",
+    operationType: "read",
     description: "Get one ElevenLabs history item by history item ID without downloading its audio.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for this action.", {
@@ -580,6 +573,7 @@ export const elevenlabsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "text_to_speech",
+    operationType: "write",
     description:
       "Generate speech audio from text by calling ElevenLabs text-to-speech and uploading the binary result to connector transit storage.",
     requiredScopes: [],
@@ -627,6 +621,7 @@ export const elevenlabsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "text_to_speech_with_timestamps",
+    operationType: "write",
     description:
       "Generate speech audio with character-level timing, upload the audio to connector transit storage, and return timing metadata.",
     requiredScopes: [],
@@ -676,6 +671,7 @@ export const elevenlabsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_sound_effect",
+    operationType: "write",
     description:
       "Generate a sound effect from a text prompt and upload the binary audio result to connector transit storage.",
     requiredScopes: [],
@@ -707,6 +703,7 @@ export const elevenlabsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_audio_from_history_item",
+    operationType: "read",
     description:
       "Download the audio for one ElevenLabs history item and upload the binary result to connector transit storage.",
     requiredScopes: [],
@@ -721,6 +718,7 @@ export const elevenlabsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_history_item",
+    operationType: "destructive",
     description: "Delete one ElevenLabs history item by history item ID.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for this action.", {

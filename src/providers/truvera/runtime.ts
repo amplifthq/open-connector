@@ -1,4 +1,5 @@
 import type { CredentialValidationResult, ExecutionContext } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
@@ -18,7 +19,7 @@ export interface TruveraActionContext {
 
 type TruveraActionHandler = (input: Record<string, unknown>, context: TruveraActionContext) => Promise<unknown>;
 
-export const truveraActionHandlers: Record<string, TruveraActionHandler> = {
+export const truveraActionHandlers: ProviderActionHandlers<"truvera", TruveraActionHandler> = {
   async get_profile(_input, context) {
     return {
       profile: parseProfile(
@@ -220,7 +221,7 @@ export async function createTruveraContext(
   };
 }
 
-function resolveTruveraApiBaseUrl(value: unknown) {
+export function resolveTruveraApiBaseUrl(value: unknown): string {
   const candidate = optionalString(value)?.trim();
   if (!candidate) {
     return truveraTestnetApiBaseUrl;

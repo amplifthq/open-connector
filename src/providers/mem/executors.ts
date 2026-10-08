@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { createHash } from "node:crypto";
 import { optionalRecord, optionalString } from "../../core/cast.ts";
@@ -13,7 +14,6 @@ import {
 
 const service = "mem";
 const memApiBaseUrl = "https://api.mem.ai/v2";
-const memRequestTimeoutMs = 30_000;
 const memMaxResponseBytes = 10 * 1024 * 1024;
 
 type MemRequestPhase = "validate" | "execute";
@@ -25,7 +25,7 @@ interface MemActionContext {
 
 type MemActionHandler = (input: Record<string, unknown>, context: MemActionContext) => Promise<unknown>;
 
-export const memActionHandlers: Record<string, MemActionHandler> = {
+export const memActionHandlers: ProviderActionHandlers<"mem", MemActionHandler> = {
   create_note(input, context) {
     validateContentBytes(input.content);
     validateCollectionTitles(input.collection_titles);
@@ -113,7 +113,7 @@ async function requestMemJson(
   context: MemActionContext,
   phase: MemRequestPhase,
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, memRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   const headers = new Headers({
     accept: "application/json",
     authorization: `Bearer ${context.apiKey}`,

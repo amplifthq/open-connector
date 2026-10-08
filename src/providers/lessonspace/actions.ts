@@ -77,15 +77,10 @@ const launchResponseSchema = s.object("A normalized Lessonspace launch response.
   raw: s.looseObject("The raw launch payload returned by Lessonspace."),
 });
 
-export type LessonspaceActionName =
-  | "list_organisation_sessions"
-  | "get_organisation_session"
-  | "get_session_recording_url"
-  | "create_unified_space";
-
 export const lessonspaceActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_organisation_sessions",
+    operationType: "read",
     description: "List Lessonspace sessions for one organisation with official filter parameters.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -149,6 +144,7 @@ export const lessonspaceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_organisation_session",
+    operationType: "read",
     description: "Get one Lessonspace organisation session by session UUID.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -165,6 +161,7 @@ export const lessonspaceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_session_recording_url",
+    operationType: "read",
     description: "Get the Lessonspace playback URL for one recorded session.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -181,6 +178,7 @@ export const lessonspaceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_unified_space",
+    operationType: "write",
     description:
       "Create or retrieve a Lessonspace space through the official launch endpoint and return the join URL plus room credentials.",
     requiredScopes: [],

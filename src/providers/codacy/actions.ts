@@ -203,19 +203,10 @@ const getToolPatternInputSchema = s.object(
   { required: ["toolUuid", "patternId"] },
 );
 
-export type CodacyActionName =
-  | "get_current_user"
-  | "list_user_organizations"
-  | "list_repository_analyses"
-  | "get_repository_analysis"
-  | "list_tools"
-  | "list_languages"
-  | "list_tool_patterns"
-  | "get_tool_pattern";
-
 export const codacyActions: readonly ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Retrieve the Codacy user associated with the connected API token.",
     inputSchema: s.object("Input parameters for retrieving the current Codacy user.", {}),
     outputSchema: s.object("The authenticated Codacy user.", {
@@ -224,6 +215,7 @@ export const codacyActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_user_organizations",
+    operationType: "read",
     description:
       "List Codacy organizations accessible to the connected API token, optionally scoped to one Git provider.",
     inputSchema: providerPaginationInputSchema,
@@ -234,6 +226,7 @@ export const codacyActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_repository_analyses",
+    operationType: "read",
     description: "List repository analysis summaries for a Codacy organization on a Git provider.",
     inputSchema: listRepositoryAnalysesInputSchema,
     outputSchema: s.object("Paginated Codacy repository analysis list.", {
@@ -243,6 +236,7 @@ export const codacyActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_repository_analysis",
+    operationType: "read",
     description: "Retrieve one Codacy repository analysis summary.",
     inputSchema: repositoryScopeInputSchema,
     outputSchema: s.object("Codacy repository analysis response.", {
@@ -251,6 +245,7 @@ export const codacyActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tools",
+    operationType: "read",
     description: "List Codacy code analysis tools.",
     inputSchema: paginationInputSchema,
     outputSchema: s.object("Paginated Codacy tool list.", {
@@ -260,6 +255,7 @@ export const codacyActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_languages",
+    operationType: "read",
     description: "List programming languages supported by Codacy analysis tools.",
     inputSchema: s.object("Input parameters for listing Codacy-supported languages.", {}),
     outputSchema: s.object("Codacy-supported language list.", {
@@ -268,6 +264,7 @@ export const codacyActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tool_patterns",
+    operationType: "read",
     description: "List code patterns available for a Codacy analysis tool.",
     inputSchema: listToolPatternsInputSchema,
     outputSchema: s.object("Paginated Codacy tool pattern list.", {
@@ -277,6 +274,7 @@ export const codacyActions: readonly ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_tool_pattern",
+    operationType: "read",
     description: "Retrieve one code pattern for a Codacy analysis tool.",
     inputSchema: getToolPatternInputSchema,
     outputSchema: s.object("Codacy tool pattern response.", {

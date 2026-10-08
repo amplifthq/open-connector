@@ -1,17 +1,17 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { DialpadWfmActionName } from "./actions.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const dialpadWfmApiBaseUrl = "https://api.teamsurfboard.com/api/v1";
-const dialpadWfmRequestTimeoutMs = 30_000;
+export const dialpadWfmApiBaseUrl = "https://api.teamsurfboard.com/api/v1";
 const validationScheduleQuery = {
   start: "2024-06-25T00:00:00.000Z",
   end: "2024-06-25T00:01:00.000Z",
@@ -28,7 +28,7 @@ interface DialpadWfmRequestInput {
   query: URLSearchParams;
 }
 
-export const dialpadWfmActionHandlers: Record<DialpadWfmActionName, DialpadWfmHandler> = {
+export const dialpadWfmActionHandlers: ProviderActionHandlers<"dialpad_wfm", DialpadWfmHandler> = {
   async get_schedule(input, context) {
     const payload = await requestDialpadWfmJson({
       path: "/schedule",
@@ -88,7 +88,7 @@ export async function validateDialpadWfmCredential(
 }
 
 async function requestDialpadWfmJson(input: DialpadWfmRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, dialpadWfmRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   let response: Response;
   try {
     response = await input.context.fetcher(buildDialpadWfmUrl(input), {
@@ -128,8 +128,8 @@ function buildDialpadWfmUrl(input: { path: string; query: URLSearchParams }): UR
 
 function buildScheduleQuery(input: Record<string, unknown>): URLSearchParams {
   const query = new URLSearchParams();
-  query.set("start", requiredString(input.start, "start", badInput));
-  query.set("end", requiredString(input.end, "end", badInput));
+  query.set("start", requiredString(input.start, "start", providerInputError));
+  query.set("end", requiredString(input.end, "end", providerInputError));
   setOptionalQueryParam(query, "include_deleted_agents", input.includeDeletedAgents);
   setOptionalQueryParam(query, "page[size]", input.pageSize);
   setOptionalQueryParam(query, "page[after]", input.pageAfter);
@@ -138,8 +138,8 @@ function buildScheduleQuery(input: Record<string, unknown>): URLSearchParams {
 
 function buildMetricsQuery(input: Record<string, unknown>): URLSearchParams {
   const query = new URLSearchParams();
-  query.set("start", requiredString(input.start, "start", badInput));
-  query.set("end", requiredString(input.end, "end", badInput));
+  query.set("start", requiredString(input.start, "start", providerInputError));
+  query.set("end", requiredString(input.end, "end", providerInputError));
   setOptionalQueryParam(query, "emails", input.emails);
   setOptionalQueryParam(query, "include_deleted_agents", input.includeDeletedAgents);
   setOptionalQueryParam(query, "limit", input.limit);
@@ -254,8 +254,4 @@ function readNullablePayloadString(value: unknown, label: string): string | null
     throw new ProviderRequestError(502, `${label} is invalid`);
   }
   return stringValue;
-}
-
-function badInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

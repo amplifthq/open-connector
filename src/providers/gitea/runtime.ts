@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { GiteaActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -8,10 +8,9 @@ import {
   optionalRecord,
   optionalString,
   positiveInteger,
-  requiredString,
 } from "../../core/cast.ts";
 import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 const giteaApiSegment = "api/v1";
 const giteaValidationPath = "/user";
@@ -28,7 +27,7 @@ export interface GiteaActionContext {
 
 type GiteaActionHandler = (input: Record<string, unknown>, context: GiteaActionContext) => Promise<unknown>;
 
-export const giteaActionHandlers: Record<GiteaActionName, GiteaActionHandler> = {
+export const giteaActionHandlers: ProviderActionHandlers<"gitea", GiteaActionHandler> = {
   get_current_user(_input, context) {
     return getCurrentUser(context);
   },
@@ -381,8 +380,8 @@ async function listMyRepositories(input: Record<string, unknown>, context: Gitea
 }
 
 async function getRepository(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -401,7 +400,7 @@ async function searchRepositories(input: Record<string, unknown>, context: Gitea
     baseUrl: context.baseUrl,
     path: "/repos/search",
     query: compactObject({
-      q: requireInputString(input.query, "query"),
+      q: requiredInputString(input.query, "query"),
       topic: optionalBoolean(input.topic),
       includeDesc: optionalBoolean(input.includeDescription),
       uid: readOptionalPositiveInteger(input.ownerId, "ownerId"),
@@ -431,8 +430,8 @@ async function searchRepositories(input: Record<string, unknown>, context: Gitea
 }
 
 async function listRepositoryIssues(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -464,8 +463,8 @@ async function listRepositoryIssues(input: Record<string, unknown>, context: Git
 }
 
 async function getIssue(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const issueNumber = requirePositiveInteger(input.issueNumber, "issueNumber");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -480,15 +479,15 @@ async function getIssue(input: Record<string, unknown>, context: GiteaActionCont
 }
 
 async function createIssue(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues`,
     method: "POST",
     body: compactObject({
-      title: requireInputString(input.title, "title"),
+      title: requiredInputString(input.title, "title"),
       body: optionalString(input.body),
       assignees: normalizeOptionalStringArray(input.assignees, "assignees"),
       labels: normalizeOptionalPositiveIntegerArray(input.labelIds, "labelIds"),
@@ -506,8 +505,8 @@ async function createIssue(input: Record<string, unknown>, context: GiteaActionC
 }
 
 async function listIssueComments(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const issueNumber = requirePositiveInteger(input.issueNumber, "issueNumber");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
@@ -530,8 +529,8 @@ async function listIssueComments(input: Record<string, unknown>, context: GiteaA
 }
 
 async function createIssueComment(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const issueNumber = requirePositiveInteger(input.issueNumber, "issueNumber");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -539,7 +538,7 @@ async function createIssueComment(input: Record<string, unknown>, context: Gitea
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issueNumber}/comments`,
     method: "POST",
     body: {
-      body: requireInputString(input.body, "body"),
+      body: requiredInputString(input.body, "body"),
     },
     fetcher: context.fetcher,
     signal: context.signal,
@@ -550,8 +549,8 @@ async function createIssueComment(input: Record<string, unknown>, context: Gitea
 }
 
 async function listPullRequests(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -579,8 +578,8 @@ async function listPullRequests(input: Record<string, unknown>, context: GiteaAc
 }
 
 async function getPullRequest(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -595,18 +594,18 @@ async function getPullRequest(input: Record<string, unknown>, context: GiteaActi
 }
 
 async function createPullRequest(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`,
     method: "POST",
     body: compactObject({
-      title: requireInputString(input.title, "title"),
+      title: requiredInputString(input.title, "title"),
       body: optionalString(input.body),
-      base: requireInputString(input.base, "base"),
-      head: requireInputString(input.head, "head"),
+      base: requiredInputString(input.base, "base"),
+      head: requiredInputString(input.head, "head"),
       assignees: normalizeOptionalStringArray(input.assignees, "assignees"),
       labels: normalizeOptionalPositiveIntegerArray(input.labelIds, "labelIds"),
       milestone: readOptionalPositiveInteger(input.milestoneId, "milestoneId"),
@@ -624,8 +623,8 @@ async function createPullRequest(input: Record<string, unknown>, context: GiteaA
 }
 
 async function updatePullRequest(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -653,10 +652,10 @@ async function updatePullRequest(input: Record<string, unknown>, context: GiteaA
 }
 
 async function mergePullRequest(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
-  const mergeStyle = requireInputString(input.do, "do");
+  const mergeStyle = requiredInputString(input.do, "do");
   const { payload } = await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -683,8 +682,8 @@ async function mergePullRequest(input: Record<string, unknown>, context: GiteaAc
 }
 
 async function listPullRequestFiles(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
@@ -707,8 +706,8 @@ async function listPullRequestFiles(input: Record<string, unknown>, context: Git
 }
 
 async function listPullRequestReviews(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
@@ -731,8 +730,8 @@ async function listPullRequestReviews(input: Record<string, unknown>, context: G
 }
 
 async function createPullRequestReview(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -753,8 +752,8 @@ async function createPullRequestReview(input: Record<string, unknown>, context: 
 }
 
 async function submitPullRequestReview(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   const reviewId = requirePositiveInteger(input.reviewId, "reviewId");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
@@ -775,9 +774,9 @@ async function submitPullRequestReview(input: Record<string, unknown>, context: 
 }
 
 async function getRepositoryContents(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const filePath = requireInputString(input.filePath, "filePath");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const filePath = requiredInputString(input.filePath, "filePath");
   const { payload } = await requestGiteaJson<Record<string, unknown> | Record<string, unknown>[]>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -794,16 +793,16 @@ async function getRepositoryContents(input: Record<string, unknown>, context: Gi
 }
 
 async function createFile(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const filePath = requireInputString(input.filePath, "filePath");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const filePath = requiredInputString(input.filePath, "filePath");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeFilePath(filePath)}`,
     method: "POST",
     body: compactObject({
-      content: encodeContent(requireInputString(input.content, "content")),
+      content: encodeContent(requiredInputString(input.content, "content")),
       message: optionalString(input.message),
       branch: optionalString(input.branch),
       new_branch: optionalString(input.newBranch),
@@ -821,16 +820,16 @@ async function createFile(input: Record<string, unknown>, context: GiteaActionCo
 }
 
 async function updateFile(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const filePath = requireInputString(input.filePath, "filePath");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const filePath = requiredInputString(input.filePath, "filePath");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeFilePath(filePath)}`,
     method: "PUT",
     body: compactObject({
-      content: encodeContent(requireInputString(input.content, "content")),
+      content: encodeContent(requiredInputString(input.content, "content")),
       sha: optionalString(input.sha),
       message: optionalString(input.message),
       branch: optionalString(input.branch),
@@ -850,16 +849,16 @@ async function updateFile(input: Record<string, unknown>, context: GiteaActionCo
 }
 
 async function deleteFile(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const filePath = requireInputString(input.filePath, "filePath");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const filePath = requiredInputString(input.filePath, "filePath");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeFilePath(filePath)}`,
     method: "DELETE",
     body: compactObject({
-      sha: requireInputString(input.sha, "sha"),
+      sha: requiredInputString(input.sha, "sha"),
       message: optionalString(input.message),
       branch: optionalString(input.branch),
       new_branch: optionalString(input.newBranch),
@@ -882,7 +881,7 @@ async function createRepository(input: Record<string, unknown>, context: GiteaAc
     path: "/user/repos",
     method: "POST",
     body: compactObject({
-      name: requireInputString(input.name, "name"),
+      name: requiredInputString(input.name, "name"),
       description: optionalString(input.description),
       private: optionalBoolean(input.private),
       auto_init: optionalBoolean(input.autoInit),
@@ -903,8 +902,8 @@ async function createRepository(input: Record<string, unknown>, context: GiteaAc
 }
 
 async function updateRepository(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -949,8 +948,8 @@ async function updateRepository(input: Record<string, unknown>, context: GiteaAc
 }
 
 async function deleteRepository(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -967,8 +966,8 @@ async function deleteRepository(input: Record<string, unknown>, context: GiteaAc
 }
 
 async function forkRepository(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -987,8 +986,8 @@ async function forkRepository(input: Record<string, unknown>, context: GiteaActi
 }
 
 async function listRepositoryTopics(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1004,8 +1003,8 @@ async function listRepositoryTopics(input: Record<string, unknown>, context: Git
 }
 
 async function updateRepositoryTopics(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const topics = normalizeOptionalStringArray(input.topics, "topics") ?? [];
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
@@ -1023,8 +1022,8 @@ async function updateRepositoryTopics(input: Record<string, unknown>, context: G
 }
 
 async function listBranches(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1046,9 +1045,9 @@ async function listBranches(input: Record<string, unknown>, context: GiteaAction
 }
 
 async function getBranch(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const branch = requireInputString(input.branch, "branch");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const branch = requiredInputString(input.branch, "branch");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1062,15 +1061,15 @@ async function getBranch(input: Record<string, unknown>, context: GiteaActionCon
 }
 
 async function createBranch(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches`,
     method: "POST",
     body: compactObject({
-      new_branch_name: requireInputString(input.newBranchName, "newBranchName"),
+      new_branch_name: requiredInputString(input.newBranchName, "newBranchName"),
       old_ref_name: optionalString(input.oldRefName),
     }),
     fetcher: context.fetcher,
@@ -1082,9 +1081,9 @@ async function createBranch(input: Record<string, unknown>, context: GiteaAction
 }
 
 async function deleteBranch(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const branch = requireInputString(input.branch, "branch");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const branch = requiredInputString(input.branch, "branch");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1101,8 +1100,8 @@ async function deleteBranch(input: Record<string, unknown>, context: GiteaAction
 }
 
 async function listCommits(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1128,9 +1127,9 @@ async function listCommits(input: Record<string, unknown>, context: GiteaActionC
 }
 
 async function getCommit(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const sha = requireInputString(input.sha, "sha");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const sha = requiredInputString(input.sha, "sha");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1144,16 +1143,16 @@ async function getCommit(input: Record<string, unknown>, context: GiteaActionCon
 }
 
 async function createCommitStatus(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const sha = requireInputString(input.sha, "sha");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const sha = requiredInputString(input.sha, "sha");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/statuses/${encodeFilePath(sha)}`,
     method: "POST",
     body: compactObject({
-      state: requireInputString(input.state, "state"),
+      state: requiredInputString(input.state, "state"),
       context: optionalString(input.context),
       description: optionalString(input.description),
       target_url: optionalString(input.targetUrl),
@@ -1167,9 +1166,9 @@ async function createCommitStatus(input: Record<string, unknown>, context: Gitea
 }
 
 async function listCommitStatuses(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const ref = requireInputString(input.ref, "ref");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const ref = requiredInputString(input.ref, "ref");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1191,8 +1190,8 @@ async function listCommitStatuses(input: Record<string, unknown>, context: Gitea
 }
 
 async function listTags(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1214,9 +1213,9 @@ async function listTags(input: Record<string, unknown>, context: GiteaActionCont
 }
 
 async function getTag(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const tag = requireInputString(input.tag, "tag");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const tag = requiredInputString(input.tag, "tag");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1230,15 +1229,15 @@ async function getTag(input: Record<string, unknown>, context: GiteaActionContex
 }
 
 async function createTag(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/tags`,
     method: "POST",
     body: compactObject({
-      tag_name: requireInputString(input.tagName, "tagName"),
+      tag_name: requiredInputString(input.tagName, "tagName"),
       target: optionalString(input.target),
       message: optionalString(input.message),
     }),
@@ -1251,9 +1250,9 @@ async function createTag(input: Record<string, unknown>, context: GiteaActionCon
 }
 
 async function deleteTag(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const tag = requireInputString(input.tag, "tag");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const tag = requiredInputString(input.tag, "tag");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1270,8 +1269,8 @@ async function deleteTag(input: Record<string, unknown>, context: GiteaActionCon
 }
 
 async function listReleases(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1295,8 +1294,8 @@ async function listReleases(input: Record<string, unknown>, context: GiteaAction
 }
 
 async function getRelease(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const releaseId = requirePositiveInteger(input.releaseId, "releaseId");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -1311,15 +1310,15 @@ async function getRelease(input: Record<string, unknown>, context: GiteaActionCo
 }
 
 async function createRelease(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/releases`,
     method: "POST",
     body: compactObject({
-      tag_name: requireInputString(input.tagName, "tagName"),
+      tag_name: requiredInputString(input.tagName, "tagName"),
       name: optionalString(input.name),
       body: optionalString(input.body),
       target_commitish: optionalString(input.targetCommitish),
@@ -1336,8 +1335,8 @@ async function createRelease(input: Record<string, unknown>, context: GiteaActio
 }
 
 async function updateRelease(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const releaseId = requirePositiveInteger(input.releaseId, "releaseId");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -1361,8 +1360,8 @@ async function updateRelease(input: Record<string, unknown>, context: GiteaActio
 }
 
 async function deleteRelease(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const releaseId = requirePositiveInteger(input.releaseId, "releaseId");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
@@ -1380,8 +1379,8 @@ async function deleteRelease(input: Record<string, unknown>, context: GiteaActio
 }
 
 async function listRepositoryLabels(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1403,8 +1402,8 @@ async function listRepositoryLabels(input: Record<string, unknown>, context: Git
 }
 
 async function getLabel(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const labelId = requirePositiveInteger(input.labelId, "labelId");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -1419,16 +1418,16 @@ async function getLabel(input: Record<string, unknown>, context: GiteaActionCont
 }
 
 async function createLabel(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/labels`,
     method: "POST",
     body: compactObject({
-      name: requireInputString(input.name, "name"),
-      color: requireInputString(input.color, "color"),
+      name: requiredInputString(input.name, "name"),
+      color: requiredInputString(input.color, "color"),
       description: optionalString(input.description),
       exclusive: optionalBoolean(input.exclusive),
       is_archived: optionalBoolean(input.isArchived),
@@ -1442,8 +1441,8 @@ async function createLabel(input: Record<string, unknown>, context: GiteaActionC
 }
 
 async function updateLabel(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const labelId = requirePositiveInteger(input.labelId, "labelId");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -1466,8 +1465,8 @@ async function updateLabel(input: Record<string, unknown>, context: GiteaActionC
 }
 
 async function deleteLabel(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const labelId = requirePositiveInteger(input.labelId, "labelId");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
@@ -1485,8 +1484,8 @@ async function deleteLabel(input: Record<string, unknown>, context: GiteaActionC
 }
 
 async function listMilestones(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1510,8 +1509,8 @@ async function listMilestones(input: Record<string, unknown>, context: GiteaActi
 }
 
 async function getMilestone(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const milestoneId = requirePositiveInteger(input.milestoneId, "milestoneId");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -1526,15 +1525,15 @@ async function getMilestone(input: Record<string, unknown>, context: GiteaAction
 }
 
 async function createMilestone(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/milestones`,
     method: "POST",
     body: compactObject({
-      title: requireInputString(input.title, "title"),
+      title: requiredInputString(input.title, "title"),
       description: optionalString(input.description),
       state: optionalString(input.state),
       due_on: optionalString(input.dueOn),
@@ -1548,8 +1547,8 @@ async function createMilestone(input: Record<string, unknown>, context: GiteaAct
 }
 
 async function updateMilestone(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const milestoneId = requirePositiveInteger(input.milestoneId, "milestoneId");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -1571,8 +1570,8 @@ async function updateMilestone(input: Record<string, unknown>, context: GiteaAct
 }
 
 async function deleteMilestone(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const milestoneId = requirePositiveInteger(input.milestoneId, "milestoneId");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
@@ -1590,8 +1589,8 @@ async function deleteMilestone(input: Record<string, unknown>, context: GiteaAct
 }
 
 async function updateIssue(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const issueNumber = requirePositiveInteger(input.issueNumber, "issueNumber");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -1617,8 +1616,8 @@ async function updateIssue(input: Record<string, unknown>, context: GiteaActionC
 }
 
 async function listIssueLabels(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const issueNumber = requirePositiveInteger(input.issueNumber, "issueNumber");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
@@ -1637,8 +1636,8 @@ async function listIssueLabels(input: Record<string, unknown>, context: GiteaAct
 }
 
 async function addIssueLabels(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const issueNumber = requirePositiveInteger(input.issueNumber, "issueNumber");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
@@ -1661,8 +1660,8 @@ async function addIssueLabels(input: Record<string, unknown>, context: GiteaActi
 }
 
 async function replaceIssueLabels(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const issueNumber = requirePositiveInteger(input.issueNumber, "issueNumber");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
@@ -1685,8 +1684,8 @@ async function replaceIssueLabels(input: Record<string, unknown>, context: Gitea
 }
 
 async function removeIssueLabel(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const issueNumber = requirePositiveInteger(input.issueNumber, "issueNumber");
   const labelId = requirePositiveInteger(input.labelId, "labelId");
   await requestGiteaJson<unknown>({
@@ -1705,8 +1704,8 @@ async function removeIssueLabel(input: Record<string, unknown>, context: GiteaAc
 }
 
 async function clearIssueLabels(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const issueNumber = requirePositiveInteger(input.issueNumber, "issueNumber");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
@@ -1724,8 +1723,8 @@ async function clearIssueLabels(input: Record<string, unknown>, context: GiteaAc
 }
 
 async function updateIssueComment(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const commentId = requirePositiveInteger(input.commentId, "commentId");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -1733,7 +1732,7 @@ async function updateIssueComment(input: Record<string, unknown>, context: Gitea
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/comments/${commentId}`,
     method: "PATCH",
     body: compactObject({
-      body: requireInputString(input.body, "body"),
+      body: requiredInputString(input.body, "body"),
     }),
     fetcher: context.fetcher,
     signal: context.signal,
@@ -1744,8 +1743,8 @@ async function updateIssueComment(input: Record<string, unknown>, context: Gitea
 }
 
 async function deleteIssueComment(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const commentId = requirePositiveInteger(input.commentId, "commentId");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
@@ -1763,8 +1762,8 @@ async function deleteIssueComment(input: Record<string, unknown>, context: Gitea
 }
 
 async function listIssueAssignees(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1782,8 +1781,8 @@ async function listIssueAssignees(input: Record<string, unknown>, context: Gitea
 }
 
 async function listPullRequestCommits(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
@@ -1806,8 +1805,8 @@ async function listPullRequestCommits(input: Record<string, unknown>, context: G
 }
 
 async function checkPullRequestMerged(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   const response = await giteaFetch({
     apiKey: context.apiKey,
@@ -1837,8 +1836,8 @@ async function requestPullRequestReviewers(
   input: Record<string, unknown>,
   context: GiteaActionContext,
 ): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
@@ -1865,8 +1864,8 @@ async function removePullRequestReviewers(
   input: Record<string, unknown>,
   context: GiteaActionContext,
 ): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
@@ -1888,8 +1887,8 @@ async function removePullRequestReviewers(
 }
 
 async function deletePullRequestReview(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   const reviewId = requirePositiveInteger(input.reviewId, "reviewId");
   await requestGiteaJson<unknown>({
@@ -1908,8 +1907,8 @@ async function deletePullRequestReview(input: Record<string, unknown>, context: 
 }
 
 async function dismissPullRequestReview(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   const reviewId = requirePositiveInteger(input.reviewId, "reviewId");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
@@ -1918,7 +1917,7 @@ async function dismissPullRequestReview(input: Record<string, unknown>, context:
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${pullRequestNumber}/reviews/${reviewId}/dismissals`,
     method: "POST",
     body: compactObject({
-      message: requireInputString(input.message, "message"),
+      message: requiredInputString(input.message, "message"),
       priors: optionalBoolean(input.priors),
     }),
     fetcher: context.fetcher,
@@ -1933,8 +1932,8 @@ async function listPullRequestReviewComments(
   input: Record<string, unknown>,
   context: GiteaActionContext,
 ): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   const reviewId = requirePositiveInteger(input.reviewId, "reviewId");
   const { items, totalCount } = await requestGiteaArray({
@@ -1954,8 +1953,8 @@ async function listPullRequestReviewComments(
 }
 
 async function updatePullRequestBranch(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const pullRequestNumber = requirePositiveInteger(input.pullRequestNumber, "pullRequestNumber");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
@@ -1976,8 +1975,8 @@ async function updatePullRequestBranch(input: Record<string, unknown>, context: 
 }
 
 async function listRepositoryHooks(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -1999,15 +1998,15 @@ async function listRepositoryHooks(input: Record<string, unknown>, context: Gite
 }
 
 async function createRepositoryHook(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/hooks`,
     method: "POST",
     body: compactObject({
-      type: requireInputString(input.type, "type"),
+      type: requiredInputString(input.type, "type"),
       config: optionalRecord(input.config),
       events: normalizeOptionalStringArray(input.events, "events"),
       active: optionalBoolean(input.active),
@@ -2023,8 +2022,8 @@ async function createRepositoryHook(input: Record<string, unknown>, context: Git
 }
 
 async function getRepositoryHook(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const hookId = requirePositiveInteger(input.hookId, "hookId");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -2039,8 +2038,8 @@ async function getRepositoryHook(input: Record<string, unknown>, context: GiteaA
 }
 
 async function updateRepositoryHook(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const hookId = requirePositiveInteger(input.hookId, "hookId");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -2063,8 +2062,8 @@ async function updateRepositoryHook(input: Record<string, unknown>, context: Git
 }
 
 async function deleteRepositoryHook(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const hookId = requirePositiveInteger(input.hookId, "hookId");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
@@ -2082,8 +2081,8 @@ async function deleteRepositoryHook(input: Record<string, unknown>, context: Git
 }
 
 async function listCollaborators(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -2105,9 +2104,9 @@ async function listCollaborators(input: Record<string, unknown>, context: GiteaA
 }
 
 async function addCollaborator(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const collaborator = requireInputString(input.collaborator, "collaborator");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const collaborator = requiredInputString(input.collaborator, "collaborator");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -2127,9 +2126,9 @@ async function addCollaborator(input: Record<string, unknown>, context: GiteaAct
 }
 
 async function removeCollaborator(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const collaborator = requireInputString(input.collaborator, "collaborator");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const collaborator = requiredInputString(input.collaborator, "collaborator");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -2149,9 +2148,9 @@ async function getCollaboratorPermission(
   input: Record<string, unknown>,
   context: GiteaActionContext,
 ): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
-  const collaborator = requireInputString(input.collaborator, "collaborator");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
+  const collaborator = requiredInputString(input.collaborator, "collaborator");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -2185,7 +2184,7 @@ async function listMyOrganizations(input: Record<string, unknown>, context: Gite
 }
 
 async function getOrganization(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const org = requireInputString(input.org, "org");
+  const org = requiredInputString(input.org, "org");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -2202,7 +2201,7 @@ async function listOrganizationRepositories(
   input: Record<string, unknown>,
   context: GiteaActionContext,
 ): Promise<unknown> {
-  const org = requireInputString(input.org, "org");
+  const org = requiredInputString(input.org, "org");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -2224,7 +2223,7 @@ async function listOrganizationRepositories(
 }
 
 async function listOrganizationMembers(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const org = requireInputString(input.org, "org");
+  const org = requiredInputString(input.org, "org");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -2246,8 +2245,8 @@ async function listOrganizationMembers(input: Record<string, unknown>, context: 
 }
 
 async function listRepositoryStargazers(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -2269,8 +2268,8 @@ async function listRepositoryStargazers(input: Record<string, unknown>, context:
 }
 
 async function listRepositoryWatchers(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -2292,8 +2291,8 @@ async function listRepositoryWatchers(input: Record<string, unknown>, context: G
 }
 
 async function starRepository(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -2310,8 +2309,8 @@ async function starRepository(input: Record<string, unknown>, context: GiteaActi
 }
 
 async function unstarRepository(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -2328,8 +2327,8 @@ async function unstarRepository(input: Record<string, unknown>, context: GiteaAc
 }
 
 async function listRepositoryKeys(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { items, totalCount } = await requestGiteaArray({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
@@ -2351,16 +2350,16 @@ async function listRepositoryKeys(input: Record<string, unknown>, context: Gitea
 }
 
 async function createRepositoryKey(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
     baseUrl: context.baseUrl,
     path: `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/keys`,
     method: "POST",
     body: compactObject({
-      title: requireInputString(input.title, "title"),
-      key: requireInputString(input.key, "key"),
+      title: requiredInputString(input.title, "title"),
+      key: requiredInputString(input.key, "key"),
       read_only: optionalBoolean(input.readOnly),
     }),
     fetcher: context.fetcher,
@@ -2372,8 +2371,8 @@ async function createRepositoryKey(input: Record<string, unknown>, context: Gite
 }
 
 async function getRepositoryKey(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const keyId = requirePositiveInteger(input.keyId, "keyId");
   const { payload } = await requestGiteaJson<Record<string, unknown>>({
     apiKey: context.apiKey,
@@ -2388,8 +2387,8 @@ async function getRepositoryKey(input: Record<string, unknown>, context: GiteaAc
 }
 
 async function deleteRepositoryKey(input: Record<string, unknown>, context: GiteaActionContext): Promise<unknown> {
-  const owner = requireInputString(input.owner, "owner");
-  const repo = requireInputString(input.repo, "repo");
+  const owner = requiredInputString(input.owner, "owner");
+  const repo = requiredInputString(input.repo, "repo");
   const keyId = requirePositiveInteger(input.keyId, "keyId");
   await requestGiteaJson<unknown>({
     apiKey: context.apiKey,
@@ -2628,10 +2627,6 @@ function buildInstanceKey(baseUrl: string): string {
   return `${parsed.host}${pathname}`;
 }
 
-function requireInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function requirePositiveInteger(value: unknown, fieldName: string): number {
   return positiveInteger(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
@@ -2663,7 +2658,7 @@ function normalizeOptionalStringArray(value: unknown, fieldName: string): string
     throw new ProviderRequestError(400, `${fieldName} must be an array`);
   }
 
-  return value.map((item) => requireInputString(item, fieldName));
+  return value.map((item) => requiredInputString(item, fieldName));
 }
 
 function normalizeStringArray(value: unknown, fieldName: string): string[] {
@@ -2697,7 +2692,7 @@ function joinCsv(value: unknown[] | undefined, fieldName: string): string | unde
     if (typeof item === "number") {
       return String(item);
     }
-    return requireInputString(item, fieldName);
+    return requiredInputString(item, fieldName);
   });
 
   return parts.length > 0 ? parts.join(",") : undefined;

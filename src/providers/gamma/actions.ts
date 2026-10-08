@@ -5,16 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "gamma";
 
-export type GammaActionName =
-  | "create_generation"
-  | "get_generation"
-  | "create_generation_and_wait"
-  | "wait_for_generation"
-  | "create_generation_from_template"
-  | "create_generation_from_template_and_wait"
-  | "list_themes"
-  | "list_folders";
-
 const themeIdSchema = s.nonEmptyString(
   "The Gamma theme ID returned by the List Themes API or copied from the Gamma app.",
 );
@@ -276,12 +266,14 @@ function listInputSchema(description: string, itemName: string): JsonSchema {
 export const gammaActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "create_generation",
+    operationType: "write",
     description: "Create an asynchronous Gamma generation from text input.",
     inputSchema: createGenerationInputSchema("Input for creating a Gamma generation from text.", false),
     outputSchema: generationOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_generation",
+    operationType: "read",
     description: "Get the status and result URLs for a specific Gamma generation job.",
     inputSchema: s.requiredObject("Input for fetching a Gamma generation result.", {
       generationId: s.nonEmptyString("The Gamma generation job identifier."),
@@ -290,6 +282,7 @@ export const gammaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_generation_and_wait",
+    operationType: "write",
     description: "Create a Gamma generation from text input and keep polling until it completes, fails, or times out.",
     inputSchema: createGenerationInputSchema(
       "Input for creating a Gamma generation from text and waiting for the result.",
@@ -299,6 +292,7 @@ export const gammaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "wait_for_generation",
+    operationType: "read",
     description: "Poll a Gamma generation job until it completes, fails, or the polling timeout is reached.",
     inputSchema: s.object(
       "Input for waiting on a Gamma generation result.",
@@ -312,12 +306,14 @@ export const gammaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_generation_from_template",
+    operationType: "write",
     description: "Create an asynchronous Gamma generation from an existing Gamma template.",
     inputSchema: createTemplateInputSchema("Input for creating a Gamma generation from a template.", false),
     outputSchema: generationOutputSchema,
   }),
   defineProviderAction(service, {
     name: "create_generation_from_template_and_wait",
+    operationType: "write",
     description: "Create a Gamma generation from a template and keep polling until it completes, fails, or times out.",
     inputSchema: createTemplateInputSchema(
       "Input for creating a template-based Gamma generation and waiting for the result.",
@@ -327,6 +323,7 @@ export const gammaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_themes",
+    operationType: "read",
     description: "List the Gamma themes available in the current workspace.",
     inputSchema: listInputSchema("Filters for listing Gamma themes.", "themes"),
     outputSchema: s.actionOutput(
@@ -339,6 +336,7 @@ export const gammaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_folders",
+    operationType: "read",
     description: "List the Gamma folders available in the current workspace.",
     inputSchema: listInputSchema("Filters for listing Gamma folders.", "folders"),
     outputSchema: s.actionOutput(

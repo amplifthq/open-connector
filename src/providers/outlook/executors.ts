@@ -1,36 +1,44 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { IntegrationDefinition } from "../../triggers/common/integration.ts";
+import type { PollDefinition } from "../../triggers/common/poll.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { OAuthProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, requiredRecord } from "../../core/cast.ts";
-import { defineOAuthProviderExecutors, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineOAuthProviderExecutors,
+  defineProviderProxy,
+  providerInputError,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
+import { microsoftGraphJson, microsoftGraphRequest } from "./microsoft-graph.ts";
+import { outlookMessageReceived } from "./trigger-on-message-received.ts";
 
 const outlookGraphBaseUrl = "https://graph.microsoft.com/v1.0";
-const graphHost = "graph.microsoft.com";
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service: "outlook",
+  baseUrl: outlookGraphBaseUrl,
+  auth: { type: "oauth_bearer" },
+  skipDnsValidation: true,
+});
 
 type OutlookRuntimeDeps = OAuthProviderContext;
 
 type OutlookActionHandler = (input: Record<string, unknown>, deps: OutlookRuntimeDeps) => Promise<unknown>;
 
-type OutlookRequestInput = {
+interface OutlookRequestInput {
   accessToken: string;
   fetcher: typeof fetch;
+  signal?: AbortSignal;
   method?: string;
   query?: Record<string, string | undefined>;
   absoluteUrlPolicy?: "mailFolders" | "messages";
   headers?: Record<string, string>;
   body?: unknown;
-};
+}
 
-type OutlookErrorPayload = {
-  error?: {
-    code?: unknown;
-    message?: unknown;
-    innerError?: unknown;
-  };
-  message?: unknown;
-};
-
-export const outlookActionHandlers: Record<string, OutlookActionHandler> = {
+const outlookActionHandlers: ProviderActionHandlers<"outlook", OutlookActionHandler> = {
   get_profile(_input, deps) {
     return getProfile(deps);
   },
@@ -99,84 +107,42 @@ export const credentialValidators: CredentialValidators = {
 };
 
 export async function outlookJsonRequest<T>(pathOrUrl: string, input: OutlookRequestInput): Promise<T> {
-  const response = await outlookRequest(pathOrUrl, input);
-  return (await response.json()) as T;
+  return microsoftGraphJson(pathOrUrl, graphRequestOptions(input));
 }
 
-async function outlookRequest(pathOrUrl: string, input: OutlookRequestInput) {
-  const target = buildOutlookUrl(pathOrUrl, input.query, input.absoluteUrlPolicy);
-  const hasJsonBody = input.body !== undefined;
-  const method = (input.method ?? (hasJsonBody ? "POST" : "GET")).toUpperCase();
-  const headers = {
-    authorization: `Bearer ${input.accessToken}`,
-    ...(input.headers ?? {}),
+async function outlookRequest(pathOrUrl: string, input: OutlookRequestInput): Promise<Response> {
+  return microsoftGraphRequest(pathOrUrl, graphRequestOptions(input));
+}
+
+function graphRequestOptions(input: OutlookRequestInput) {
+  return {
+    accessToken: input.accessToken,
+    fetcher: input.fetcher,
+    signal: input.signal,
+    method: input.method,
+    query: input.query,
+    headers: input.headers,
+    body: input.body,
+    allowNextLink:
+      input.absoluteUrlPolicy === "mailFolders"
+        ? isAllowedOutlookMailFolderNextLinkPath
+        : isAllowedOutlookMessageNextLinkPath,
+    refineErrorMessage: refineOutlookErrorMessage,
+    label: "Outlook",
   };
-
-  if ((method === "GET" || method === "HEAD") && hasJsonBody) {
-    throw new ProviderRequestError(400, `outlook ${method} request must not include a body`);
-  }
-
-  const response = await input.fetcher(target.toString(), {
-    method,
-    headers:
-      hasJsonBody && !hasContentTypeHeader(headers)
-        ? {
-            ...headers,
-            "content-type": "application/json",
-          }
-        : headers,
-    ...(hasJsonBody ? { body: JSON.stringify(input.body) } : {}),
-  });
-
-  await assertOutlookResponse(response);
-  return response;
-}
-
-function buildOutlookUrl(
-  pathOrUrl: string,
-  query?: Record<string, string | undefined>,
-  absoluteUrlPolicy: "mailFolders" | "messages" = "messages",
-) {
-  const isAbsolutePath = isAbsoluteUrl(pathOrUrl);
-  const target = isAbsolutePath ? new URL(pathOrUrl) : new URL(pathOrUrl, `${outlookGraphBaseUrl}/`);
-
-  if (target.hostname !== graphHost) {
-    throw new ProviderRequestError(400, "nextLink must target graph.microsoft.com");
-  }
-  if (isAbsolutePath) {
-    assertAllowedOutlookNextLink(target, absoluteUrlPolicy);
-  }
-
-  for (const [key, value] of Object.entries(query ?? {})) {
-    if (typeof value !== "string" || value.length === 0) {
-      continue;
-    }
-
-    target.searchParams.set(key, value);
-  }
-
-  return target;
-}
-
-function isAbsoluteUrl(value: string) {
-  return value.startsWith("https://") || value.startsWith("http://");
-}
-
-function assertAllowedOutlookNextLink(target: URL, absoluteUrlPolicy: "mailFolders" | "messages") {
-  if (target.protocol !== "https:") {
-    throw new ProviderRequestError(400, "nextLink must use https");
-  }
-  if (absoluteUrlPolicy === "messages" && !isAllowedOutlookMessageNextLinkPath(target.pathname)) {
-    throw new ProviderRequestError(400, "nextLink must target Outlook message pagination endpoints");
-  }
-  if (absoluteUrlPolicy === "mailFolders" && !isAllowedOutlookMailFolderNextLinkPath(target.pathname)) {
-    throw new ProviderRequestError(400, "nextLink must target Outlook mail folder pagination endpoints");
-  }
 }
 
 function isAllowedOutlookMessageNextLinkPath(pathname: string) {
   const normalizedPath = trimTrailingSlash(pathname);
   const segments = normalizedPath.split("/").filter(Boolean);
+
+  // Delta continuation links (@odata.nextLink inside a delta round and
+  // @odata.deltaLink) end in a trailing `delta` segment on the two
+  // folder-scoped message-collection shapes. Graph tracks message changes per
+  // folder, so `/v1.0/me/messages/delta` is not admitted.
+  if (segments.length > 4 && segments[segments.length - 1] === "delta") {
+    segments.pop();
+  }
 
   if (segments[0] !== "v1.0") {
     return false;
@@ -187,7 +153,16 @@ function isAllowedOutlookMessageNextLinkPath(pathname: string) {
   if (segments.length === 3 && segments[2] === "messages") {
     return true;
   }
+  if (segments.length === 4 && isParenthesizedMailFoldersSegment(segments[2]) && segments[3] === "messages") {
+    return true;
+  }
   return segments.length === 5 && segments[2] === "mailFolders" && segments[3] !== "" && segments[4] === "messages";
+}
+
+// Graph's @odata.nextLink uses the OData parenthesized-key form for
+// folder-scoped listings: /v1.0/me/mailFolders('{id}')/messages.
+function isParenthesizedMailFoldersSegment(segment: string) {
+  return segment.startsWith("mailFolders('") && segment.endsWith("')") && segment.length > "mailFolders('')".length;
 }
 
 function isAllowedOutlookMailFolderNextLinkPath(pathname: string) {
@@ -208,72 +183,10 @@ function trimTrailingSlash(value: string) {
   return normalizedValue;
 }
 
-function hasContentTypeHeader(headers: Record<string, string>) {
-  return Object.keys(headers).some((key) => key.toLowerCase() === "content-type");
-}
-
-export async function assertOutlookResponse(response: Response): Promise<void> {
-  if (response.ok) {
-    return;
-  }
-
-  const { code, message } = await extractOutlookError(response);
-
-  if (response.status === 400) {
-    throw new ProviderRequestError(400, message);
-  }
-  if (response.status === 401) {
-    throw new ProviderRequestError(401, message);
-  }
-  if (response.status === 403 && isScopeError(code, message)) {
-    throw new ProviderRequestError(403, message);
-  }
-  if (response.status === 403) {
-    throw new ProviderRequestError(403, message);
-  }
-  if (response.status === 429) {
-    throw new ProviderRequestError(429, message);
-  }
-
-  throw new ProviderRequestError(response.status, message);
-}
-
-async function extractOutlookError(response: Response) {
-  const text = await response.text().catch(() => "");
-  if (!text) {
-    return {
-      code: "",
-      message: `outlook request failed with status ${response.status}`,
-    };
-  }
-
-  try {
-    const parsed = JSON.parse(text) as OutlookErrorPayload;
-    const code = typeof parsed.error?.code === "string" ? parsed.error.code : "";
-    const message =
-      (typeof parsed.error?.message === "string" && parsed.error.message) ||
-      (typeof parsed.message === "string" && parsed.message) ||
-      text;
-
-    return { code, message };
-  } catch {
-    return {
-      code: "",
-      message: text,
-    };
-  }
-}
-
-function isScopeError(code: string, message: string) {
-  const loweredCode = code.toLowerCase();
-  const loweredMessage = message.toLowerCase();
-  return (
-    loweredCode.includes("accessdenied") ||
-    loweredMessage.includes("insufficient privileges") ||
-    loweredMessage.includes("required scopes") ||
-    loweredMessage.includes("does not have permission") ||
-    loweredMessage.includes("access is denied")
-  );
+function refineOutlookErrorMessage(code: string, message: string): string {
+  return code === "InefficientFilter"
+    ? `${message} When filter and orderby are combined, include every orderby property in filter, in the same order and before other filter properties.`
+    : message;
 }
 
 async function getProfile({ accessToken, fetcher }: OutlookRuntimeDeps) {
@@ -315,14 +228,27 @@ async function listMailFolders(input: Record<string, unknown>, { accessToken, fe
 }
 
 async function listMessages(input: Record<string, unknown>, { accessToken, fetcher }: OutlookRuntimeDeps) {
-  const pathOrUrl =
+  // A nextLink continues the current page sequence; a deltaLink starts the
+  // next delta round. Both are opaque Graph URLs checked by the allowlist.
+  const followUpLink =
     typeof input.nextLink === "string"
       ? input.nextLink
-      : typeof input.mailFolderId === "string"
-        ? `me/mailFolders/${encodeURIComponent(input.mailFolderId)}/messages`
-        : "me/messages";
+      : typeof input.deltaLink === "string"
+        ? input.deltaLink
+        : undefined;
+  const folderPath =
+    typeof input.mailFolderId === "string"
+      ? `me/mailFolders/${encodeURIComponent(input.mailFolderId)}/messages`
+      : undefined;
+  // Graph tracks message changes per folder: there is no mailbox-wide
+  // messages/delta, so a delta listing needs a folder.
+  if (followUpLink === undefined && input.delta === true && folderPath === undefined) {
+    throw providerInputError("mailFolderId is required when delta is true.");
+  }
+  const collectionPath = folderPath ?? "me/messages";
+  const pathOrUrl = followUpLink ?? (input.delta === true ? `${collectionPath}/delta` : collectionPath);
   const query =
-    typeof input.nextLink === "string"
+    followUpLink !== undefined
       ? undefined
       : compactObject({
           $top: typeof input.top === "number" ? String(input.top) : undefined,
@@ -340,6 +266,7 @@ async function listMessages(input: Record<string, unknown>, { accessToken, fetch
   const payload = await outlookJsonRequest<{
     value?: unknown[];
     "@odata.nextLink"?: unknown;
+    "@odata.deltaLink"?: unknown;
   }>(pathOrUrl, {
     accessToken,
     fetcher,
@@ -347,9 +274,11 @@ async function listMessages(input: Record<string, unknown>, { accessToken, fetch
     headers,
   });
 
+  // Rows stay raw: a delta round reports removals as `{ id, "@removed": {...} }`.
   return {
     messages: Array.isArray(payload.value) ? payload.value : [],
     nextLink: typeof payload["@odata.nextLink"] === "string" ? payload["@odata.nextLink"] : null,
+    deltaLink: typeof payload["@odata.deltaLink"] === "string" ? payload["@odata.deltaLink"] : null,
   };
 }
 
@@ -620,3 +549,5 @@ function requiredString(value: unknown, field: string) {
 function asObject(value: unknown): Record<string, unknown> {
   return requiredRecord(value, "object input", (message) => new ProviderRequestError(400, message));
 }
+
+export const triggers: readonly (IntegrationDefinition | PollDefinition)[] = [outlookMessageReceived];

@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { EverhourActionName } from "./actions.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -10,9 +10,8 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const everhourApiBaseUrl = "https://api.everhour.com";
+export const everhourApiBaseUrl = "https://api.everhour.com";
 const everhourValidationPath = "/users/me";
-const everhourDefaultRequestTimeoutMs = 30_000;
 
 type EverhourRequestPhase = "validate" | "execute";
 type EverhourMethod = "GET" | "POST" | "DELETE";
@@ -28,7 +27,7 @@ interface EverhourRequestInput {
   body?: Record<string, unknown>;
 }
 
-export const everhourActionHandlers: Record<EverhourActionName, EverhourActionHandler> = {
+export const everhourActionHandlers: ProviderActionHandlers<"everhour", EverhourActionHandler> = {
   async get_current_user(_input, context) {
     return {
       user: requireEverhourObject(
@@ -52,9 +51,9 @@ export const everhourActionHandlers: Record<EverhourActionName, EverhourActionHa
         path: "/projects",
         phase: "execute",
         query: compactObject({
-          query: readOptionalString(input.query),
+          query: optionalString(input.query),
           limit: readOptionalPositiveInteger(input.limit, "limit"),
-          platform: readOptionalString(input.platform),
+          platform: optionalString(input.platform),
         }),
       },
       context,
@@ -82,7 +81,7 @@ export const everhourActionHandlers: Record<EverhourActionName, EverhourActionHa
         query: compactObject({
           page: readOptionalPositiveInteger(input.page, "page"),
           limit: readOptionalPositiveInteger(input.limit, "limit"),
-          query: readOptionalString(input.query),
+          query: optionalString(input.query),
           "exclude-closed": optionalBoolean(input.excludeClosed),
         }),
       },
@@ -118,8 +117,8 @@ export const everhourActionHandlers: Record<EverhourActionName, EverhourActionHa
     return { tasks: requireEverhourArray(payload, "tasks") };
   },
   async list_time_records(input, context) {
-    const from = readOptionalString(input.from);
-    const to = readOptionalString(input.to);
+    const from = optionalString(input.from);
+    const to = optionalString(input.to);
     if (from && to && from > to) {
       throw new ProviderRequestError(400, "from must be on or before to");
     }
@@ -148,9 +147,9 @@ export const everhourActionHandlers: Record<EverhourActionName, EverhourActionHa
         body: compactObject({
           time: readRequiredPositiveInteger(input.time, "time"),
           date: readRequiredString(input.date, "date"),
-          task: readOptionalString(input.taskId),
+          task: optionalString(input.taskId),
           user: readOptionalPositiveInteger(input.userId, "userId"),
-          comment: readOptionalString(input.comment),
+          comment: optionalString(input.comment),
         }),
       },
       context,
@@ -165,8 +164,8 @@ export const everhourActionHandlers: Record<EverhourActionName, EverhourActionHa
         phase: "execute",
         body: compactObject({
           task: readRequiredString(input.taskId, "taskId"),
-          userDate: readOptionalString(input.userDate),
-          comment: readOptionalString(input.comment),
+          userDate: optionalString(input.userDate),
+          comment: optionalString(input.comment),
         }),
       },
       context,
@@ -236,7 +235,7 @@ async function requestEverhourJson(input: EverhourRequestInput, context: Everhou
     }
   }
 
-  const timeout = createProviderTimeout(context.signal, everhourDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   let response: Response;
   try {
     response = await context.fetcher(url.toString(), {
@@ -318,15 +317,11 @@ function requireEverhourArray(value: unknown, label: string): unknown[] {
 }
 
 function readRequiredString(value: unknown, fieldName: string): string {
-  const parsed = readOptionalString(value);
+  const parsed = optionalString(value);
   if (!parsed) {
     throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return parsed;
-}
-
-function readOptionalString(value: unknown): string | undefined {
-  return optionalString(value);
 }
 
 function readRequiredPositiveInteger(value: unknown, fieldName: string): number {

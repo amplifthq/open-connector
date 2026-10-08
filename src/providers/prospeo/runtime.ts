@@ -1,9 +1,14 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ProspeoActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  isAbortLikeError,
+  ProviderRequestError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 export const prospeoApiBaseUrl = "https://api.prospeo.io";
 
@@ -25,7 +30,7 @@ interface ProspeoRequestInput {
   mode: ProspeoMode;
 }
 
-export const prospeoActionHandlers: Record<ProspeoActionName, ProspeoActionHandler> = {
+export const prospeoActionHandlers: ProviderActionHandlers<"prospeo", ProspeoActionHandler> = {
   async get_account_information(_input, context) {
     const payload = await requestProspeoJson(
       {
@@ -155,25 +160,6 @@ export async function validateProspeoCredential(
       credits: account.credits ?? undefined,
     }),
   };
-}
-
-export async function executeProspeoAction(
-  input: {
-    actionName: ProspeoActionName;
-    input: Record<string, unknown>;
-    apiKey: string;
-  },
-  fetcher: typeof fetch,
-): Promise<unknown> {
-  const handler = (prospeoActionHandlers as Record<ProspeoActionName, ProspeoActionHandler>)[input.actionName];
-  if (!handler) {
-    throw new ProviderRequestError(400, `unknown prospeo action: ${input.actionName}`);
-  }
-
-  return handler(input.input, {
-    apiKey: input.apiKey,
-    fetcher,
-  });
 }
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(
@@ -526,11 +512,4 @@ function readFirstObject(input: Record<string, unknown>, keys: string[]) {
 function readNonEmptyString(value: unknown) {
   const text = optionalString(value);
   return text || undefined;
-}
-
-function isAbortLikeError(error: unknown) {
-  return (
-    error instanceof DOMException ||
-    (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError"))
-  );
 }

@@ -72,11 +72,10 @@ const pollDetailSchema = s.object(
   },
 );
 
-export type LoomioActionName = "list_polls" | "get_poll";
-
 export const loomioActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_polls",
+    operationType: "read",
     description: "List Loomio polls in one group with optional status filtering and offset pagination.",
     inputSchema: s.object(
       "Input parameters for listing Loomio polls in one group.",
@@ -96,6 +95,7 @@ export const loomioActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_poll",
+    operationType: "read",
     description: "Get one Loomio poll by numeric ID or poll key.",
     inputSchema: s.object("Input parameters for getting one Loomio poll.", {
       pollIdOrKey: s.nonEmptyString("Numeric poll ID or poll key to retrieve."),

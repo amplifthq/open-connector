@@ -141,47 +141,45 @@ const employeesOutputSchema = s.actionOutput(
   "Employee person URNs returned for a company.",
 );
 
-export type HarmonicAiActionName =
-  | "enrich_company"
-  | "enrich_person"
-  | "get_enrichment_status"
-  | "get_company"
-  | "get_company_employees"
-  | "get_person";
-
 export const harmonicAiActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "enrich_company",
+    operationType: "read",
     description: "Enrich one company by website, social, or business profile identifier with Harmonic.",
     inputSchema: companyIdentifierInputSchema,
     outputSchema: enrichmentResultOutputSchema,
   }),
   defineProviderAction(service, {
     name: "enrich_person",
+    operationType: "read",
     description: "Enrich one person by LinkedIn URL or email address with Harmonic.",
     inputSchema: personIdentifierInputSchema,
     outputSchema: enrichmentResultOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_enrichment_status",
+    operationType: "read",
     description: "Check Harmonic enrichment job statuses by enrichment IDs or URNs.",
     inputSchema: enrichmentStatusInputSchema,
     outputSchema: enrichmentStatusesOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_company",
+    operationType: "read",
     description: "Retrieve a Harmonic company profile by numeric ID or full company URN.",
     inputSchema: getEntityInputSchema,
     outputSchema: entityOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_company_employees",
+    operationType: "read",
     description: "Retrieve employee person URNs for a Harmonic company with optional filters.",
     inputSchema: employeesInputSchema,
     outputSchema: employeesOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_person",
+    operationType: "read",
     description: "Retrieve a Harmonic person profile by numeric ID or full person URN.",
     inputSchema: getEntityInputSchema,
     outputSchema: entityOutputSchema,

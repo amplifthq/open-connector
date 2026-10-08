@@ -159,22 +159,10 @@ const updateTaskInputSchema = {
     .map((key) => ({ required: [key] })),
 };
 
-export type HabiticaActionName =
-  | "get_user_profile"
-  | "list_my_tasks"
-  | "get_task"
-  | "create_task"
-  | "update_task"
-  | "delete_task"
-  | "score_task"
-  | "list_tags"
-  | "create_tag"
-  | "update_tag"
-  | "delete_tag";
-
 export const habiticaActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_user_profile",
+    operationType: "read",
     description: "Get the authenticated Habitica user's profile with optional userFields filtering.",
     inputSchema: s.actionInput(
       {
@@ -192,6 +180,7 @@ export const habiticaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_my_tasks",
+    operationType: "read",
     description: "List the authenticated Habitica user's tasks with optional type and dueDate filters.",
     inputSchema: s.actionInput(
       {
@@ -208,24 +197,28 @@ export const habiticaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_task",
+    operationType: "read",
     description: "Get one Habitica task by task ID or alias.",
     inputSchema: s.actionInput({ taskId: taskIdSchema }, ["taskId"], "Input parameters for reading one Habitica task."),
     outputSchema: s.actionOutput({ task: taskSchema }, "The response returned when reading one Habitica task."),
   }),
   defineProviderAction(service, {
     name: "create_task",
+    operationType: "write",
     description: "Create one new personal Habitica task from a single JSON task object.",
     inputSchema: createTaskInputSchema,
     outputSchema: s.actionOutput({ task: taskSchema }, "The response returned when creating one Habitica task."),
   }),
   defineProviderAction(service, {
     name: "update_task",
+    operationType: "write",
     description: "Update one Habitica task by task ID or alias.",
     inputSchema: updateTaskInputSchema,
     outputSchema: s.actionOutput({ task: taskSchema }, "The response returned when updating one Habitica task."),
   }),
   defineProviderAction(service, {
     name: "delete_task",
+    operationType: "destructive",
     description: "Delete one Habitica task by task ID or alias.",
     inputSchema: s.actionInput(
       { taskId: taskIdSchema },
@@ -242,6 +235,7 @@ export const habiticaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "score_task",
+    operationType: "read",
     description: "Score one Habitica task in the up or down direction.",
     inputSchema: s.actionInput(
       {
@@ -258,6 +252,7 @@ export const habiticaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tags",
+    operationType: "read",
     description: "List the authenticated Habitica user's tags.",
     inputSchema: s.actionInput({}, [], "No input is required for listing Habitica tags."),
     outputSchema: s.actionOutput(
@@ -267,6 +262,7 @@ export const habiticaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_tag",
+    operationType: "write",
     description: "Create one new Habitica tag.",
     inputSchema: s.actionInput(
       { name: s.nonEmptyString("The Habitica tag name.") },
@@ -277,6 +273,7 @@ export const habiticaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_tag",
+    operationType: "write",
     description: "Update one Habitica tag by tag ID.",
     inputSchema: s.actionInput(
       {
@@ -290,6 +287,7 @@ export const habiticaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_tag",
+    operationType: "destructive",
     description: "Delete one Habitica tag by tag ID.",
     inputSchema: s.actionInput({ tagId: tagIdSchema }, ["tagId"], "Input parameters for deleting one Habitica tag."),
     outputSchema: s.actionOutput(

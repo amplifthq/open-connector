@@ -5,10 +5,10 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { FlagsmithActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
+import { compactObject, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
 import { queryParams } from "../../core/request.ts";
 import {
   createProviderTimeout,
@@ -17,17 +17,17 @@ import {
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 export const flagsmithApiBaseUrl = "https://edge.api.flagsmith.com/api/v1";
 const service = "flagsmith";
 const flagsmithValidationPath = "/flags/";
-const flagsmithDefaultRequestTimeoutMs = 30_000;
 
 type FlagsmithRequestPhase = "validate" | "execute";
 type FlagsmithActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const flagsmithActionHandlers: Record<FlagsmithActionName, FlagsmithActionHandler> = {
+export const flagsmithActionHandlers: ProviderActionHandlers<"flagsmith", FlagsmithActionHandler> = {
   async list_flags(input, context) {
     const payload = await requestFlagsmithJson({
       path: "/flags/",
@@ -139,7 +139,7 @@ async function requestFlagsmithJson(input: {
   context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
   phase: FlagsmithRequestPhase;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, flagsmithDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const headers = new Headers({
       accept: "application/json",
@@ -301,10 +301,6 @@ function readOptionalTraits(value: unknown): Array<Record<string, unknown>> | un
       trait_value: trait.trait_value,
     };
   });
-}
-
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function asObject(value: unknown): Record<string, unknown> {

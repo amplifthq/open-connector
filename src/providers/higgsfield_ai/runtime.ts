@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { HiggsfieldAiActionName } from "./actions.ts";
 
 import { createHash } from "node:crypto";
 import { compactObject, optionalBoolean, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -17,7 +17,6 @@ const higgsfieldAiValidationPath = `/requests/${higgsfieldAiValidationRequestId}
 const higgsfieldAiValidationNotFoundStatus = "request_not_found";
 const higgsfieldAiDefaultImageModelId = "higgsfield-ai/soul/standard";
 const higgsfieldAiDefaultVideoModelId = "higgsfield-ai/dop/standard";
-const higgsfieldAiRequestTimeoutMs = 30_000;
 
 type HiggsfieldAiRequestPhase = "validate" | "execute";
 
@@ -34,7 +33,10 @@ interface HiggsfieldAiRequestInput {
   body?: Record<string, unknown>;
 }
 
-export const higgsfieldAiActionHandlers: Record<HiggsfieldAiActionName, ProviderRuntimeHandler<HiggsfieldAiContext>> = {
+export const higgsfieldAiActionHandlers: ProviderActionHandlers<
+  "higgsfield_ai",
+  ProviderRuntimeHandler<HiggsfieldAiContext>
+> = {
   submit_image_generation(input, context) {
     return submitGenerationRequest(input, context, {
       defaultModelId: higgsfieldAiDefaultImageModelId,
@@ -147,7 +149,7 @@ async function requestHiggsfieldAiJson(input: HiggsfieldAiRequestInput): Promise
 }
 
 async function requestHiggsfieldAiResponse(input: HiggsfieldAiRequestInput): Promise<Response> {
-  const timeout = createProviderTimeout(input.context.signal, higgsfieldAiRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     return await input.context.fetcher(buildHiggsfieldAiUrl(input.path, input.query), {
       method: input.method,

@@ -1,33 +1,33 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ChatarminActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { compactObject, looseArray, optionalRecord, optionalString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
 import {
-  createProviderTimeout,
   defineApiKeyProviderExecutors,
-  isAbortLikeError,
+  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
+  requiredInputString,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 const service = "chatarmin";
 const chatarminApiBaseUrl = "https://api.chatarmin.com/api/public";
-const chatarminDefaultRequestTimeoutMs = 30_000;
 
 type ChatarminRequestPhase = "validate" | "execute";
 type ChatarminMethod = "GET" | "POST" | "PUT" | "DELETE";
 type ChatarminContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type ChatarminActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const chatarminActionHandlers: Record<ChatarminActionName, ChatarminActionHandler> = {
+export const chatarminActionHandlers: ProviderActionHandlers<"chatarmin", ChatarminActionHandler> = {
   list_contacts(input, context) {
     return listChatarminRecords("/contacts", input, context);
   },
   get_contact(input, context) {
     return readChatarminResource(
-      `/contacts/${encodePathSegment(readRequiredString(input.contactId, "contactId"))}`,
+      `/contacts/${encodePathSegment(requiredInputString(input.contactId, "contactId"))}`,
       "contact",
       context,
     );
@@ -38,7 +38,7 @@ export const chatarminActionHandlers: Record<ChatarminActionName, ChatarminActio
   update_contact(input, context) {
     return writeChatarminResource(
       "POST",
-      `/contacts/${encodePathSegment(readRequiredString(input.contactId, "contactId"))}`,
+      `/contacts/${encodePathSegment(requiredInputString(input.contactId, "contactId"))}`,
       pickContactBody(input),
       "contact",
       context,
@@ -46,7 +46,7 @@ export const chatarminActionHandlers: Record<ChatarminActionName, ChatarminActio
   },
   delete_contact(input, context) {
     return deleteChatarminResource(
-      `/contacts/${encodePathSegment(readRequiredString(input.contactId, "contactId"))}`,
+      `/contacts/${encodePathSegment(requiredInputString(input.contactId, "contactId"))}`,
       context,
     );
   },
@@ -76,7 +76,7 @@ export const chatarminActionHandlers: Record<ChatarminActionName, ChatarminActio
   },
   get_campaign(input, context) {
     return readChatarminResource(
-      `/campaigns/${encodePathSegment(readRequiredString(input.campaignId, "campaignId"))}`,
+      `/campaigns/${encodePathSegment(requiredInputString(input.campaignId, "campaignId"))}`,
       "campaign",
       context,
     );
@@ -86,14 +86,14 @@ export const chatarminActionHandlers: Record<ChatarminActionName, ChatarminActio
   },
   get_flow(input, context) {
     return readChatarminResource(
-      `/flows/${encodePathSegment(readRequiredString(input.flowId, "flowId"))}`,
+      `/flows/${encodePathSegment(requiredInputString(input.flowId, "flowId"))}`,
       "flow",
       context,
     );
   },
   get_flow_analytics(input, context) {
     return listChatarminRecords(
-      `/flows/analytics/${encodePathSegment(readRequiredString(input.flowId, "flowId"))}`,
+      `/flows/analytics/${encodePathSegment(requiredInputString(input.flowId, "flowId"))}`,
       input,
       context,
       ["page", "limit", "start", "end"],
@@ -103,7 +103,7 @@ export const chatarminActionHandlers: Record<ChatarminActionName, ChatarminActio
     const payload = await chatarminRequestJson(
       {
         method: "POST",
-        path: `/flows/analyticsv2/${encodePathSegment(readRequiredString(input.flowId, "flowId"))}`,
+        path: `/flows/analyticsv2/${encodePathSegment(requiredInputString(input.flowId, "flowId"))}`,
         body: pickBody(input, ["contactIds", "start", "end"]),
       },
       context,
@@ -117,7 +117,7 @@ export const chatarminActionHandlers: Record<ChatarminActionName, ChatarminActio
   },
   get_voucher_pool(input, context) {
     return readChatarminResource(
-      `/voucher-pools/${encodePathSegment(readRequiredString(input.poolId, "poolId"))}`,
+      `/voucher-pools/${encodePathSegment(requiredInputString(input.poolId, "poolId"))}`,
       "voucherPool",
       context,
     );
@@ -128,7 +128,7 @@ export const chatarminActionHandlers: Record<ChatarminActionName, ChatarminActio
   update_voucher_pool(input, context) {
     return writeChatarminResource(
       "PUT",
-      `/voucher-pools/${encodePathSegment(readRequiredString(input.poolId, "poolId"))}`,
+      `/voucher-pools/${encodePathSegment(requiredInputString(input.poolId, "poolId"))}`,
       pickVoucherPoolBody(input),
       "voucherPool",
       context,
@@ -138,7 +138,7 @@ export const chatarminActionHandlers: Record<ChatarminActionName, ChatarminActio
     const payload = await chatarminRequestJson(
       {
         method: "POST",
-        path: `/voucher-pools/${encodePathSegment(readRequiredString(input.poolId, "poolId"))}/vouchers`,
+        path: `/voucher-pools/${encodePathSegment(requiredInputString(input.poolId, "poolId"))}/vouchers`,
         body: pickBody(input, ["codes", "replaceCode"]),
       },
       context,
@@ -146,25 +146,25 @@ export const chatarminActionHandlers: Record<ChatarminActionName, ChatarminActio
     );
     const record = requireChatarminObject(payload);
     return {
-      added: readOptionalArray(record.added),
+      added: looseArray(record.added),
       raw: record,
     };
   },
   remove_voucher_code(input, context) {
     return deleteChatarminResource(
-      `/voucher-pools/${encodePathSegment(readRequiredString(input.poolId, "poolId"))}/vouchers/${encodePathSegment(readRequiredString(input.code, "code"))}`,
+      `/voucher-pools/${encodePathSegment(requiredInputString(input.poolId, "poolId"))}/vouchers/${encodePathSegment(requiredInputString(input.code, "code"))}`,
       context,
     );
   },
   delete_voucher_pool(input, context) {
     return deleteChatarminResource(
-      `/voucher-pools/${encodePathSegment(readRequiredString(input.poolId, "poolId"))}`,
+      `/voucher-pools/${encodePathSegment(requiredInputString(input.poolId, "poolId"))}`,
       context,
     );
   },
   async list_webhooks(_input, context) {
     const payload = await chatarminRequestJson({ method: "GET", path: "/webhooks" }, context, "execute");
-    return { webhooks: readOptionalArray(payload) };
+    return { webhooks: looseArray(payload) };
   },
   create_webhook(input, context) {
     return writeChatarminResource("PUT", "/webhooks", pickBody(input, ["url", "topic"]), "webhook", context);
@@ -172,7 +172,7 @@ export const chatarminActionHandlers: Record<ChatarminActionName, ChatarminActio
   update_webhook(input, context) {
     return writeChatarminResource(
       "POST",
-      `/webhooks/${encodePathSegment(readRequiredString(input.webhookId, "webhookId"))}`,
+      `/webhooks/${encodePathSegment(requiredInputString(input.webhookId, "webhookId"))}`,
       pickBody(input, ["url", "topic"]),
       "webhook",
       context,
@@ -180,13 +180,23 @@ export const chatarminActionHandlers: Record<ChatarminActionName, ChatarminActio
   },
   delete_webhook(input, context) {
     return deleteChatarminResource(
-      `/webhooks/${encodePathSegment(readRequiredString(input.webhookId, "webhookId"))}`,
+      `/webhooks/${encodePathSegment(requiredInputString(input.webhookId, "webhookId"))}`,
       context,
     );
   },
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, chatarminActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: chatarminApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -237,7 +247,7 @@ async function listChatarminRecords(
   );
   const record = requireChatarminObject(payload);
   return {
-    data: readOptionalArray(record.data),
+    data: looseArray(record.data),
     pagination: optionalRecord(record.pagination) ?? null,
   };
 }
@@ -277,14 +287,12 @@ async function chatarminRequestJson(
   context: ChatarminContext,
   phase: ChatarminRequestPhase,
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, chatarminDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: context.signal, label: "Chatarmin" }, async (signal) => {
     const response = await context.fetcher(buildChatarminUrl(input.path, input.query), {
       method: input.method,
       headers: chatarminHeaders(context.apiKey, input.body !== undefined),
       body: input.body === undefined ? undefined : JSON.stringify(input.body),
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readChatarminPayload(response);
 
@@ -293,20 +301,7 @@ async function chatarminRequestJson(
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Chatarmin request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Chatarmin request failed: ${error.message}` : "Chatarmin request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildChatarminUrl(path: string, query: Record<string, string | undefined> = {}): URL {
@@ -396,10 +391,6 @@ function requireChatarminObject(payload: unknown): Record<string, unknown> {
   return record;
 }
 
-function readOptionalArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
 function pickContactBody(input: Record<string, unknown>): Record<string, unknown> {
   return pickBody(input, ["phone", "email", "firstname", "lastname", "consent", "externalId", "properties"]);
 }
@@ -427,8 +418,4 @@ function pickQuery(input: Record<string, unknown>, keys: readonly string[]): Rec
     }
   }
   return query;
-}
-
-function readRequiredString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }

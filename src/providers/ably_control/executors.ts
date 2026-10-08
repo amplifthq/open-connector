@@ -1,5 +1,10 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { AblyControlActionName } from "./actions.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -12,6 +17,7 @@ import {
 import { encodePathSegment } from "../../core/request.ts";
 import {
   defineProviderExecutors,
+  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
@@ -39,7 +45,7 @@ interface AblyControlRequestInput {
 
 type AblyControlActionHandler = (input: Record<string, unknown>, context: AblyControlActionContext) => Promise<unknown>;
 
-export const ablyControlActionHandlers: Record<AblyControlActionName, AblyControlActionHandler> = {
+export const ablyControlActionHandlers: ProviderActionHandlers<"ably_control", AblyControlActionHandler> = {
   async get_current_account(_input, context): Promise<unknown> {
     const payload = await requestAblyControlJson(context, {
       path: "/me",
@@ -193,6 +199,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<AblyControlA
       signal: context.signal,
       metadata: credential.metadata,
     };
+  },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: ablyControlApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
   },
 });
 

@@ -78,22 +78,10 @@ const customDomainScopedInputSchema = s.object("Input parameters for a custom-do
   domain_uuid: customDomainUuidSchema,
 });
 
-export type SaasCustomDomainsActionName =
-  | "list_accounts"
-  | "list_upstreams"
-  | "create_upstream"
-  | "get_upstream"
-  | "delete_upstream"
-  | "list_custom_domains"
-  | "create_custom_domain"
-  | "get_custom_domain"
-  | "delete_custom_domain"
-  | "verify_custom_domain_dns_records"
-  | "purge_custom_domain_http_cache";
-
 export const saasCustomDomainsActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_accounts",
+    operationType: "read",
     description: "List SaaS Custom Domains accounts available to the API token.",
     inputSchema: s.object("Input parameters for listing SaaS Custom Domains accounts.", {}),
     outputSchema: s.object("Output payload for SaaS Custom Domains account listing.", {
@@ -102,6 +90,7 @@ export const saasCustomDomainsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_upstreams",
+    operationType: "read",
     description: "List upstreams for a SaaS Custom Domains account.",
     inputSchema: s.object(
       "Input parameters for listing SaaS Custom Domains upstreams.",
@@ -119,6 +108,7 @@ export const saasCustomDomainsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_upstream",
+    operationType: "write",
     description: "Create an upstream for a SaaS Custom Domains account.",
     inputSchema: s.object(
       "Input parameters for creating a SaaS Custom Domains upstream.",
@@ -142,6 +132,7 @@ export const saasCustomDomainsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_upstream",
+    operationType: "read",
     description: "Retrieve one SaaS Custom Domains upstream by UUID.",
     inputSchema: s.object("Input parameters for retrieving a SaaS Custom Domains upstream.", {
       ...upstreamScopedInputFields,
@@ -152,6 +143,7 @@ export const saasCustomDomainsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_upstream",
+    operationType: "destructive",
     description: "Delete one SaaS Custom Domains upstream and its custom domains.",
     inputSchema: s.object("Input parameters for deleting a SaaS Custom Domains upstream.", {
       ...upstreamScopedInputFields,
@@ -162,6 +154,7 @@ export const saasCustomDomainsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_custom_domains",
+    operationType: "read",
     description: "List custom domains for a SaaS Custom Domains upstream.",
     inputSchema: s.object(
       "Input parameters for listing SaaS Custom Domains custom domains.",
@@ -179,6 +172,7 @@ export const saasCustomDomainsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_custom_domain",
+    operationType: "write",
     description: "Create a custom domain for a SaaS Custom Domains upstream.",
     inputSchema: s.object(
       "Input parameters for creating a SaaS Custom Domains custom domain.",
@@ -198,6 +192,7 @@ export const saasCustomDomainsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_custom_domain",
+    operationType: "read",
     description: "Retrieve one SaaS Custom Domains custom domain by UUID.",
     inputSchema: customDomainScopedInputSchema,
     outputSchema: s.object("Output payload for one SaaS Custom Domains custom domain.", {
@@ -206,6 +201,7 @@ export const saasCustomDomainsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_custom_domain",
+    operationType: "destructive",
     description: "Delete one SaaS Custom Domains custom domain.",
     inputSchema: customDomainScopedInputSchema,
     outputSchema: s.object("Output payload for a deleted SaaS Custom Domains custom domain.", {
@@ -214,6 +210,7 @@ export const saasCustomDomainsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "verify_custom_domain_dns_records",
+    operationType: "write",
     description: "Trigger DNS record verification for one SaaS Custom Domains custom domain.",
     inputSchema: customDomainScopedInputSchema,
     outputSchema: s.object("Output payload for SaaS Custom Domains DNS record verification.", {
@@ -224,6 +221,7 @@ export const saasCustomDomainsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "purge_custom_domain_http_cache",
+    operationType: "destructive",
     description: "Initiate an HTTP cache purge for one SaaS Custom Domains custom domain.",
     inputSchema: customDomainScopedInputSchema,
     outputSchema: s.object("Output payload for a SaaS Custom Domains HTTP cache purge.", {

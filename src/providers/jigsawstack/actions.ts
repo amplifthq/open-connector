@@ -192,17 +192,10 @@ const profanityOutputSchema = s.object("The normalized JigsawStack profanity che
   profanitiesFound: s.nullable(s.boolean("Whether profanity was found in the text.")),
 });
 
-export type JigsawstackActionName =
-  | "search_web"
-  | "get_search_suggestions"
-  | "translate_text"
-  | "summarize_text"
-  | "check_spam"
-  | "check_profanity";
-
 export const jigsawstackActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "search_web",
+    operationType: "read",
     description: "Search the web with JigsawStack AI Search and return normalized result data.",
     requiredScopes: [],
     inputSchema: searchWebInputSchema,
@@ -210,6 +203,7 @@ export const jigsawstackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_search_suggestions",
+    operationType: "read",
     description: "Get JigsawStack search suggestions for a query prefix.",
     requiredScopes: [],
     inputSchema: searchSuggestionsInputSchema,
@@ -217,6 +211,7 @@ export const jigsawstackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "translate_text",
+    operationType: "read",
     description: "Translate one string or an array of strings with JigsawStack.",
     requiredScopes: [],
     inputSchema: translateTextInputSchema,
@@ -224,6 +219,7 @@ export const jigsawstackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "summarize_text",
+    operationType: "read",
     description: "Summarize text or a provider-accessible PDF document with JigsawStack.",
     requiredScopes: [],
     inputSchema: summarizeTextInputSchema,
@@ -231,6 +227,7 @@ export const jigsawstackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "check_spam",
+    operationType: "read",
     description: "Check whether one string or an array of strings is spam with JigsawStack.",
     requiredScopes: [],
     inputSchema: spamCheckInputSchema,
@@ -238,6 +235,7 @@ export const jigsawstackActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "check_profanity",
+    operationType: "read",
     description: "Check text for profanity with JigsawStack and return detected occurrences.",
     requiredScopes: [],
     inputSchema: profanityInputSchema,

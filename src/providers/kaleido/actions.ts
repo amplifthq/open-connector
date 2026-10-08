@@ -5,20 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "kaleido";
 
-export type KaleidoActionName =
-  | "list_memberships"
-  | "list_consortia"
-  | "get_consortium"
-  | "list_environments"
-  | "get_environment"
-  | "get_environment_status"
-  | "list_nodes"
-  | "get_node"
-  | "get_node_status"
-  | "list_services"
-  | "get_service"
-  | "get_service_status";
-
 const emptyInputSchema = s.object("This action does not require any input.", {});
 
 const idField = (description: string) => s.string(description, { minLength: 1 });
@@ -38,18 +24,21 @@ const resourceListSchema = s.array("The Kaleido platform resources returned by t
 export const kaleidoActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_memberships",
+    operationType: "read",
     description: "List memberships available to the current Kaleido API key.",
     inputSchema: emptyInputSchema,
     outputSchema: resourceListSchema,
   }),
   defineProviderAction(service, {
     name: "list_consortia",
+    operationType: "read",
     description: "List Kaleido consortia available to the current membership.",
     inputSchema: emptyInputSchema,
     outputSchema: resourceListSchema,
   }),
   defineProviderAction(service, {
     name: "get_consortium",
+    operationType: "read",
     description: "Get details for a specific Kaleido consortium.",
     inputSchema: s.object("The input payload for reading a Kaleido consortium.", {
       ...consortiaIdProperty,
@@ -58,6 +47,7 @@ export const kaleidoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_environments",
+    operationType: "read",
     description: "List environments in a specific Kaleido consortium.",
     inputSchema: s.object("The input payload for listing Kaleido environments.", {
       ...consortiaIdProperty,
@@ -66,6 +56,7 @@ export const kaleidoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_environment",
+    operationType: "read",
     description: "Get details for a specific Kaleido environment.",
     inputSchema: s.object("The input payload for reading a Kaleido environment.", {
       ...environmentPathProperties,
@@ -74,6 +65,7 @@ export const kaleidoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_environment_status",
+    operationType: "read",
     description: "Get runtime status for a specific Kaleido environment.",
     inputSchema: s.object("The input payload for reading Kaleido environment status.", {
       ...environmentPathProperties,
@@ -82,6 +74,7 @@ export const kaleidoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_nodes",
+    operationType: "read",
     description: "List nodes in a specific Kaleido environment.",
     inputSchema: s.object("The input payload for listing Kaleido nodes.", {
       ...environmentPathProperties,
@@ -90,6 +83,7 @@ export const kaleidoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_node",
+    operationType: "read",
     description: "Get details for a specific Kaleido node.",
     inputSchema: s.object("The input payload for reading a Kaleido node.", {
       ...environmentPathProperties,
@@ -99,6 +93,7 @@ export const kaleidoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_node_status",
+    operationType: "read",
     description: "Get runtime status for a specific Kaleido node.",
     inputSchema: s.object("The input payload for reading Kaleido node status.", {
       ...environmentPathProperties,
@@ -108,6 +103,7 @@ export const kaleidoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_services",
+    operationType: "read",
     description: "List services in a specific Kaleido environment.",
     inputSchema: s.object("The input payload for listing Kaleido services.", {
       ...environmentPathProperties,
@@ -116,6 +112,7 @@ export const kaleidoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_service",
+    operationType: "read",
     description: "Get details for a specific Kaleido service.",
     inputSchema: s.object("The input payload for reading a Kaleido service.", {
       ...environmentPathProperties,
@@ -125,6 +122,7 @@ export const kaleidoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_service_status",
+    operationType: "read",
     description: "Get runtime status for a specific Kaleido service.",
     inputSchema: s.object("The input payload for reading Kaleido service status.", {
       ...environmentPathProperties,

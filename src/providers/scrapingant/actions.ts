@@ -136,15 +136,10 @@ const usageOutputSchema = s.object("The credits usage payload returned by Scrapi
   remained_credits: s.integer("The remaining credits available for the active plan."),
 });
 
-export type ScrapingantActionName =
-  | "scrape_with_extended_json_output"
-  | "extract_content_as_markdown"
-  | "extract_data_with_ai"
-  | "get_api_credits_usage";
-
 export const scrapingantActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "scrape_with_extended_json_output",
+    operationType: "read",
     description:
       "Scrape a page through ScrapingAnt's v2 extended endpoint and return HTML, text, cookies, headers, XHRs, and iframes.",
     inputSchema: commonRequestInputSchema,
@@ -152,18 +147,21 @@ export const scrapingantActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "extract_content_as_markdown",
+    operationType: "read",
     description: "Convert a page into Markdown through ScrapingAnt's Markdown transformation endpoint.",
     inputSchema: commonRequestInputSchema,
     outputSchema: markdownOutputSchema,
   }),
   defineProviderAction(service, {
     name: "extract_data_with_ai",
+    operationType: "read",
     description: "Extract structured top-level JSON fields from a page through ScrapingAnt's AI extraction endpoint.",
     inputSchema: aiExtractionInputSchema,
     outputSchema: s.looseObject("The top-level JSON object returned by ScrapingAnt AI extraction."),
   }),
   defineProviderAction(service, {
     name: "get_api_credits_usage",
+    operationType: "read",
     description: "Read the current ScrapingAnt subscription status and remaining API credits.",
     inputSchema: s.object("The input payload for retrieving ScrapingAnt API credits usage.", {}),
     outputSchema: usageOutputSchema,

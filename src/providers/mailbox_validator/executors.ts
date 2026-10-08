@@ -1,9 +1,19 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { MailboxValidatorActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "mailbox_validator";
 const mailboxValidatorApiBaseUrl = "https://api.mailboxvalidator.com";
@@ -14,7 +24,10 @@ type MailboxValidatorActionHandler = (
   context: ApiKeyProviderContext,
 ) => Promise<unknown>;
 
-export const mailboxValidatorActionHandlers: Record<MailboxValidatorActionName, MailboxValidatorActionHandler> = {
+export const mailboxValidatorActionHandlers: ProviderActionHandlers<
+  "mailbox_validator",
+  MailboxValidatorActionHandler
+> = {
   validate_email(input, context) {
     return requestMailboxValidator({
       path: "/v2/validation/single",
@@ -42,6 +55,16 @@ export const mailboxValidatorActionHandlers: Record<MailboxValidatorActionName, 
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, mailboxValidatorActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: mailboxValidatorApiBaseUrl,
+  auth: { type: "api_key_query", name: "key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

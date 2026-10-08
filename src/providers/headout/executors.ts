@@ -1,9 +1,15 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { HeadoutActionName } from "./actions.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   compactObject,
   optionalBoolean,
+  optionalBooleanOrNull,
   optionalInteger,
   optionalNumber,
   optionalRecord,
@@ -12,9 +18,13 @@ import {
 } from "../../core/cast.ts";
 import {
   defineProviderExecutors,
+  defineProviderProxy,
+  isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
+  requiredResponseRecord,
 } from "../provider-runtime.ts";
 
 const service = "headout";
@@ -33,7 +43,7 @@ interface HeadoutActionContext {
 }
 type HeadoutActionHandler = (input: Record<string, unknown>, context: HeadoutActionContext) => Promise<unknown>;
 
-export const headoutActionHandlers: Record<HeadoutActionName, HeadoutActionHandler> = {
+export const headoutActionHandlers: ProviderActionHandlers<"headout", HeadoutActionHandler> = {
   async list_cities(input, context) {
     const payload = await requestHeadoutJson({
       context,
@@ -45,7 +55,7 @@ export const headoutActionHandlers: Record<HeadoutActionName, HeadoutActionHandl
       phase: "execute",
     });
 
-    const record = expectObject(payload, "Headout city list response");
+    const record = requiredResponseRecord(payload, "Headout city list response");
     return {
       cities: readItems(record).map(normalizeCity),
       pagination: normalizePagination(record),
@@ -63,7 +73,7 @@ export const headoutActionHandlers: Record<HeadoutActionName, HeadoutActionHandl
       phase: "execute",
     });
 
-    const record = expectObject(payload, "Headout category list response");
+    const record = requiredResponseRecord(payload, "Headout category list response");
     return {
       categories: readItems(record).map(normalizeCategory),
       pagination: normalizePagination(record),
@@ -83,7 +93,7 @@ export const headoutActionHandlers: Record<HeadoutActionName, HeadoutActionHandl
       phase: "execute",
     });
 
-    const record = expectObject(payload, "Headout city product list response");
+    const record = requiredResponseRecord(payload, "Headout city product list response");
     return {
       products: readItems(record).map(normalizeProductListing),
       pagination: normalizePagination(record),
@@ -103,7 +113,7 @@ export const headoutActionHandlers: Record<HeadoutActionName, HeadoutActionHandl
       phase: "execute",
     });
 
-    const record = expectObject(payload, "Headout category product list response");
+    const record = requiredResponseRecord(payload, "Headout category product list response");
     return {
       products: readItems(record).map(normalizeProductListing),
       pagination: normalizePagination(record),
@@ -123,7 +133,7 @@ export const headoutActionHandlers: Record<HeadoutActionName, HeadoutActionHandl
     });
 
     return {
-      product: normalizeProduct(expectObject(payload, "Headout product response")),
+      product: normalizeProduct(requiredResponseRecord(payload, "Headout product response")),
     };
   },
   async list_inventory_by_variant(input, context) {
@@ -141,7 +151,7 @@ export const headoutActionHandlers: Record<HeadoutActionName, HeadoutActionHandl
       phase: "execute",
     });
 
-    const record = expectObject(payload, "Headout inventory list response");
+    const record = requiredResponseRecord(payload, "Headout inventory list response");
     return {
       inventories: readItems(record).map(normalizeInventory),
       pagination: normalizePagination(record),
@@ -158,7 +168,7 @@ export const headoutActionHandlers: Record<HeadoutActionName, HeadoutActionHandl
       phase: "execute",
     });
 
-    const record = expectObject(payload, "Headout booking list response");
+    const record = requiredResponseRecord(payload, "Headout booking list response");
     return {
       bookings: readItems(record).map(normalizeBooking),
       pagination: normalizePagination(record),
@@ -174,7 +184,7 @@ export const headoutActionHandlers: Record<HeadoutActionName, HeadoutActionHandl
     });
 
     return {
-      booking: normalizeBooking(expectObject(payload, "Headout booking response")),
+      booking: normalizeBooking(requiredResponseRecord(payload, "Headout booking response")),
     };
   },
 };
@@ -190,6 +200,21 @@ export const executors: ProviderExecutors = defineProviderExecutors<HeadoutActio
       fetcher,
       signal: context.signal,
     };
+  },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  async baseUrl(context) {
+    const credential = await requireApiKeyCredential(context, service);
+    return optionalString(credential.metadata.apiBaseUrl) === headoutSandboxApiBaseUrl
+      ? headoutSandboxApiBaseUrl
+      : headoutProductionApiBaseUrl;
+  },
+  allowedOrigins: [headoutProductionApiBaseUrl, headoutSandboxApiBaseUrl],
+  auth: { type: "api_key_header", name: "Headout-Auth" },
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
   },
 });
 
@@ -345,7 +370,9 @@ function normalizePagination(record: Record<string, unknown>): Record<string, un
 }
 
 function readItems(record: Record<string, unknown>): Array<Record<string, unknown>> {
-  return Array.isArray(record.items) ? record.items.map((item) => expectObject(item, "Headout list item")) : [];
+  return Array.isArray(record.items)
+    ? record.items.map((item) => requiredResponseRecord(item, "Headout list item"))
+    : [];
 }
 
 function normalizeCity(record: Record<string, unknown>): Record<string, unknown> {
@@ -369,7 +396,7 @@ function normalizeCategory(record: Record<string, unknown>): Record<string, unkn
 }
 
 function normalizeImage(value: unknown): Record<string, unknown> {
-  const record = expectObject(value, "Headout image");
+  const record = requiredResponseRecord(value, "Headout image");
   return {
     url: requireStringish(record.url, "image.url"),
   };
@@ -393,7 +420,7 @@ function normalizeProductListing(record: Record<string, unknown>): Record<string
     startGeolocation: normalizeGeolocationOrNull(record.startGeolocation),
     ratingCumulative: normalizeRatingOrNull(record.ratingCumulative),
     pricing: normalizeProductPricingOrNull(record.pricing),
-    hasInstantConfirmation: readBoolean(record.hasInstantConfirmation),
+    hasInstantConfirmation: optionalBooleanOrNull(record.hasInstantConfirmation),
     raw: record,
   };
 }
@@ -414,8 +441,8 @@ function normalizeProduct(record: Record<string, unknown>): Record<string, unkno
     endLocation: normalizeLocationOrNull(record.endLocation),
     productType: readStringish(record.productType),
     ratingCumulative: normalizeRatingOrNull(record.ratingCumulative),
-    hasInstantConfirmation: readBoolean(record.hasInstantConfirmation),
-    hasMobileTicket: readBoolean(record.hasMobileTicket),
+    hasInstantConfirmation: optionalBooleanOrNull(record.hasInstantConfirmation),
+    hasMobileTicket: optionalBooleanOrNull(record.hasMobileTicket),
     variants: readObjectArray(record.variants).map(normalizeVariant),
     pricing: normalizeProductPricingOrNull(record.pricing),
     raw: record,
@@ -470,7 +497,7 @@ function normalizeValidationOrNull(value: unknown): Record<string, unknown> | nu
     maxLength: optionalInteger(record.maxLength) ?? null,
     minValue: optionalNumber(record.minValue) ?? null,
     maxValue: optionalNumber(record.maxValue) ?? null,
-    required: readBoolean(record.required),
+    required: optionalBooleanOrNull(record.required),
     values: readStringArrayOrNull(record.values),
     raw: record,
   };
@@ -717,7 +744,7 @@ function normalizeCustomerDetailsOrNull(value: unknown): Record<string, unknown>
 function normalizeBookingCustomer(record: Record<string, unknown>): Record<string, unknown> {
   return {
     personType: readStringish(record.personType),
-    isPrimary: readBoolean(record.isPrimary),
+    isPrimary: optionalBooleanOrNull(record.isPrimary),
     inputFields: readObjectArray(record.inputFields).map(normalizeBookingInputField),
   };
 }
@@ -748,14 +775,6 @@ function normalizeTicket(record: Record<string, unknown>): Record<string, unknow
   };
 }
 
-function expectObject(value: unknown, context: string): Record<string, unknown> {
-  const record = optionalRecord(value);
-  if (!record) {
-    throw new ProviderRequestError(502, `${context} must be an object`);
-  }
-  return record;
-}
-
 function requireStringish(value: unknown, fieldName: string): string {
   const text = readStringish(value);
   if (!text) {
@@ -774,10 +793,6 @@ function readStringish(value: unknown): string | null {
   return null;
 }
 
-function readBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
-}
-
 function readObjectArray(value: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(value)) {
     return [];
@@ -794,18 +809,4 @@ function readStringArray(value: unknown): string[] {
 
 function readStringArrayOrNull(value: unknown): string[] | null {
   return value == null ? null : readStringArray(value);
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === "object" &&
-    "name" in error &&
-    (String((error as { name?: unknown }).name) === "AbortError" ||
-      String((error as { name?: unknown }).name) === "TimeoutError")
-  );
 }

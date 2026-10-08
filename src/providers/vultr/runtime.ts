@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -15,17 +16,18 @@ import { compactJson, encodePathSegment, jsonObject } from "../../core/request.t
 import {
   createProviderTimeout,
   isAbortSignalError,
+  providerInputError,
+  providerResponseError,
   providerUserAgent,
   ProviderRequestError,
   readProviderJsonBody,
 } from "../provider-runtime.ts";
 
-const vultrApiBaseUrl = "https://api.vultr.com/v2";
-const requestTimeoutMs = 30_000;
+export const vultrApiBaseUrl = "https://api.vultr.com/v2";
 
 type VultrRequestPhase = "validate" | "execute";
 
-export const vultrActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const vultrActionHandlers: ProviderActionHandlers<"vultr", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   async get_account(_input, context) {
     return { account: await getAccount(context, "execute") };
   },
@@ -271,7 +273,7 @@ async function vultrFetch(input: VultrRequestInput): Promise<Response> {
     }
   }
 
-  const timeout = createProviderTimeout(input.signal, requestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const headers: Record<string, string> = {
       accept: "application/json",
@@ -354,12 +356,4 @@ function readOptionalPerPage(value: unknown): number | undefined {
 
 function readOptionalStringArray(value: unknown): string[] | undefined {
   return value === undefined ? undefined : requiredStringArray(value, "array value", providerInputError);
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerResponseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

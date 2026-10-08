@@ -4,6 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
@@ -11,6 +12,7 @@ import {
   createProviderTimeout,
   defineProviderExecutors,
   defineProviderProxy,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
@@ -43,7 +45,7 @@ interface QuriiriResponseBody {
 
 type QuriiriActionHandler = (input: Record<string, unknown>, context: QuriiriContext) => Promise<unknown>;
 
-export const quriiriActionHandlers: Record<string, QuriiriActionHandler> = {
+export const quriiriActionHandlers: ProviderActionHandlers<"quriiri", QuriiriActionHandler> = {
   send_sms(input, context) {
     return quriiriRequest(context, {
       method: "POST",
@@ -64,7 +66,7 @@ export const quriiriActionHandlers: Record<string, QuriiriActionHandler> = {
     }).then((response) => response.payload);
   },
   async get_sms_status(input, context) {
-    const deliveryReportId = requiredString(input.deliveryReportId, "deliveryReportId", invalidInput);
+    const deliveryReportId = requiredString(input.deliveryReportId, "deliveryReportId", providerInputError);
     const response = await quriiriRequest(context, {
       method: "GET",
       path: `/v2/status/sms/${encodeURIComponent(deliveryReportId)}`,
@@ -148,10 +150,10 @@ export const credentialValidators: CredentialValidators = {
 };
 
 export function normalizeQuriiriApiBaseUrl(value: unknown): string {
-  const raw = requiredString(value, "apiBaseUrl", invalidInput);
+  const raw = requiredString(value, "apiBaseUrl", providerInputError);
   const url = assertPublicHttpUrl(raw, {
     fieldName: "apiBaseUrl",
-    createError: invalidInput,
+    createError: providerInputError,
   });
   if (url.username || url.password) {
     throw new ProviderRequestError(400, "apiBaseUrl must not include credentials");
@@ -246,8 +248,4 @@ function requireCleanApiKey(value: string): string {
     throw new ProviderRequestError(400, "quriiri apiKey must not include leading or trailing whitespace");
   }
   return value;
-}
-
-function invalidInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

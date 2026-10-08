@@ -1,15 +1,15 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
-import type { ValyuActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
+import { compactObject, looseArray, optionalRecord, optionalString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 export const valyuApiBaseUrl = "https://api.valyu.ai";
 
 type ValyuActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const valyuActionHandlers: Record<ValyuActionName, ValyuActionHandler> = {
+export const valyuActionHandlers: ProviderActionHandlers<"valyu", ValyuActionHandler> = {
   async search(input, context) {
     const payload = await valyuRequest({
       path: "/v1/search",
@@ -40,7 +40,7 @@ export const valyuActionHandlers: Record<ValyuActionName, ValyuActionHandler> = 
     const response = asObject(payload);
     return {
       ...response,
-      results: readArray(response.results).map(normalizeSearchResult),
+      results: looseArray(response.results).map(normalizeSearchResult),
       results_by_source: optionalRecord(response.results_by_source) ?? {},
       raw: response,
     };
@@ -169,10 +169,6 @@ function normalizeSearchResult(value: unknown): Record<string, unknown> {
     metadata: optionalRecord(input.metadata),
     raw: input,
   });
-}
-
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
 }
 
 function asObject(value: unknown): Record<string, unknown> {

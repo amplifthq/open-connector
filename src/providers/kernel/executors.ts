@@ -1,14 +1,14 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { KernelActionName } from "./actions.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
   defineApiKeyProviderExecutors,
-  isAbortLikeError,
+  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 const service = "kernel";
@@ -29,7 +29,7 @@ interface KernelRequestInput {
 
 type KernelActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const kernelActionHandlers: Record<KernelActionName, KernelActionHandler> = {
+export const kernelActionHandlers: ProviderActionHandlers<"kernel", KernelActionHandler> = {
   async list_browser_sessions(input, context): Promise<unknown> {
     const result = await requestKernelJson({
       method: "GET",
@@ -94,6 +94,16 @@ export const kernelActionHandlers: Record<KernelActionName, KernelActionHandler>
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, kernelActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: kernelApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     await requestKernelJson({
@@ -153,40 +163,26 @@ async function requestKernelJson(input: KernelRequestInput): Promise<{
   payload: unknown;
   pagination: ReturnType<typeof readKernelPagination>;
 }> {
-  const timeout = createProviderTimeout(input.context.signal, kernelDefaultRequestTimeoutMs);
+  return runProviderRequest(
+    { signal: input.context.signal, timeoutMs: kernelDefaultRequestTimeoutMs, label: "Kernel" },
+    async (signal) => {
+      const response = await input.context.fetcher(buildKernelUrl(input.path, input.query), {
+        method: input.method,
+        headers: buildKernelHeaders(input),
+        body: input.body ? JSON.stringify(input.body) : undefined,
+        signal,
+      });
+      if (!response.ok) {
+        const payload = await readKernelErrorPayload(response);
+        throw createKernelError(response, payload, input.phase);
+      }
 
-  try {
-    const response = await input.context.fetcher(buildKernelUrl(input.path, input.query), {
-      method: input.method,
-      headers: buildKernelHeaders(input),
-      body: input.body ? JSON.stringify(input.body) : undefined,
-      signal: timeout.signal,
-    });
-    if (!response.ok) {
-      const payload = await readKernelErrorPayload(response);
-      throw createKernelError(response, payload, input.phase);
-    }
-
-    return {
-      payload: await readKernelPayload(response),
-      pagination: readKernelPagination(response.headers),
-    };
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Kernel request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Kernel request failed: ${error.message}` : "Kernel request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+      return {
+        payload: await readKernelPayload(response),
+        pagination: readKernelPagination(response.headers),
+      };
+    },
+  );
 }
 
 function buildKernelHeaders(input: KernelRequestInput): Record<string, string> {

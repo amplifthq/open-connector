@@ -1,12 +1,19 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { BearerProviderContext } from "../provider-runtime.ts";
-import type { TicktickActionName } from "./actions.ts";
 
 import { createHash } from "node:crypto";
-import { compactObject, objectArray, optionalBoolean, optionalInteger, optionalString } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  compactObject,
+  objectArray,
+  optionalBoolean,
+  optionalInteger,
+  optionalNumber,
+  optionalString,
+} from "../../core/cast.ts";
+import { providerInputError, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
-const ticktickApiBaseUrl = "https://api.ticktick.com";
+export const ticktickApiBaseUrl = "https://api.ticktick.com";
 const ticktickProviderScopes = ["ticktick.read", "ticktick.write"] as const;
 
 type TicktickPayload = Record<string, unknown>;
@@ -32,7 +39,7 @@ interface TicktickProjectData {
   columns: TicktickPayload[];
 }
 
-export const ticktickActionHandlers: Record<TicktickActionName, TicktickHandler> = {
+export const ticktickActionHandlers: ProviderActionHandlers<"ticktick", TicktickHandler> = {
   async get_user_project(_input, context) {
     return { projects: await fetchProjects(context, "execute") };
   },
@@ -670,10 +677,6 @@ function requireInteger(value: unknown, fieldName: string): number {
   return parsed;
 }
 
-function optionalNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
 function requireObjectPayload(value: unknown, fieldName: string): TicktickPayload {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new ProviderRequestError(502, `${fieldName} must be an object`);
@@ -688,10 +691,6 @@ function requireObjectArrayPayload(value: unknown, fieldName: string): TicktickP
 
 function optionalObjectArrayPayload(value: unknown): TicktickPayload[] {
   return value == null ? [] : requireObjectArrayPayload(value, "ticktick nested array response");
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function hashAccessToken(accessToken: string): string {

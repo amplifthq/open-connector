@@ -5,14 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "freshsales";
 
-export type FreshsalesActionName =
-  | "list_contact_filters"
-  | "list_contacts"
-  | "get_contact"
-  | "create_contact"
-  | "update_contact"
-  | "delete_contact";
-
 const positiveIdSchema = (description: string) => s.positiveInteger(description);
 const pageSchema = s.positiveInteger("One-based Freshsales page number.");
 
@@ -50,6 +42,7 @@ const contactOutputSchema = s.object("Freshsales contact response wrapper.", {
 export const freshsalesActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_contact_filters",
+    operationType: "read",
     description: "List Freshsales contact filters used to discover contact view IDs.",
     inputSchema: s.object("Input parameters for listing Freshsales contact filters.", {}),
     outputSchema: s.object("Freshsales contact filters response wrapper.", {
@@ -58,6 +51,7 @@ export const freshsalesActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_contacts",
+    operationType: "read",
     description: "List Freshsales contacts from a saved contact view.",
     inputSchema: s.object(
       "Input parameters for listing Freshsales contacts from a saved view.",
@@ -75,6 +69,7 @@ export const freshsalesActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_contact",
+    operationType: "read",
     description: "Get one Freshsales contact by ID.",
     inputSchema: s.object(
       "Input parameters for reading a Freshsales contact.",
@@ -88,6 +83,7 @@ export const freshsalesActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_contact",
+    operationType: "write",
     description: "Create a Freshsales contact from a JSON contact payload.",
     inputSchema: s.object("Input parameters for creating a Freshsales contact.", {
       contact: contactFieldsSchema,
@@ -96,6 +92,7 @@ export const freshsalesActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_contact",
+    operationType: "write",
     description: "Update a Freshsales contact by ID.",
     inputSchema: s.object("Input parameters for updating a Freshsales contact.", {
       contactId: positiveIdSchema("Freshsales contact ID."),
@@ -105,6 +102,7 @@ export const freshsalesActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_contact",
+    operationType: "destructive",
     description: "Delete a Freshsales contact by ID.",
     inputSchema: s.object("Input parameters for deleting a Freshsales contact.", {
       contactId: positiveIdSchema("Freshsales contact ID."),

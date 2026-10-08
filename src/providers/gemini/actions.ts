@@ -5,16 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "gemini";
 
-export type GeminiActionName =
-  | "list_models"
-  | "generate_content"
-  | "embed_content"
-  | "count_tokens"
-  | "generate_image"
-  | "generate_videos"
-  | "get_videos_operation"
-  | "wait_for_video";
-
 const jsonObjectSchema = s.looseObject("A JSON-like object with arbitrary string keys.");
 
 const modelSummarySchema = s.object(
@@ -74,6 +64,7 @@ const aspectRatioSchema = s.stringEnum("The image aspect ratio.", [
 export const geminiActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_models",
+    operationType: "read",
     description: "List the available Gemini and Veo models.",
     inputSchema: s.actionInput(
       {
@@ -99,6 +90,7 @@ export const geminiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "generate_content",
+    operationType: "read",
     description: "Generate text or speech audio with Gemini models.",
     inputSchema: s.actionInput(
       {
@@ -126,6 +118,7 @@ export const geminiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "embed_content",
+    operationType: "read",
     description: "Generate Gemini embeddings for text content.",
     inputSchema: s.actionInput(
       {
@@ -148,6 +141,7 @@ export const geminiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "count_tokens",
+    operationType: "read",
     description: "Count the Gemini token usage for input text.",
     inputSchema: s.actionInput(
       {
@@ -174,6 +168,7 @@ export const geminiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "generate_image",
+    operationType: "read",
     description: "Generate an image with Gemini and return a transit URL.",
     inputSchema: s.actionInput(
       {
@@ -195,6 +190,7 @@ export const geminiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "generate_videos",
+    operationType: "write",
     description: "Start a Gemini Veo video generation operation.",
     inputSchema: s.actionInput(
       {
@@ -224,6 +220,7 @@ export const geminiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_videos_operation",
+    operationType: "read",
     description: "Fetch the current status for a Gemini Veo operation.",
     inputSchema: s.actionInput(
       {
@@ -248,6 +245,7 @@ export const geminiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "wait_for_video",
+    operationType: "read",
     description: "Poll a Gemini Veo operation and return the finished video via transit URL.",
     inputSchema: s.actionInput(
       {

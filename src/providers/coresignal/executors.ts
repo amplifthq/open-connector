@@ -1,8 +1,13 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { CoresignalActionName } from "./actions.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "coresignal";
 const coresignalApiBaseUrl = "https://api.coresignal.com/cdapi/v2";
@@ -15,7 +20,7 @@ interface CoresignalContext {
 
 type CoresignalActionHandler = (input: Record<string, unknown>, context: CoresignalContext) => Promise<unknown>;
 
-const coresignalActionHandlers: Record<CoresignalActionName, CoresignalActionHandler> = {
+const coresignalActionHandlers: ProviderActionHandlers<"coresignal", CoresignalActionHandler> = {
   search_base_companies(input, context) {
     return searchBaseCompanies(input, context);
   },
@@ -28,6 +33,16 @@ const coresignalActionHandlers: Record<CoresignalActionName, CoresignalActionHan
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, coresignalActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: coresignalApiBaseUrl,
+  auth: { type: "api_key_header", name: "apikey" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input) {

@@ -1,17 +1,11 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { SystemeIoActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  createProviderTimeout,
-  isAbortLikeError,
-  ProviderRequestError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
 
 export const systemeIoApiBaseUrl = "https://api.systeme.io";
-const systemeIoDefaultRequestTimeoutMs = 30_000;
 
 type SystemeIoPhase = "validate" | "execute";
 type SystemeIoMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -28,7 +22,7 @@ interface SystemeIoRequestInput {
   body?: Record<string, unknown>;
 }
 
-export const systemeIoActionHandlers: Record<SystemeIoActionName, SystemeIoActionHandler> = {
+export const systemeIoActionHandlers: ProviderActionHandlers<"systeme_io", SystemeIoActionHandler> = {
   async list_contacts(input, context) {
     const { items, hasMore } = extractPaginatedPayload(
       await requestSystemeIoJson({
@@ -380,8 +374,7 @@ function pageParams(input: Record<string, unknown>): Record<string, string | und
 }
 
 async function requestSystemeIoJson(input: SystemeIoRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, systemeIoDefaultRequestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: input.signal, label: "Systeme.io" }, async (signal) => {
     const headers: Record<string, string> = {
       "x-api-key": input.apiKey,
       "user-agent": providerUserAgent,
@@ -389,7 +382,7 @@ async function requestSystemeIoJson(input: SystemeIoRequestInput): Promise<unkno
     const init: RequestInit = {
       method: input.method,
       headers,
-      signal: timeout.signal,
+      signal,
     };
     if (input.body !== undefined && (input.method === "POST" || input.method === "PUT" || input.method === "PATCH")) {
       headers["content-type"] = "application/json";
@@ -400,17 +393,7 @@ async function requestSystemeIoJson(input: SystemeIoRequestInput): Promise<unkno
     const payload = await readSystemeIoPayload(response, { strictJson: response.ok });
     if (!response.ok) throw createSystemeIoError(response.status, payload, input.phase);
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) throw error;
-    if (timeout.didTimeout() || isAbortLikeError(error))
-      throw new ProviderRequestError(504, "Systeme.io request timed out");
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Systeme.io request failed: ${error.message}` : "Systeme.io request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildSystemeIoUrl(path: string, params: Record<string, string | undefined>): URL {

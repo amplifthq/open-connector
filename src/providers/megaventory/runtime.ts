@@ -1,10 +1,10 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 export const megaventoryApiBaseUrl = "https://api.megaventory.com/v2017a";
-const timeoutMs = 30_000;
 const recordAction = "InsertOrUpdateNonEmptyFields";
 const lists: Record<string, { path: string; responseKey: string; outputKey: string }> = {
   list_products: { path: "/Product/ProductGet", responseKey: "mvProducts", outputKey: "products" },
@@ -129,15 +129,20 @@ const handler =
   (name: string): ProviderRuntimeHandler<ApiKeyProviderContext> =>
   (input, context) =>
     execute(name, input, context);
-export const megaventoryActionHandlers: Record<
-  string,
+export const megaventoryActionHandlers: ProviderActionHandlers<
+  "megaventory",
   ProviderRuntimeHandler<ApiKeyProviderContext>
-> = Object.fromEntries(
-  [...Object.keys(lists), "upsert_product", "upsert_sales_order", "upsert_purchase_order"].map((name) => [
-    name,
-    handler(name),
-  ]),
-);
+> = {
+  list_products: handler("list_products"),
+  list_supplier_clients: handler("list_supplier_clients"),
+  list_inventory_locations: handler("list_inventory_locations"),
+  list_document_types: handler("list_document_types"),
+  list_sales_orders: handler("list_sales_orders"),
+  list_purchase_orders: handler("list_purchase_orders"),
+  upsert_product: handler("upsert_product"),
+  upsert_sales_order: handler("upsert_sales_order"),
+  upsert_purchase_order: handler("upsert_purchase_order"),
+};
 export async function validateMegaventoryCredential(
   apiKey: string,
   fetcher: typeof fetch,
@@ -156,7 +161,7 @@ async function request(
   context: ApiKeyProviderContext,
   phase: "validate" | "execute",
 ) {
-  const timeout = createProviderTimeout(context.signal, timeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(`${megaventoryApiBaseUrl}${path}`, {
       method: "POST",

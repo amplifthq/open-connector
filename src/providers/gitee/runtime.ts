@@ -1,12 +1,12 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { BearerProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { GiteeActionName } from "./actions.ts";
 
 import { compactObject, optionalIntegerLike, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { encodePathSegment, queryParams } from "../../core/request.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const giteeApiBaseUrl = "https://gitee.com/api/v5";
+export const giteeApiBaseUrl: string = "https://gitee.com/api/v5";
 
 type GiteeRequestPhase = "validate" | "execute";
 
@@ -14,7 +14,7 @@ interface GiteeRequestOptions {
   query?: Record<string, string | number | boolean | null | undefined>;
 }
 
-export const giteeActionHandlers: Record<GiteeActionName, ProviderRuntimeHandler<BearerProviderContext>> = {
+export const giteeActionHandlers: ProviderActionHandlers<"gitee", ProviderRuntimeHandler<BearerProviderContext>> = {
   async get_current_user(_input, context) {
     return requireGiteeObject(await giteeRequestJson("/user", context), "current user");
   },
@@ -25,8 +25,8 @@ export const giteeActionHandlers: Record<GiteeActionName, ProviderRuntimeHandler
         q: optionalString(input.q),
         sort: optionalString(input.sort),
         direction: optionalString(input.direction),
-        page: optionalIntegerLike(input.page, "page", createInputError),
-        per_page: optionalIntegerLike(input.perPage, "perPage", createInputError),
+        page: optionalIntegerLike(input.page, "page", providerInputError),
+        per_page: optionalIntegerLike(input.perPage, "perPage", providerInputError),
       },
     });
     if (!Array.isArray(payload)) {
@@ -35,8 +35,8 @@ export const giteeActionHandlers: Record<GiteeActionName, ProviderRuntimeHandler
     return { repositories: payload };
   },
   async get_repository(input, context) {
-    const owner = requiredString(input.owner, "owner", createInputError);
-    const repo = requiredString(input.repo, "repo", createInputError);
+    const owner = requiredString(input.owner, "owner", providerInputError);
+    const repo = requiredString(input.repo, "repo", providerInputError);
     return requireGiteeObject(
       await giteeRequestJson(`/repos/${encodePathSegment(owner)}/${encodePathSegment(repo)}`, context),
       "repository",
@@ -174,8 +174,4 @@ function requireGiteeObject(value: unknown, resource: string): Record<string, un
     return record;
   }
   throw new ProviderRequestError(502, `Gitee ${resource} response is not an object`, value);
-}
-
-function createInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

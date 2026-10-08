@@ -1,6 +1,6 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { PaymoActionName } from "./actions.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -11,7 +11,13 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  providerInputError,
+  ProviderRequestError,
+  providerResponseError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 export const paymoApiBaseUrl = "https://app.paymoapp.com/api";
 
@@ -29,7 +35,7 @@ interface PaymoRequestInput {
 type PaymoActionContext = ApiKeyProviderContext;
 type PaymoActionHandler = (input: Record<string, unknown>, context: PaymoActionContext) => Promise<unknown>;
 
-export const paymoActionHandlers: Record<PaymoActionName, PaymoActionHandler> = {
+export const paymoActionHandlers: ProviderActionHandlers<"paymo", PaymoActionHandler> = {
   get_current_user(_input, context) {
     return requestSinglePaymoResource({
       apiKey: context.apiKey,
@@ -200,7 +206,7 @@ export async function validatePaymoCredential(
     fetcher,
     signal,
   });
-  const user = requiredRecord(payload.user, "user", providerOutputError);
+  const user = requiredRecord(payload.user, "user", providerResponseError);
 
   return {
     profile: {
@@ -362,12 +368,4 @@ function readNonEmptyString(value: unknown) {
     return String(value);
   }
   return optionalString(value);
-}
-
-function providerInputError(message: string) {
-  return new ProviderRequestError(400, message);
-}
-
-function providerOutputError(message: string) {
-  return new ProviderRequestError(502, message);
 }

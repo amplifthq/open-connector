@@ -145,36 +145,10 @@ const folderVideosInputSchema = s.object(
   { optional: ["userId", "query", "sort", "direction", "includeSubfolders", "page", "perPage"] },
 );
 
-export type VimeoActionName =
-  | "get_current_user"
-  | "list_user_videos"
-  | "get_video"
-  | "update_video"
-  | "delete_video"
-  | "upload_video_from_url"
-  | "replace_video_from_url"
-  | "get_video_download_links"
-  | "download_video_file"
-  | "list_video_tags"
-  | "add_video_tags"
-  | "delete_video_tag"
-  | "list_showcases"
-  | "get_showcase"
-  | "list_showcase_videos"
-  | "add_video_to_showcase"
-  | "remove_video_from_showcase"
-  | "list_folders"
-  | "create_folder"
-  | "get_folder"
-  | "update_folder"
-  | "delete_folder"
-  | "list_folder_videos"
-  | "add_video_to_folder"
-  | "remove_video_from_folder";
-
 export const vimeoActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Get the authenticated Vimeo user profile.",
     requiredScopes: [vimeoConnectorScopes.read],
     providerPermissions: [vimeoProviderPermissions.public],
@@ -183,6 +157,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_user_videos",
+    operationType: "read",
     description: "List videos uploaded by the authenticated user or by a specified Vimeo user.",
     requiredScopes: [vimeoConnectorScopes.read],
     providerPermissions: [vimeoProviderPermissions.public, vimeoProviderPermissions.private],
@@ -219,6 +194,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_video",
+    operationType: "read",
     description: "Get metadata for a specific Vimeo video.",
     requiredScopes: [vimeoConnectorScopes.read],
     providerPermissions: [vimeoProviderPermissions.public, vimeoProviderPermissions.private],
@@ -227,6 +203,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_video",
+    operationType: "write",
     description: "Update basic metadata for a Vimeo video without uploading or replacing media.",
     requiredScopes: [vimeoConnectorScopes.write],
     providerPermissions: [vimeoProviderPermissions.edit],
@@ -252,6 +229,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_video",
+    operationType: "destructive",
     description: "Delete a Vimeo video by ID.",
     requiredScopes: [vimeoConnectorScopes.delete],
     providerPermissions: [vimeoProviderPermissions.delete],
@@ -263,6 +241,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "upload_video_from_url",
+    operationType: "write",
     description: "Upload a new Vimeo video by asking Vimeo to pull the media from an HTTP or HTTPS URL.",
     requiredScopes: [vimeoConnectorScopes.upload],
     providerPermissions: [vimeoProviderPermissions.upload],
@@ -271,6 +250,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "replace_video_from_url",
+    operationType: "write",
     description:
       "Add a new version to an existing Vimeo video by asking Vimeo to pull the replacement media from a URL.",
     requiredScopes: [vimeoConnectorScopes.upload],
@@ -291,6 +271,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_video_download_links",
+    operationType: "read",
     description: "Get temporary downloadable file links for a Vimeo video when Vimeo exposes them.",
     requiredScopes: [vimeoConnectorScopes.file],
     providerPermissions: [vimeoProviderPermissions.videoFiles],
@@ -301,6 +282,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "download_video_file",
+    operationType: "read",
     description: "Download one Vimeo video file link and store it in local transit storage.",
     requiredScopes: [vimeoConnectorScopes.file],
     providerPermissions: [vimeoProviderPermissions.videoFiles],
@@ -322,6 +304,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_video_tags",
+    operationType: "read",
     description: "List tags attached to a Vimeo video.",
     requiredScopes: [vimeoConnectorScopes.read],
     providerPermissions: [vimeoProviderPermissions.public, vimeoProviderPermissions.private],
@@ -334,6 +317,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "add_video_tags",
+    operationType: "write",
     description: "Add one or more tags to a Vimeo video.",
     requiredScopes: [vimeoConnectorScopes.write],
     providerPermissions: [vimeoProviderPermissions.edit],
@@ -348,6 +332,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_video_tag",
+    operationType: "destructive",
     description: "Remove a tag from a Vimeo video.",
     requiredScopes: [vimeoConnectorScopes.write],
     providerPermissions: [vimeoProviderPermissions.edit],
@@ -363,6 +348,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_showcases",
+    operationType: "read",
     description: "List showcases that belong to the authenticated user or to a specified Vimeo user.",
     requiredScopes: [vimeoConnectorScopes.read],
     providerPermissions: [vimeoProviderPermissions.public, vimeoProviderPermissions.private],
@@ -387,6 +373,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_showcase",
+    operationType: "read",
     description: "Get metadata for a specific Vimeo showcase.",
     requiredScopes: [vimeoConnectorScopes.read],
     providerPermissions: [vimeoProviderPermissions.public, vimeoProviderPermissions.private],
@@ -399,6 +386,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_showcase_videos",
+    operationType: "read",
     description: "List videos in a Vimeo showcase.",
     requiredScopes: [vimeoConnectorScopes.read],
     providerPermissions: [vimeoProviderPermissions.public, vimeoProviderPermissions.private],
@@ -430,6 +418,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "add_video_to_showcase",
+    operationType: "write",
     description: "Add a Vimeo video to a showcase.",
     requiredScopes: [vimeoConnectorScopes.write],
     providerPermissions: [vimeoProviderPermissions.edit],
@@ -447,6 +436,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "remove_video_from_showcase",
+    operationType: "destructive",
     description: "Remove a Vimeo video from a showcase.",
     requiredScopes: [vimeoConnectorScopes.write],
     providerPermissions: [vimeoProviderPermissions.edit],
@@ -464,6 +454,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_folders",
+    operationType: "read",
     description: "List folders that belong to the authenticated user or to a specified Vimeo user.",
     requiredScopes: [vimeoConnectorScopes.read],
     providerPermissions: [vimeoProviderPermissions.private],
@@ -488,6 +479,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_folder",
+    operationType: "write",
     description: "Create a Vimeo folder for the authenticated user or a specified Vimeo user.",
     requiredScopes: [vimeoConnectorScopes.write],
     providerPermissions: [vimeoProviderPermissions.create],
@@ -504,6 +496,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_folder",
+    operationType: "read",
     description: "Get metadata for a Vimeo folder.",
     requiredScopes: [vimeoConnectorScopes.read],
     providerPermissions: [vimeoProviderPermissions.private],
@@ -516,6 +509,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_folder",
+    operationType: "write",
     description: "Update a Vimeo folder name.",
     requiredScopes: [vimeoConnectorScopes.write],
     providerPermissions: [vimeoProviderPermissions.edit],
@@ -532,6 +526,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_folder",
+    operationType: "destructive",
     description: "Delete a Vimeo folder, optionally deleting the videos inside it.",
     requiredScopes: [vimeoConnectorScopes.delete],
     providerPermissions: [vimeoProviderPermissions.delete],
@@ -552,6 +547,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_folder_videos",
+    operationType: "read",
     description: "List videos in a Vimeo folder.",
     requiredScopes: [vimeoConnectorScopes.read],
     providerPermissions: [vimeoProviderPermissions.private],
@@ -560,6 +556,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "add_video_to_folder",
+    operationType: "write",
     description: "Add a Vimeo video to a folder.",
     requiredScopes: [vimeoConnectorScopes.write],
     providerPermissions: [vimeoProviderPermissions.interact],
@@ -577,6 +574,7 @@ export const vimeoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "remove_video_from_folder",
+    operationType: "destructive",
     description: "Remove a Vimeo video from a folder without deleting the video.",
     requiredScopes: [vimeoConnectorScopes.delete],
     providerPermissions: [vimeoProviderPermissions.delete],

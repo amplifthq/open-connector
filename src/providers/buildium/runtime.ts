@@ -1,18 +1,18 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { BuildiumActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalString, requiredRecord } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerResponseError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
 export const buildiumApiBaseUrl: string = "https://api.buildium.com";
 const rentalsPath = "/v1/rentals";
-const buildiumDefaultRequestTimeoutMs = 30_000;
 
 type RequestPhase = "validate" | "execute";
 type BuildiumActionHandler = ProviderRuntimeHandler<BuildiumActionContext>;
@@ -24,7 +24,7 @@ export interface BuildiumActionContext {
   signal?: AbortSignal;
 }
 
-export const buildiumActionHandlers: Record<BuildiumActionName, BuildiumActionHandler> = {
+export const buildiumActionHandlers: ProviderActionHandlers<"buildium", BuildiumActionHandler> = {
   async list_properties(input, context) {
     const payload = await buildiumRequestJson({
       path: rentalsPath,
@@ -134,7 +134,7 @@ async function buildiumRequestJson(input: {
   phase: RequestPhase;
   searchParams?: URLSearchParams;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, buildiumDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   const url = new URL(input.path, buildiumApiBaseUrl);
   for (const [key, value] of input.searchParams ?? []) {
     url.searchParams.set(key, value);
@@ -250,7 +250,7 @@ function normalizeList(payload: unknown): { count: number; items: Array<Record<s
     };
   }
 
-  const record = requiredRecord(payload, "Buildium list response", providerOutputError);
+  const record = requiredRecord(payload, "Buildium list response", providerResponseError);
   const rawItems = Array.isArray(record.Items) ? record.Items : Array.isArray(record.items) ? record.items : [];
   const items = rawItems.map((item) => normalizeResource(item));
   return {
@@ -260,7 +260,7 @@ function normalizeList(payload: unknown): { count: number; items: Array<Record<s
 }
 
 function normalizeResource(payload: unknown): Record<string, unknown> {
-  const record = requiredRecord(payload, "Buildium resource response", providerOutputError);
+  const record = requiredRecord(payload, "Buildium resource response", providerResponseError);
   return compactObject({ ...record }) as Record<string, unknown>;
 }
 
@@ -269,8 +269,4 @@ function readPositiveInteger(value: unknown, fieldName: string): number {
     throw new ProviderRequestError(400, `${fieldName} must be a positive integer`);
   }
   return value;
-}
-
-function providerOutputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

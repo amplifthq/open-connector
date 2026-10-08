@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { TriggercmdActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -12,7 +12,6 @@ import {
 
 export const triggercmdApiBaseUrl = "https://www.triggercmd.com";
 
-const triggercmdRequestTimeoutMs = 30_000;
 const listCommandsPath = "/api/command/list";
 
 type TriggercmdRequestPhase = "validate" | "execute";
@@ -31,7 +30,7 @@ interface TriggercmdRequestInput {
   body?: Record<string, unknown>;
 }
 
-export const triggercmdActionHandlers: Record<TriggercmdActionName, TriggercmdActionHandler> = {
+export const triggercmdActionHandlers: ProviderActionHandlers<"triggercmd", TriggercmdActionHandler> = {
   async list_commands(_input, context) {
     return requireResponseObject(
       await requestTriggercmdPayload({
@@ -93,7 +92,7 @@ export async function validateTriggercmdCredential(
 }
 
 async function requestTriggercmdPayload(input: TriggercmdRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, triggercmdRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   let response: Response;
   try {
     const headers: Record<string, string> = {

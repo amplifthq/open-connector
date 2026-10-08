@@ -1,14 +1,17 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
 import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 export const timelinesAiApiBaseUrl = "https://app.timelines.ai/integrations/api";
-const timelinesAiRequestTimeoutMs = 30_000;
 
 type RequestPhase = "validate" | "execute";
-export const timelinesAiActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const timelinesAiActionHandlers: ProviderActionHandlers<
+  "timelinesai",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   async get_workspace(_input, context) {
     return { workspace: normalizeWorkspace(await request({ path: "/workspace", ...context })) };
   },
@@ -164,7 +167,7 @@ async function request(input: RequestInput) {
     }
   }
 
-  const timeout = createProviderTimeout(input.signal, timelinesAiRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const response = await input.fetcher(url, {
       method: input.method ?? "GET",

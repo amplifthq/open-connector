@@ -1,7 +1,8 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
-import { compactObject, optionalRawString, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { compactObject, optionalRawString, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
@@ -9,6 +10,7 @@ import {
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 const service = "pinboard";
@@ -36,7 +38,7 @@ interface PinboardRequestInput {
 type PinboardRequestPhase = "validate" | "execute";
 type PinboardActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-const pinboardActionHandlers: Record<string, PinboardActionHandler> = {
+const pinboardActionHandlers: ProviderActionHandlers<"pinboard", PinboardActionHandler> = {
   async get_last_update(_input, context) {
     const payload = await requestPinboardJson({ path: "/posts/update" }, context, "execute");
     return { updateTime: readUpdateTime(payload) };
@@ -76,8 +78,8 @@ const pinboardActionHandlers: Record<string, PinboardActionHandler> = {
       {
         path: "/posts/add",
         query: {
-          url: readRequiredInputString(input.url, "url"),
-          description: readRequiredInputString(input.title, "title"),
+          url: requiredInputString(input.url, "url"),
+          description: requiredInputString(input.title, "title"),
           extended: optionalString(input.description),
           tags: readTagQuery(input.tags, "tags", 100),
           dt: optionalString(input.createdAt),
@@ -95,7 +97,7 @@ const pinboardActionHandlers: Record<string, PinboardActionHandler> = {
     const payload = await requestPinboardJson(
       {
         path: "/posts/delete",
-        query: { url: readRequiredInputString(input.url, "url") },
+        query: { url: requiredInputString(input.url, "url") },
       },
       context,
       "execute",
@@ -324,10 +326,6 @@ function readProviderObject(value: unknown, label: string): Record<string, unkno
   return object;
 }
 
-function readRequiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function readOptionalInteger(value: unknown): string | undefined {
   if (value == null) {
     return undefined;
@@ -382,7 +380,7 @@ function readOptionalTagArray(value: unknown, fieldName: string, maxCount: numbe
 }
 
 function readTag(value: unknown, fieldName: string): string {
-  const tag = readRequiredInputString(value, fieldName);
+  const tag = requiredInputString(value, fieldName);
   if (tag.includes(",")) {
     throw new ProviderRequestError(400, `${fieldName} may not contain commas`);
   }

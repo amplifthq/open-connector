@@ -1,19 +1,20 @@
+import type { ProviderActionHandlerSubset } from "../provider-runtime.ts";
 import type { MondayProviderActionInput } from "./runtime-common.ts";
 import type { MondayActionHandler } from "./runtime-common.ts";
 
 import { compactObject, optionalRecord as asOptionalObject } from "../../core/cast.ts";
+import { ProviderRequestError } from "../provider-runtime.ts";
 import {
   asArray,
   normalizeDocBlocksFromMarkdownResult,
   mondayGraphqlRequest,
   mondayItemFields,
   normalizeItemsPage,
-  mondayProviderError,
   normalizeMondayItem,
   serializeJsonInput,
 } from "./runtime-common.ts";
 
-export const mondayItemActionHandlers: Record<string, MondayActionHandler> = {
+export const mondayItemActionHandlers: ProviderActionHandlerSubset<"monday", MondayActionHandler> = {
   find_items_by_column_values(input, fetcher) {
     return mondayFindItemsByColumnValues(input, fetcher);
   },
@@ -365,7 +366,11 @@ async function mondaySetItemDescriptionContent(input: MondayProviderActionInput,
     {
       query: `
         mutation SetItemDescriptionContent($item_id: ID!, $markdown: String!) {
-          set_item_description_content(item_id: $item_id, markdown: $markdown)
+          set_item_description_content(item_id: $item_id, markdown: $markdown) {
+            success
+            error
+            block_ids
+          }
         }
       `,
       variables: {
@@ -671,5 +676,5 @@ function requireMutationItemId(value: unknown, message: string) {
     return String(id);
   }
 
-  throw mondayProviderError("provider_error", message, 502);
+  throw new ProviderRequestError(502, message);
 }

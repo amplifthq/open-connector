@@ -5,14 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "firstbase";
 
-export type FirstbaseActionName =
-  | "list_inventory"
-  | "get_inventory"
-  | "list_catalog_skus"
-  | "get_catalog_sku"
-  | "list_brands"
-  | "list_categories";
-
 const pageSchema = s.positiveInteger("The 1-based page number to request.");
 const sizeSchema = s.positiveInteger("The number of results to return in a page.");
 const cappedSizeSchema = s.integer("The number of results to return in a page, from 1 to 100.", {
@@ -199,6 +191,7 @@ const pageFields = {
 export const firstbaseActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_inventory",
+    operationType: "read",
     description: "List inventory items owned by the authenticated Firstbase organization.",
     inputSchema: listInventoryInputSchema,
     outputSchema: s.object("A Firstbase inventory list response.", {
@@ -207,6 +200,7 @@ export const firstbaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_inventory",
+    operationType: "read",
     description: "Get one inventory item by Firstbase inventory ID.",
     inputSchema: getInventoryInputSchema,
     outputSchema: s.object("A Firstbase inventory item response.", {
@@ -215,6 +209,7 @@ export const firstbaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_catalog_skus",
+    operationType: "read",
     description: "List catalog SKUs available to the authenticated Firstbase organization.",
     inputSchema: listCatalogSkusInputSchema,
     outputSchema: s.object("A Firstbase catalog SKU list response.", {
@@ -223,6 +218,7 @@ export const firstbaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_catalog_sku",
+    operationType: "read",
     description: "Get one catalog SKU by Firstbase SKU ID.",
     inputSchema: getCatalogSkuInputSchema,
     outputSchema: s.object("A Firstbase catalog SKU response.", {
@@ -231,6 +227,7 @@ export const firstbaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_brands",
+    operationType: "read",
     description: "List brands available for Firstbase asset creation.",
     inputSchema: metadataListInputSchema,
     outputSchema: s.object("A normalized Firstbase brands page.", {
@@ -240,6 +237,7 @@ export const firstbaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_categories",
+    operationType: "read",
     description: "List product categories available for Firstbase asset creation.",
     inputSchema: metadataListInputSchema,
     outputSchema: s.object("A normalized Firstbase categories page.", {

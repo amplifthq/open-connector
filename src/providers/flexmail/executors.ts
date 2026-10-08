@@ -4,6 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalInteger, optionalRawString, optionalRecord } from "../../core/cast.ts";
@@ -15,12 +16,12 @@ import {
   ProviderRequestError,
   readProviderTextBody,
   requireCustomCredential,
+  requiredResponseRecord,
 } from "../provider-runtime.ts";
 
 const service = "flexmail";
 const flexmailApiBaseUrl = "https://api.flexmail.eu";
 
-const flexmailDefaultRequestTimeoutMs = 30_000;
 const flexmailMaxResponseBytes = 10 * 1024 * 1024;
 const supportedLanguageSet = new Set([
   "nl",
@@ -87,7 +88,7 @@ interface FlexmailCollection {
 
 type FlexmailActionHandler = (input: Record<string, unknown>, context: FlexmailCredentialContext) => Promise<unknown>;
 
-export const flexmailActionHandlers: Record<string, FlexmailActionHandler> = {
+export const flexmailActionHandlers: ProviderActionHandlers<"flexmail", FlexmailActionHandler> = {
   list_contacts(input, context) {
     return flexmailCollectionRequest({
       context,
@@ -346,7 +347,7 @@ export const credentialValidators: CredentialValidators = {
       path: "/",
       phase: "validate",
     });
-    const payloadRecord = requireRecord(payload, "Flexmail API root response");
+    const payloadRecord = requiredResponseRecord(payload, "Flexmail API root response");
     const user = optionalRecord(payloadRecord.user);
     const firstName = optionalRawString(user?.first_name);
     const lastName = optionalRawString(user?.name);
@@ -384,7 +385,7 @@ function resolveFlexmailCredentialContext(
 
 async function flexmailCollectionRequest(input: FlexmailRequestInput): Promise<FlexmailCollection> {
   const payload = await flexmailRequest(input);
-  const record = requireRecord(payload, "Flexmail collection response");
+  const record = requiredResponseRecord(payload, "Flexmail collection response");
   return {
     items: readEmbeddedItems(record),
     total: optionalInteger(record.total),
@@ -397,7 +398,7 @@ async function flexmailCollectionRequest(input: FlexmailRequestInput): Promise<F
 async function flexmailResourceRequest(input: FlexmailRequestInput) {
   const resource = await flexmailRequest(input);
   return {
-    resource: requireRecord(resource, "Flexmail resource response"),
+    resource: requiredResponseRecord(resource, "Flexmail resource response"),
   };
 }
 
@@ -422,7 +423,7 @@ async function flexmailRequest(input: FlexmailRequestInput) {
 }
 
 async function flexmailRawRequest(input: FlexmailRequestInput) {
-  const timeoutHandle = createProviderTimeout(input.context.signal, flexmailDefaultRequestTimeoutMs);
+  const timeoutHandle = createProviderTimeout(input.context.signal);
   const headers: Record<string, string> = {
     accept: "application/hal+json, application/json",
     authorization: buildFlexmailAuthorization(input.context.accountId, input.context.personalAccessToken),
@@ -570,12 +571,4 @@ function readSupportedLanguage(value: unknown): string | undefined {
     throw new ProviderRequestError(400, "language must be one of the Flexmail supported contact languages.");
   }
   return language;
-}
-
-function requireRecord(value: unknown, fieldName: string) {
-  const record = optionalRecord(value);
-  if (!record) {
-    throw new ProviderRequestError(502, `${fieldName} must be an object`);
-  }
-  return record;
 }

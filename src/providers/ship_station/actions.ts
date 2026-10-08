@@ -28,15 +28,10 @@ const purchaseOrderStatusSchema = s.stringEnum("The purchase order status filter
   "cancelled",
 ]);
 
-export type ShipStationActionName =
-  | "list_inventory_levels"
-  | "list_inventory_warehouses"
-  | "list_purchase_orders"
-  | "get_purchase_order";
-
 export const shipStationActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_inventory_levels",
+    operationType: "read",
     description: "List ShipStation V2 inventory stock levels and inventory-related properties for SKUs.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -60,6 +55,7 @@ export const shipStationActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_inventory_warehouses",
+    operationType: "read",
     description: "List inventory warehouses configured in ShipStation V2.",
     requiredScopes: [],
     inputSchema: s.actionInput({}, [], "The input payload for listing ShipStation inventory warehouses."),
@@ -73,6 +69,7 @@ export const shipStationActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_purchase_orders",
+    operationType: "read",
     description: "List ShipStation V2 purchase orders with optional filters and pagination.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -103,6 +100,7 @@ export const shipStationActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_purchase_order",
+    operationType: "read",
     description: "Retrieve a ShipStation V2 purchase order by ID, including detailed product lines when returned.",
     requiredScopes: [],
     inputSchema: s.actionInput(

@@ -1,9 +1,14 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { BoxheroActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "boxhero";
 const boxheroApiBaseUrl = "https://rest.boxhero-app.com";
@@ -12,7 +17,7 @@ const boxheroValidationPath = "/v1/team";
 type BoxheroRequestPhase = "validate" | "execute";
 type BoxheroActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
-export const boxheroActionHandlers: Record<BoxheroActionName, BoxheroActionHandler> = {
+export const boxheroActionHandlers: ProviderActionHandlers<"boxhero", BoxheroActionHandler> = {
   get_team_info(_input, context) {
     return requestBoxheroJson({
       apiKey: context.apiKey,
@@ -52,6 +57,16 @@ export const boxheroActionHandlers: Record<BoxheroActionName, BoxheroActionHandl
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, boxheroActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: boxheroApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

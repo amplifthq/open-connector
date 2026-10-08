@@ -94,26 +94,10 @@ const seasonTicketingInput = s.object(
   { required: ["header", "command"] },
 );
 
-export type TicketmasterActionName =
-  | "get_events"
-  | "get_event_details"
-  | "get_event_images"
-  | "get_attractions"
-  | "get_attraction_details"
-  | "get_venues"
-  | "get_venue_details"
-  | "get_suggestions"
-  | "get_classifications"
-  | "get_classification_details"
-  | "get_segment_details"
-  | "get_genre_details"
-  | "get_subgenre_details"
-  | "get_section_map_image"
-  | "execute_season_ticketing_command";
-
 export const ticketmasterActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_events",
+    operationType: "read",
     description: "Search Discovery API events with Ticketmaster filters.",
     inputSchema: searchInput,
     outputSchema: s.object("Ticketmaster event search output.", {
@@ -125,12 +109,14 @@ export const ticketmasterActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_event_details",
+    operationType: "read",
     description: "Get the details for a specific Ticketmaster event by ID.",
     inputSchema: idLookupInput,
     outputSchema: s.object({ event }),
   }),
   defineProviderAction(service, {
     name: "get_event_images",
+    operationType: "read",
     description: "Get the image set for a specific Ticketmaster event.",
     inputSchema: idLookupInput,
     outputSchema: s.object({
@@ -141,6 +127,7 @@ export const ticketmasterActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_attractions",
+    operationType: "read",
     description: "Search Discovery API attractions.",
     inputSchema: searchInput,
     outputSchema: s.object({
@@ -151,12 +138,14 @@ export const ticketmasterActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_attraction_details",
+    operationType: "read",
     description: "Get the details for a specific Ticketmaster attraction by ID.",
     inputSchema: idLookupInput,
     outputSchema: s.object({ attraction }),
   }),
   defineProviderAction(service, {
     name: "get_venues",
+    operationType: "read",
     description: "Search Discovery API venues.",
     inputSchema: searchInput,
     outputSchema: s.object({
@@ -167,12 +156,14 @@ export const ticketmasterActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_venue_details",
+    operationType: "read",
     description: "Get the details for a specific Ticketmaster venue by ID.",
     inputSchema: idLookupInput,
     outputSchema: s.object({ venue }),
   }),
   defineProviderAction(service, {
     name: "get_suggestions",
+    operationType: "read",
     description: "Retrieve Ticketmaster search suggestions.",
     inputSchema: searchInput,
     outputSchema: s.object({
@@ -187,6 +178,7 @@ export const ticketmasterActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_classifications",
+    operationType: "read",
     description: "Search Ticketmaster classifications.",
     inputSchema: searchInput,
     outputSchema: s.object({
@@ -197,30 +189,35 @@ export const ticketmasterActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_classification_details",
+    operationType: "read",
     description: "Get a Ticketmaster classification by ID.",
     inputSchema: idLookupInput,
     outputSchema: s.object({ classification }),
   }),
   defineProviderAction(service, {
     name: "get_segment_details",
+    operationType: "read",
     description: "Get a Ticketmaster segment by ID.",
     inputSchema: idLookupInput,
     outputSchema: s.object({ segment: classification }),
   }),
   defineProviderAction(service, {
     name: "get_genre_details",
+    operationType: "read",
     description: "Get a Ticketmaster genre by ID.",
     inputSchema: idLookupInput,
     outputSchema: s.object({ genre: classification }),
   }),
   defineProviderAction(service, {
     name: "get_subgenre_details",
+    operationType: "read",
     description: "Get a Ticketmaster sub-genre by ID.",
     inputSchema: idLookupInput,
     outputSchema: s.object({ subGenre: classification }),
   }),
   defineProviderAction(service, {
     name: "get_section_map_image",
+    operationType: "read",
     description: "Retrieve a Ticketmaster section-map image as base64.",
     inputSchema: sectionMapInput,
     outputSchema: s.object({
@@ -231,6 +228,7 @@ export const ticketmasterActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "execute_season_ticketing_command",
+    operationType: "write",
     description: "Execute a Ticketmaster Season Ticketing command.",
     inputSchema: seasonTicketingInput,
     outputSchema: s.object({

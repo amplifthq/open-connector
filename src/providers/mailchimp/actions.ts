@@ -110,22 +110,10 @@ const successOutputSchema = s.object(
   { required: ["success"] },
 );
 
-export type MailchimpActionName =
-  | "list_lists"
-  | "get_list"
-  | "list_members"
-  | "get_member"
-  | "upsert_member"
-  | "update_member"
-  | "archive_member"
-  | "delete_member_permanently"
-  | "list_member_tags"
-  | "update_member_tags"
-  | "list_merge_fields";
-
 export const mailchimpActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_lists",
+    operationType: "read",
     description: "List Mailchimp audiences/lists visible to the current API key.",
     inputSchema: listListsInputSchema,
     outputSchema: createCollectionOutputSchema(
@@ -136,6 +124,7 @@ export const mailchimpActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_list",
+    operationType: "read",
     description: "Fetch a single Mailchimp audience/list by ID.",
     inputSchema: getListInputSchema,
     outputSchema: createSingleOutputSchema(
@@ -146,6 +135,7 @@ export const mailchimpActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_members",
+    operationType: "read",
     description: "List members in a Mailchimp audience/list.",
     inputSchema: listMembersInputSchema,
     outputSchema: createCollectionOutputSchema(
@@ -156,6 +146,7 @@ export const mailchimpActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_member",
+    operationType: "read",
     description: "Fetch a single Mailchimp member by subscriber hash or email address.",
     inputSchema: memberLocatorInputSchema(
       "Mailchimp list identifier plus either a subscriber hash or an email address.",
@@ -168,6 +159,7 @@ export const mailchimpActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "upsert_member",
+    operationType: "write",
     description: "Add or update a Mailchimp member using the official upsert endpoint.",
     inputSchema: upsertMemberInputSchema,
     outputSchema: createSingleOutputSchema(
@@ -178,6 +170,7 @@ export const mailchimpActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_member",
+    operationType: "write",
     description: "Patch an existing Mailchimp member by subscriber hash or email address.",
     inputSchema: updateMemberInputSchema,
     outputSchema: createSingleOutputSchema(
@@ -188,18 +181,21 @@ export const mailchimpActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "archive_member",
+    operationType: "destructive",
     description: "Archive a Mailchimp member from the specified audience/list.",
     inputSchema: memberLocatorInputSchema("Mailchimp member locator for archiving a member."),
     outputSchema: successOutputSchema,
   }),
   defineProviderAction(service, {
     name: "delete_member_permanently",
+    operationType: "destructive",
     description: "Permanently delete a Mailchimp member from the specified audience/list.",
     inputSchema: memberLocatorInputSchema("Mailchimp member locator for permanently deleting a member."),
     outputSchema: successOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_member_tags",
+    operationType: "read",
     description: "List tags currently attached to a Mailchimp member.",
     inputSchema: memberLocatorInputSchema("Mailchimp member locator for listing tags."),
     outputSchema: createCollectionOutputSchema(
@@ -210,12 +206,14 @@ export const mailchimpActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_member_tags",
+    operationType: "destructive",
     description: "Add or remove Mailchimp member tags using the official tag-update endpoint.",
     inputSchema: tagWriteInputSchema,
     outputSchema: successOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_merge_fields",
+    operationType: "read",
     description: "List merge fields defined for a Mailchimp audience/list.",
     inputSchema: listMergeFieldsInputSchema,
     outputSchema: createCollectionOutputSchema(

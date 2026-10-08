@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { BitriseActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -11,8 +11,6 @@ import {
 } from "../provider-runtime.ts";
 
 export const bitriseApiBaseUrl = "https://api.bitrise.io/v0.1";
-
-const bitriseDefaultRequestTimeoutMs = 30_000;
 
 interface BitriseActionHandler {
   (input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown>;
@@ -29,7 +27,7 @@ interface BitriseRequestInput {
   signal?: AbortSignal;
 }
 
-export const bitriseActionHandlers: Record<BitriseActionName, BitriseActionHandler> = {
+export const bitriseActionHandlers: ProviderActionHandlers<"bitrise", BitriseActionHandler> = {
   list_apps(input, context) {
     return listApps(input, context);
   },
@@ -189,7 +187,7 @@ async function bitriseFetch(input: BitriseRequestInput) {
     url.search = input.query.toString();
   }
 
-  const timeout = createProviderTimeout(input.signal, bitriseDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     return await input.fetcher(url, {
       method: input.method ?? "GET",

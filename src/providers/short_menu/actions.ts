@@ -72,6 +72,7 @@ const deleteLinkOutputSchema = s.object("Normalized delete result returned after
 export const shortMenuActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "create_link",
+    operationType: "write",
     description: "Create a Short Menu short link.",
     requiredScopes: [],
     inputSchema: createLinkInputSchema,
@@ -79,6 +80,7 @@ export const shortMenuActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_link",
+    operationType: "write",
     description: "Update an existing Short Menu short link.",
     requiredScopes: [],
     inputSchema: updateLinkInputSchema,
@@ -86,11 +88,10 @@ export const shortMenuActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_link",
+    operationType: "destructive",
     description: "Delete an existing Short Menu short link.",
     requiredScopes: [],
     inputSchema: deleteLinkInputSchema,
     outputSchema: deleteLinkOutputSchema,
   }),
 ];
-
-export type ShortMenuActionName = "create_link" | "update_link" | "delete_link";

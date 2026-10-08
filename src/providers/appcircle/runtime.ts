@@ -1,3 +1,4 @@
+import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-runtime.ts";
 import type { AppcircleActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -8,14 +9,6 @@ export interface AppcircleCredentialCheck {
   accountLabel: string;
   providerScopes: string[];
   providerMetadata: Record<string, unknown>;
-}
-
-interface ApiKeyProviderActionInput {
-  apiKey: string;
-  actionName: string;
-  input: Record<string, unknown>;
-  providerMetadata?: Record<string, unknown>;
-  values?: Record<string, string>;
 }
 
 export const appcircleApiBaseUrl = "https://api.appcircle.io";
@@ -33,7 +26,7 @@ type AppcircleActionHandler = (
   fetcher: typeof fetch,
 ) => Promise<unknown>;
 
-export const appcircleActionHandlers: Record<AppcircleActionName, AppcircleActionHandler> = {
+export const appcircleActionHandlers: ProviderActionHandlers<"appcircle", AppcircleActionHandler> = {
   async list_organizations(input, credential, fetcher) {
     const payload = await requestAppcircleJson({
       path: "/identity/v1/organizations",
@@ -57,7 +50,7 @@ export const appcircleActionHandlers: Record<AppcircleActionName, AppcircleActio
   async list_enterprise_store_profiles(input, credential, fetcher) {
     return listProfiles("/store/v2/profiles", input, credential, fetcher);
   },
-} satisfies Record<AppcircleActionName, AppcircleActionHandler>;
+};
 
 export async function validateAppcircleCredential(
   input: Record<string, string>,
@@ -94,7 +87,7 @@ export async function validateAppcircleCredential(
 }
 
 export async function executeAppcircleAction(
-  input: ApiKeyProviderActionInput & {
+  input: ApiKeyActionRequest & {
     actionName: AppcircleActionName;
     input: Record<string, unknown>;
   },

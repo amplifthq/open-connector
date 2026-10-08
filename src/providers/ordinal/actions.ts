@@ -5,17 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "ordinal";
 
-export type OrdinalActionName =
-  | "get_workspace"
-  | "list_scheduling_profiles"
-  | "list_engagement_profiles"
-  | "list_users"
-  | "list_labels"
-  | "list_posts"
-  | "get_post"
-  | "list_ideas"
-  | "get_idea";
-
 const uuidSchema = s.uuid("An Ordinal UUID.");
 const paginationLimitSchema = s.integer("The maximum number of items to return, from 1 to 100.", {
   minimum: 1,
@@ -104,6 +93,7 @@ const paginatedIdeasOutputSchema = s.object("A paginated Ordinal ideas response.
 export const ordinalActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_workspace",
+    operationType: "read",
     description: "Get details about the current Ordinal workspace.",
     inputSchema: emptyInputSchema,
     outputSchema: s.object("The current Ordinal workspace.", {
@@ -112,6 +102,7 @@ export const ordinalActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_scheduling_profiles",
+    operationType: "read",
     description: "List Ordinal scheduling profiles connected to the workspace.",
     inputSchema: emptyInputSchema,
     outputSchema: s.object("Ordinal scheduling profiles response.", {
@@ -120,6 +111,7 @@ export const ordinalActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_engagement_profiles",
+    operationType: "read",
     description: "List Ordinal engagement-only profiles connected to the workspace.",
     inputSchema: emptyInputSchema,
     outputSchema: s.object("Ordinal engagement profiles response.", {
@@ -128,6 +120,7 @@ export const ordinalActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List users in the current Ordinal workspace.",
     inputSchema: emptyInputSchema,
     outputSchema: s.object("Ordinal workspace users response.", {
@@ -136,6 +129,7 @@ export const ordinalActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_labels",
+    operationType: "read",
     description: "List labels in the current Ordinal workspace.",
     inputSchema: emptyInputSchema,
     outputSchema: s.object("Ordinal labels response.", {
@@ -144,6 +138,7 @@ export const ordinalActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_posts",
+    operationType: "read",
     description: "List Ordinal posts with pagination and optional filters.",
     inputSchema: s.object("Query parameters for listing Ordinal posts.", listPostsInputFields, {
       optional: Object.keys(listPostsInputFields),
@@ -152,6 +147,7 @@ export const ordinalActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_post",
+    operationType: "read",
     description: "Get a specific Ordinal post by ID.",
     inputSchema: s.object(
       "Input for getting an Ordinal post.",
@@ -166,6 +162,7 @@ export const ordinalActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_ideas",
+    operationType: "read",
     description: "List Ordinal ideas with pagination and optional filters.",
     inputSchema: s.object("Query parameters for listing Ordinal ideas.", listIdeasInputFields, {
       optional: Object.keys(listIdeasInputFields),
@@ -174,6 +171,7 @@ export const ordinalActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_idea",
+    operationType: "read",
     description: "Get a specific Ordinal idea by ID.",
     inputSchema: s.object(
       "Input for getting an Ordinal idea.",

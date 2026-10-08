@@ -67,11 +67,10 @@ const countSummarySchema = s.looseObject(
   "Summary counts grouped by verification state or provider reason for the Emailable batch.",
 );
 
-export type EmailableActionName = "get_account_info" | "verify_email" | "verify_batch_emails" | "get_batch_status";
-
 export const emailableActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_account_info",
+    operationType: "read",
     description: "Retrieve Emailable account information including owner email and available credits.",
     requiredScopes: [],
     inputSchema: emptyInputSchema,
@@ -85,6 +84,7 @@ export const emailableActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "verify_email",
+    operationType: "read",
     description: "Verify a single email address and return Emailable deliverability signals.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -98,6 +98,7 @@ export const emailableActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "verify_batch_emails",
+    operationType: "write",
     description: "Create an Emailable batch verification job for a list of email addresses.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -124,6 +125,7 @@ export const emailableActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_batch_status",
+    operationType: "read",
     description: "Retrieve the latest Emailable status and results for an existing batch verification job.",
     requiredScopes: [],
     inputSchema: s.actionInput(

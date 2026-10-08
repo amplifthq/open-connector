@@ -1,4 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -8,7 +9,14 @@ import {
   optionalString,
   requiredRecord,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  isAbortLikeError,
+  providerResponseError,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "circle";
 const apiBaseUrl = "https://app.circle.so/api/admin/v2";
@@ -23,7 +31,7 @@ interface CircleContext {
 
 type CircleHandler = (input: Record<string, unknown>, context: CircleContext) => Promise<unknown>;
 
-export const circleActionHandlers: Record<string, CircleHandler> = {
+export const circleActionHandlers: ProviderActionHandlers<"circle", CircleHandler> = {
   async get_community(_input, context) {
     return {
       community: normalizeCommunity(await requestCircleJson({ context, path: "/community", phase: "execute" })),
@@ -111,6 +119,17 @@ export const circleActionHandlers: Record<string, CircleHandler> = {
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, circleActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+    if (!headers.has("content-type")) headers.set("content-type", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const community = normalizeCommunity(
@@ -169,7 +188,7 @@ async function requestCircleJson(input: {
     );
   }
   if (!response.ok) throw createError(response.status, payload, input.phase);
-  return requiredRecord(payload, "Circle payload", providerError);
+  return requiredRecord(payload, "Circle payload", providerResponseError);
 }
 
 function buildUrl(path: string, query: Record<string, string | undefined>): URL {
@@ -219,7 +238,7 @@ function normalizePagination(payload: Record<string, unknown>): Record<string, u
 
 function readRecords(payload: Record<string, unknown>): Array<Record<string, unknown>> {
   return Array.isArray(payload.records)
-    ? payload.records.map((item) => requiredRecord(item, "Circle record", providerError))
+    ? payload.records.map((item) => requiredRecord(item, "Circle record", providerResponseError))
     : [];
 }
 
@@ -344,12 +363,4 @@ function optionalPositiveIntegerString(value: unknown, fieldName: string): strin
 function optionalIntegerListString(value: unknown): string | undefined {
   if (!Array.isArray(value) || value.length === 0) return undefined;
   return value.map((item) => String(positiveInteger(item, "member_tag_ids"))).join(",");
-}
-
-function providerError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return error instanceof Error && error.name === "AbortError";
 }

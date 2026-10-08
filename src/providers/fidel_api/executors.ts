@@ -1,9 +1,15 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { FidelApiActionName } from "./actions.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  isAbortLikeError,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "fidel_api";
 const fidelApiBaseUrl = "https://api.fidel.uk/v1";
@@ -24,7 +30,7 @@ type FidelApiRequestPhase = "validate" | "execute";
 type FidelApiActionContext = ApiKeyProviderContext;
 type FidelApiActionHandler = (input: Record<string, unknown>, context: FidelApiActionContext) => Promise<unknown>;
 
-export const fidelApiActionHandlers: Record<FidelApiActionName, FidelApiActionHandler> = {
+export const fidelApiActionHandlers: ProviderActionHandlers<"fidel_api", FidelApiActionHandler> = {
   async list_brands(input, context): Promise<unknown> {
     return normalizeBrandListResponse(
       await requestFidelJson({
@@ -112,6 +118,17 @@ export const fidelApiActionHandlers: Record<FidelApiActionName, FidelApiActionHa
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, fidelApiActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: fidelApiBaseUrl,
+  auth: { type: "api_key_header", name: "Fidel-Key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+    headers.set("content-type", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -585,8 +602,4 @@ function createFidelRequestSignal(parent?: AbortSignal): FidelApiRequestSignal {
       parent?.removeEventListener("abort", abortFromParent);
     },
   };
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return error instanceof Error && error.name === "AbortError";
 }

@@ -1,6 +1,6 @@
 import type { ExecutionContext, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
-import type { PlasmicActionName } from "./actions.ts";
 
 import { optionalBoolean, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -15,7 +15,6 @@ import {
 const service = "plasmic";
 const plasmicDataBaseUrl = "https://data.plasmic.app";
 const plasmicCmsBaseUrl = `${plasmicDataBaseUrl}/api/v1/cms`;
-const plasmicDefaultRequestTimeoutMs = 30_000;
 const plasmicCmsTokenHeaderName = "x-plasmic-api-cms-tokens";
 
 interface PlasmicContext {
@@ -27,7 +26,7 @@ interface PlasmicContext {
 
 type PlasmicActionHandler = (input: Record<string, unknown>, context: PlasmicContext) => Promise<unknown>;
 
-const plasmicActionHandlers: Record<PlasmicActionName, PlasmicActionHandler> = {
+const plasmicActionHandlers: ProviderActionHandlers<"plasmic", PlasmicActionHandler> = {
   list_items(input, context) {
     return plasmicGetJson(buildModelReadUrl(context.cmsId, input, "query"), context);
   },
@@ -87,7 +86,7 @@ function buildModelReadUrl(cmsId: string, input: Record<string, unknown>, endpoi
 }
 
 async function plasmicGetJson(url: URL, context: PlasmicContext): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, plasmicDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   let response: Response, payload: unknown;
   try {
     response = await context.fetcher(url, {

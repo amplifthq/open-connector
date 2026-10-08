@@ -67,16 +67,10 @@ const fieldValueSchema = s.anyOf("Value to store in the Landbot customer field."
   s.nullable(s.string("Null field value.")),
 ]);
 
-export type LandbotActionName =
-  | "list_channels"
-  | "list_customers"
-  | "get_customer_messages"
-  | "send_text"
-  | "set_customer_field";
-
 export const landbotActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_channels",
+    operationType: "read",
     description: "List channels in a Landbot workspace with optional pagination and filters.",
     requiredScopes: [],
     inputSchema: listChannelsInputSchema,
@@ -87,6 +81,7 @@ export const landbotActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_customers",
+    operationType: "read",
     description: "List Landbot customers with pagination and optional channel or search filters.",
     requiredScopes: [],
     inputSchema: listCustomersInputSchema,
@@ -97,6 +92,7 @@ export const landbotActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_customer_messages",
+    operationType: "read",
     description: "Fetch the message history for a Landbot customer.",
     requiredScopes: [],
     inputSchema: customerIdInputSchema,
@@ -107,6 +103,7 @@ export const landbotActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "send_text",
+    operationType: "write",
     description: "Send a text message to a Landbot customer through their current channel.",
     requiredScopes: [],
     inputSchema: s.object("Input for sending a text message to a Landbot customer.", {
@@ -119,6 +116,7 @@ export const landbotActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "set_customer_field",
+    operationType: "write",
     description: "Set a typed custom field value on a Landbot customer.",
     requiredScopes: [],
     inputSchema: s.object(

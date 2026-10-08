@@ -21,6 +21,14 @@ function placeholders(value: string): string[] {
   return (value.match(/{{\w+}}/g) ?? []).sort();
 }
 
+function normalize(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function englishWords(value: string): string {
+  return normalize(value).split(/\s+/).sort().join(" ");
+}
+
 describe("resolveInitialLang", () => {
   it("uses a stored supported language first", () => {
     expect(resolveInitialLang({ storedLang: "fr", detectedLang: "zh-CN" })).toBe("fr");
@@ -90,19 +98,72 @@ describe("locales", () => {
   // ever caught here.
   const enEntries = flattenLocale(en);
 
+  // Product and protocol names every locale renders in English on purpose. A
+  // multi-word value that matches en without being one of these is an
+  // untranslated string, not a deliberate one. Terms are lowercased because the
+  // copied-value check below ignores case, so a locale respelling a term
+  // ("OAuth app" -> "OAuth App") still needs it here.
+  const englishTerms = new Set([
+    "api key",
+    "api reference",
+    "callback url",
+    "client id",
+    "client secret",
+    "connector marketplace",
+    "discovery url",
+    "mcp url",
+    "oauth app",
+    "oauth apps",
+    "oomol key",
+    "openapi json",
+  ]);
+
+  // Entries whose English wording is also the correct wording in that locale.
+  const englishKeys: Record<string, string[]> = {
+    // "{{count}} actions" is spelled the same way in French.
+    fr: ["actions.actionsCount"],
+  };
+
+  // Locales that write their own words in a non-Latin script. Reordering the
+  // English words there leaves the value in English, while in French the same
+  // reordering is the translation ("Local MCP client" -> "Client MCP local").
+  // The heuristic cannot separate that from a locale fronting a Latin acronym
+  // ("MCP URL" -> ru "URL MCP"), so such a value goes on englishTerms above.
+  const nonLatinScriptLangs = new Set(["zh-CN", "zh-TW", "ja", "ru"]);
+
   it.each([
     ["zh-CN", zhCN],
     ["zh-TW", zhTW],
     ["ja", ja],
     ["ru", ru],
     ["fr", fr],
-  ] satisfies [string, LocaleTree][])("%s matches the en keys and placeholders", (_lang, locale) => {
-    const entries = flattenLocale(locale);
-    expect(entries.map(([key]) => key)).toEqual(enEntries.map(([key]) => key));
+  ] satisfies [string, LocaleTree][])(
+    "%s matches the en keys and placeholders and leaves no multi-word English value untranslated",
+    (lang, locale) => {
+      const entries = flattenLocale(locale);
+      expect(entries.map(([key]) => key)).toEqual(enEntries.map(([key]) => key));
 
-    const translations = new Map(entries);
-    for (const [key, value] of enEntries) {
-      expect(placeholders(translations.get(key) ?? "")).toEqual(placeholders(value));
-    }
-  });
+      const translations = new Map(entries);
+      for (const [key, value] of enEntries) {
+        expect(placeholders(translations.get(key) ?? "")).toEqual(placeholders(value));
+      }
+      expect(entries.filter(([, value]) => value.trim() === "").map(([key]) => key)).toEqual([]);
+
+      const allowedKeys = englishKeys[lang] ?? [];
+      const untranslated = enEntries
+        .filter(([, value]) => value.trim().split(/\s+/).length > 1)
+        .filter(([key, value]) => !englishTerms.has(normalize(value)) && !allowedKeys.includes(key))
+        .filter(([key, value]) => {
+          // A value copied from en reads as English however it is recased, and
+          // so does one that only shuffles the same English words.
+          const translated = translations.get(key) ?? "";
+          return (
+            normalize(translated) === normalize(value) ||
+            (nonLatinScriptLangs.has(lang) && englishWords(translated) === englishWords(value))
+          );
+        })
+        .map(([key]) => key);
+      expect(untranslated).toEqual([]);
+    },
+  );
 });

@@ -7,59 +7,61 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown, gfmToMarkdown } from "mdast-util-gfm";
 import { toMarkdown } from "mdast-util-to-markdown";
 import { gfm } from "micromark-extension-gfm";
+import { describeSchemaType, readSchemaProperties, readSchemaRequired } from "../../core/json-schema.ts";
 
-export type ActionMarkdownContext = {
+/** HTTP callers get request examples against the runtime's public origin. */
+interface HttpActionGuideTransport {
+  kind: "http";
+  /** Public origin of the runtime, for example `https://connector.example.com`. */
+  origin: string;
+}
+
+/** MCP callers get an `execute_action` tool example instead of HTTP requests. */
+interface McpActionGuideTransport {
+  kind: "mcp";
+}
+
+type ActionGuideTransport = HttpActionGuideTransport | McpActionGuideTransport;
+
+export interface ActionMarkdownContext {
+  /** How the caller executes actions; selects the examples and agent notes the guide renders. */
+  transport: ActionGuideTransport;
   connection?: ConnectionSummary;
-  providerPermissions?: string[];
   policy?: ActionPolicyDecision;
-};
+}
 
 /**
  * Render a compact action guide for coding agents and humans who want the raw
- * local HTTP contract without browsing the full catalog JSON.
+ * execution contract without browsing the full catalog JSON.
  */
-export function renderActionMarkdown(action: ActionDefinition, context: ActionMarkdownContext = {}): string {
+export function renderActionMarkdown(action: ActionDefinition, context: ActionMarkdownContext): string {
   const exampleInput = buildExampleInput(action.inputSchema);
-  const exampleBody = JSON.stringify({ input: exampleInput }, null, 2);
-  const providerPermissions = context.providerPermissions ?? action.providerPermissions;
   const root: Root = {
     type: "root",
     children: [
       heading(1, action.id),
       ...markdownBlocks(action.description),
       heading(2, "Execute"),
-      code(
-        "bash",
-        [
-          `curl -s http://localhost:3000/v1/actions/${action.id} \\`,
-          "  -H 'content-type: application/json' \\",
-          `  -d '${JSON.stringify({ input: exampleInput })}'`,
-        ].join("\n"),
-      ),
-      code(
-        "ts",
-        [
-          `const response = await fetch("http://localhost:3000/v1/actions/${action.id}", {`,
-          `  method: "POST",`,
-          `  headers: { "content-type": "application/json" },`,
-          `  body: JSON.stringify(${indentMultiline(exampleBody, 2)}),`,
-          `});`,
-          `const result = await response.json();`,
-        ].join("\n"),
-      ),
+      ...describeExecute(action, context.transport, exampleInput),
       heading(2, "Input Parameters"),
       ...describeParameters(action.inputSchema),
       heading(2, "Required Scopes"),
       ...describeStringList(action.requiredScopes, "No provider scopes are required."),
       heading(2, "Provider Permissions"),
-      ...describeStringList(providerPermissions, "No provider permissions are declared."),
+      ...describeStringList(action.providerPermissions, "No provider permissions are declared."),
       heading(2, "Execution Policy"),
       ...describePolicy(context.policy),
       heading(2, "Current Connection"),
       ...describeConnection(context.connection),
       heading(2, "Notes For Agents"),
       list([
-        textParagraph("Use the local runtime endpoint above; do not call provider APIs directly unless the user asks."),
+        context.transport.kind === "mcp"
+          ? paragraph([
+              "Use the ",
+              inlineCode("execute_action"),
+              " tool above; do not call provider APIs directly unless the user asks.",
+            ])
+          : textParagraph("Use the runtime endpoint above; do not call provider APIs directly unless the user asks."),
         paragraph(["Send JSON with a top-level ", inlineCode("input"), " object."]),
         textParagraph("Check the current connection and provider scopes before choosing actions on the user's behalf."),
         textParagraph(
@@ -74,6 +76,48 @@ export function renderActionMarkdown(action: ActionDefinition, context: ActionMa
     fences: true,
     extensions: [gfmToMarkdown()],
   });
+}
+
+function describeExecute(
+  action: ActionDefinition,
+  transport: ActionGuideTransport,
+  exampleInput: Record<string, unknown>,
+): BlockContent[] {
+  if (transport.kind === "mcp") {
+    return [
+      paragraph(["Call the ", inlineCode("execute_action"), " tool with these arguments:"]),
+      code("json", JSON.stringify({ actionId: action.id, input: exampleInput }, null, 2)),
+      paragraph([
+        "Add ",
+        inlineCode("connectionName"),
+        " to run the action with a named connection instead of the default one.",
+      ]),
+    ];
+  }
+
+  const endpoint = `${transport.origin}/v1/actions/${action.id}`;
+  const exampleBody = JSON.stringify({ input: exampleInput }, null, 2);
+  return [
+    code(
+      "bash",
+      [
+        `curl -s ${endpoint} \\`,
+        "  -H 'content-type: application/json' \\",
+        `  -d ${shellSingleQuote(JSON.stringify({ input: exampleInput }))}`,
+      ].join("\n"),
+    ),
+    code(
+      "ts",
+      [
+        `const response = await fetch(${JSON.stringify(endpoint)}, {`,
+        `  method: "POST",`,
+        `  headers: { "content-type": "application/json" },`,
+        `  body: JSON.stringify(${indentMultiline(exampleBody, 2)}),`,
+        `});`,
+        `const result = await response.json();`,
+      ].join("\n"),
+    ),
+  ];
 }
 
 function describePolicy(policy: ActionPolicyDecision | undefined): BlockContent[] {
@@ -125,13 +169,13 @@ function describeConnection(connection: ConnectionSummary | undefined): BlockCon
 }
 
 function describeParameters(schema: JsonSchema): BlockContent[] {
-  const properties = readProperties(schema);
+  const properties = readSchemaProperties(schema);
   const entries = Object.entries(properties);
   if (entries.length === 0) {
     return [textParagraph("This action does not require input parameters.")];
   }
 
-  const required = new Set(readRequired(schema));
+  const required = new Set(readSchemaRequired(schema));
   return [
     parameterTable(entries, required),
     listItems(
@@ -152,7 +196,7 @@ function parameterTable(entries: Array<[string, JsonSchema]>, required: Set<stri
         tableRow([
           inlineCodeTableCell(name),
           textTableCell(required.has(name) ? "Yes" : "No"),
-          inlineCodeTableCell(describeType(property)),
+          inlineCodeTableCell(describeSchemaType(property)),
         ]),
       ),
     ],
@@ -234,6 +278,11 @@ function inlineCodeTableCell(value: string): TableCell {
   return { type: "tableCell", children: [{ type: "inlineCode", value }] };
 }
 
+/** Quote a value for a POSIX shell so an apostrophe inside an example does not end the argument. */
+function shellSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
 function indentMultiline(value: string, spaces: number): string {
   const indent = " ".repeat(spaces);
   return value
@@ -264,40 +313,12 @@ function isBlockContent(node: DocumentContent): node is BlockContent {
 type DocumentContent = BlockContent | DefinitionContent;
 
 function buildExampleInput(schema: JsonSchema): Record<string, unknown> {
-  const properties = readProperties(schema);
+  const properties = readSchemaProperties(schema);
   const input: Record<string, unknown> = {};
-  for (const name of readRequired(schema)) {
+  for (const name of readSchemaRequired(schema)) {
     input[name] = exampleValue(properties[name]);
   }
   return input;
-}
-
-function readProperties(schema: JsonSchema): Record<string, JsonSchema> {
-  return schema.properties && typeof schema.properties === "object"
-    ? (schema.properties as Record<string, JsonSchema>)
-    : {};
-}
-
-function readRequired(schema: JsonSchema): string[] {
-  return Array.isArray(schema.required)
-    ? schema.required.filter((value): value is string => typeof value === "string")
-    : [];
-}
-
-function describeType(schema: JsonSchema | undefined): string {
-  if (!schema) {
-    return "unknown";
-  }
-  if (typeof schema.const === "string" || typeof schema.const === "number" || typeof schema.const === "boolean") {
-    return JSON.stringify(schema.const);
-  }
-  if (Array.isArray(schema.enum)) {
-    return schema.enum.map((value) => JSON.stringify(value)).join(" | ");
-  }
-  if (Array.isArray(schema.anyOf)) {
-    return schema.anyOf.map((item) => describeType(item as JsonSchema)).join(" | ");
-  }
-  return typeof schema.type === "string" ? schema.type : "unknown";
 }
 
 function readDescription(schema: JsonSchema | undefined): string {

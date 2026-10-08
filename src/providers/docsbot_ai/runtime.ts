@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { DocsbotAiActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -22,13 +22,11 @@ import {
 export const docsbotAiAdminBaseUrl = "https://docsbot.ai/api";
 export const docsbotAiApiBaseUrl = "https://api.docsbot.ai";
 
-const docsbotAiDefaultRequestTimeoutMs = 30_000;
-
 type DocsbotAiPhase = "validate" | "execute";
 type DocsbotAiContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type DocsbotAiActionHandler = (input: Record<string, unknown>, context: DocsbotAiContext) => Promise<unknown>;
 
-export const docsbotAiActionHandlers: Record<DocsbotAiActionName, DocsbotAiActionHandler> = {
+export const docsbotAiActionHandlers: ProviderActionHandlers<"docsbot_ai", DocsbotAiActionHandler> = {
   async list_teams(_input, context) {
     const payload = await requestDocsbotAiJson({
       baseUrl: docsbotAiAdminBaseUrl,
@@ -159,7 +157,7 @@ async function requestDocsbotAiJson(input: {
   body?: Record<string, unknown>;
   phase: DocsbotAiPhase;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, docsbotAiDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const headers: Record<string, string> = {
       authorization: `Bearer ${input.context.apiKey}`,

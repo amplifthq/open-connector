@@ -1,10 +1,10 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 export const referralheroApiBaseUrl = "https://app.referralhero.com/api/v2";
-const timeoutMs = 30_000;
 interface Spec {
   method: string;
   path: string;
@@ -84,23 +84,22 @@ const handler =
   (name: string): ProviderRuntimeHandler<ApiKeyProviderContext> =>
   (input, context) =>
     execute(name, input, context);
-const names = [
-  "create_list",
-  "list_lists",
-  "get_leaderboard",
-  "list_rewards",
-  "add_subscriber",
-  "list_subscribers",
-  "get_subscriber",
-  "update_subscriber",
-  "delete_subscriber",
-  "track_conversion",
-  "confirm_referral",
-];
-export const referralheroActionHandlers: Record<
-  string,
+export const referralheroActionHandlers: ProviderActionHandlers<
+  "referralhero",
   ProviderRuntimeHandler<ApiKeyProviderContext>
-> = Object.fromEntries(names.map((name) => [name, handler(name)]));
+> = {
+  create_list: handler("create_list"),
+  list_lists: handler("list_lists"),
+  get_leaderboard: handler("get_leaderboard"),
+  list_rewards: handler("list_rewards"),
+  add_subscriber: handler("add_subscriber"),
+  list_subscribers: handler("list_subscribers"),
+  get_subscriber: handler("get_subscriber"),
+  update_subscriber: handler("update_subscriber"),
+  delete_subscriber: handler("delete_subscriber"),
+  track_conversion: handler("track_conversion"),
+  confirm_referral: handler("confirm_referral"),
+};
 export async function validateReferralheroCredential(
   apiKey: string,
   fetcher: typeof fetch,
@@ -117,7 +116,7 @@ async function request(spec: Spec, context: ApiKeyProviderContext, phase: "valid
   const url = new URL(`${referralheroApiBaseUrl}${spec.path}`);
   for (const [key, value] of Object.entries(spec.query ?? {}))
     if (value !== undefined) url.searchParams.set(key, String(value));
-  const timeout = createProviderTimeout(context.signal, timeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       method: spec.method,

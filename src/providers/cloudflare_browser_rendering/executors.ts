@@ -1,6 +1,6 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
-import type { CloudflareBrowserRenderingActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -48,8 +48,8 @@ type CloudflareBrowserRenderingActionHandler = (
   context: CloudflareBrowserRenderingContext,
 ) => Promise<unknown>;
 
-const cloudflareBrowserRenderingActionHandlers: Record<
-  CloudflareBrowserRenderingActionName,
+const cloudflareBrowserRenderingActionHandlers: ProviderActionHandlers<
+  "cloudflare_browser_rendering",
   CloudflareBrowserRenderingActionHandler
 > = {
   list_accounts(input, context) {
@@ -375,8 +375,8 @@ function resolveAccountId(input: Record<string, unknown>, context: CloudflareBro
   if (!accountId) {
     throw new ProviderRequestError(
       400,
-      Array.isArray(context.metadata.availableAccounts)
-        ? "accountId is required for this Cloudflare Browser Run action because the OAuth connection can access multiple accounts."
+      context.authType === "oauth2"
+        ? "accountId is required for this Cloudflare Browser Run action. Use list_accounts to find an accessible Cloudflare account ID."
         : "accountId is required in the connected Cloudflare Browser Run credential.",
     );
   }

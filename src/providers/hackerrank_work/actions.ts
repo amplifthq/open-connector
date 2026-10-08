@@ -99,16 +99,10 @@ const candidateSchema = s.looseRequiredObject(
   },
 );
 
-export type HackerrankWorkActionName =
-  | "list_tests"
-  | "get_test"
-  | "list_test_candidates"
-  | "search_test_candidates"
-  | "get_test_candidate";
-
 export const hackerrankWorkActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_tests",
+    operationType: "read",
     description: "List the HackerRank tests available to the authenticated account.",
     inputSchema: s.actionInput(
       {
@@ -128,6 +122,7 @@ export const hackerrankWorkActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_test",
+    operationType: "read",
     description: "Retrieve one HackerRank test by id.",
     inputSchema: s.actionInput(
       {
@@ -141,6 +136,7 @@ export const hackerrankWorkActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_test_candidates",
+    operationType: "read",
     description: "List the candidates invited to or associated with a HackerRank test.",
     inputSchema: s.actionInput(
       {
@@ -161,6 +157,7 @@ export const hackerrankWorkActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_test_candidates",
+    operationType: "read",
     description: "Search HackerRank test candidates by name or email.",
     inputSchema: s.actionInput(
       {
@@ -182,6 +179,7 @@ export const hackerrankWorkActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_test_candidate",
+    operationType: "read",
     description: "Retrieve one HackerRank candidate from a specific test.",
     inputSchema: s.actionInput(
       {

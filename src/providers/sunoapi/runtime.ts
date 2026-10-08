@@ -1,25 +1,23 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
 
+import { optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
-  compactObject,
-  optionalBoolean,
-  optionalNumber,
-  optionalRecord,
-  optionalString,
-  pickOptionalInteger,
-} from "../../core/cast.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+  providerUserAgent,
+  ProviderRequestError,
+  requiredInputString,
+  runProviderRequest,
+} from "../provider-runtime.ts";
 
 export const sunoApiBaseUrl = "https://api.sunoapi.org";
 
-type SunoApiRequestPhase = "validate" | "execute";
 type SunoApiActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type SunoApiActionHandler = (input: Record<string, unknown>, context: SunoApiActionContext) => Promise<unknown>;
 
-export const sunoapiActionHandlers: Record<string, SunoApiActionHandler> = {
+export const sunoapiActionHandlers: ProviderActionHandlers<"sunoapi", SunoApiActionHandler> = {
   get_remaining_credits(_input, context) {
-    return getRemainingCredits(context, "execute");
+    return getRemainingCredits(context);
   },
   generate_music(input, context) {
     return submitSunoApiTask(input, context, "/api/v1/generate", "sunoapi music generation");
@@ -108,7 +106,7 @@ export async function validateSunoApiCredential(
   fetcher: ProviderFetch,
   signal?: AbortSignal,
 ): Promise<CredentialValidationResult> {
-  const credits = await getRemainingCredits({ apiKey, fetcher, signal }, "validate");
+  const credits = await getRemainingCredits({ apiKey, fetcher, signal });
   return {
     profile: {
       accountId: "api_key",
@@ -123,19 +121,15 @@ export async function validateSunoApiCredential(
   };
 }
 
-async function getRemainingCredits(
-  context: SunoApiActionContext,
-  phase: SunoApiRequestPhase,
-): Promise<{ credits: number }> {
+async function getRemainingCredits(context: SunoApiActionContext): Promise<{ credits: number }> {
   const payload = await requestSunoApiJson({
     ...context,
     method: "GET",
     path: "/api/v1/generate/credit",
-    phase,
   });
   const data = readSunoApiData(payload);
   const credits = optionalNumber(data);
-  if (credits === undefined || !Number.isInteger(credits)) {
+  if (credits === undefined) {
     throw new ProviderRequestError(502, "sunoapi credit response did not include credits", payload);
   }
   return { credits };
@@ -152,9 +146,8 @@ async function getSunoApiRecordInfo(
     method: "GET",
     path,
     query: {
-      taskId: requireString(input.taskId, "taskId"),
+      taskId: requiredInputString(input.taskId, "taskId"),
     },
-    phase: "execute",
   });
   return readSunoApiObjectData(payload, label);
 }
@@ -165,13 +158,17 @@ async function submitSunoApiTask(
   path: string,
   label: string,
 ): Promise<{ taskId: string }> {
-  const body = buildTaskBody(input, path);
+  if (input.callBackUrl === "") {
+    throw new ProviderRequestError(
+      400,
+      "An empty callBackUrl requires a Marketplace connection; supply a callback URL for a SunoAPI API key connection",
+    );
+  }
   const payload = await requestSunoApiJson({
     ...context,
     method: "POST",
     path,
-    body,
-    phase: "execute",
+    body: input,
   });
   const data = readSunoApiObjectData(payload, `${label} submission`);
   const taskId = optionalString(data.taskId);
@@ -191,229 +188,54 @@ async function submitSunoApiObject(
     ...context,
     method: "POST",
     path,
-    body: buildTaskBody(input, path),
-    phase: "execute",
+    body: input,
   });
   return readSunoApiObjectData(payload, label);
 }
 
-function buildTaskBody(input: Record<string, unknown>, path: string): Record<string, unknown> {
-  switch (path) {
-    case "/api/v1/generate":
-      return compactObject({
-        prompt: optionalString(input.prompt),
-        style: optionalString(input.style),
-        title: optionalString(input.title),
-        customMode: optionalBoolean(input.customMode),
-        instrumental: optionalBoolean(input.instrumental),
-        personaId: optionalString(input.personaId),
-        personaModel: optionalString(input.personaModel),
-        model: optionalString(input.model),
-        negativeTags: optionalString(input.negativeTags),
-        vocalGender: optionalString(input.vocalGender),
-        styleWeight: optionalNumber(input.styleWeight),
-        weirdnessConstraint: optionalNumber(input.weirdnessConstraint),
-        audioWeight: optionalNumber(input.audioWeight),
-        callBackUrl: optionalString(input.callBackUrl),
-      });
-    case "/api/v1/lyrics":
-      return compactObject({
-        prompt: optionalString(input.prompt),
-        callBackUrl: optionalString(input.callBackUrl),
-      });
-    case "/api/v1/generate/extend":
-      return compactObject({
-        defaultParamFlag: optionalBoolean(input.defaultParamFlag),
-        audioId: optionalString(input.audioId),
-        prompt: optionalString(input.prompt),
-        style: optionalString(input.style),
-        title: optionalString(input.title),
-        continueAt: optionalNumber(input.continueAt),
-        personaId: optionalString(input.personaId),
-        personaModel: optionalString(input.personaModel),
-        model: optionalString(input.model),
-        negativeTags: optionalString(input.negativeTags),
-        vocalGender: optionalString(input.vocalGender),
-        styleWeight: optionalNumber(input.styleWeight),
-        weirdnessConstraint: optionalNumber(input.weirdnessConstraint),
-        audioWeight: optionalNumber(input.audioWeight),
-        callBackUrl: optionalString(input.callBackUrl),
-      });
-    case "/api/v1/generate/upload-cover":
-      return compactObject({
-        uploadUrl: requireString(input.uploadUrl, "uploadUrl"),
-        customMode: optionalBoolean(input.customMode),
-        instrumental: optionalBoolean(input.instrumental),
-        callBackUrl: optionalString(input.callBackUrl),
-        model: optionalString(input.model),
-        prompt: optionalString(input.prompt),
-        style: optionalString(input.style),
-        title: optionalString(input.title),
-        personaId: optionalString(input.personaId),
-        personaModel: optionalString(input.personaModel),
-        negativeTags: optionalString(input.negativeTags),
-        vocalGender: optionalString(input.vocalGender),
-        styleWeight: optionalNumber(input.styleWeight),
-        weirdnessConstraint: optionalNumber(input.weirdnessConstraint),
-        audioWeight: optionalNumber(input.audioWeight),
-      });
-    case "/api/v1/generate/upload-extend":
-      return compactObject({
-        uploadUrl: requireString(input.uploadUrl, "uploadUrl"),
-        defaultParamFlag: optionalBoolean(input.defaultParamFlag),
-        callBackUrl: optionalString(input.callBackUrl),
-        model: optionalString(input.model),
-        instrumental: optionalBoolean(input.instrumental),
-        prompt: optionalString(input.prompt),
-        style: optionalString(input.style),
-        title: optionalString(input.title),
-        personaId: optionalString(input.personaId),
-        personaModel: optionalString(input.personaModel),
-        negativeTags: optionalString(input.negativeTags),
-        vocalGender: optionalString(input.vocalGender),
-        styleWeight: optionalNumber(input.styleWeight),
-        weirdnessConstraint: optionalNumber(input.weirdnessConstraint),
-        audioWeight: optionalNumber(input.audioWeight),
-      });
-    case "/api/v1/generate/add-vocals":
-      return pickAudioEditBody(input, ["prompt", "title", "negativeTags", "style"]);
-    case "/api/v1/generate/add-instrumental":
-      return pickAudioEditBody(input, ["title", "negativeTags", "tags"]);
-    case "/api/v1/generate/replace-section":
-      return compactObject({
-        taskId: optionalString(input.taskId),
-        audioId: optionalString(input.audioId),
-        prompt: optionalString(input.prompt),
-        tags: optionalString(input.tags),
-        title: optionalString(input.title),
-        infillStartS: optionalNumber(input.infillStartS),
-        infillEndS: optionalNumber(input.infillEndS),
-        negativeTags: optionalString(input.negativeTags),
-        callBackUrl: optionalString(input.callBackUrl),
-      });
-    case "/api/v1/generate/mashup":
-      return compactObject({
-        uploadUrlList: Array.isArray(input.uploadUrlList)
-          ? input.uploadUrlList.map((value) => String(value))
-          : undefined,
-        customMode: optionalBoolean(input.customMode),
-        prompt: optionalString(input.prompt),
-        style: optionalString(input.style),
-        title: optionalString(input.title),
-        instrumental: optionalBoolean(input.instrumental),
-        model: optionalString(input.model),
-        vocalGender: optionalString(input.vocalGender),
-        styleWeight: optionalNumber(input.styleWeight),
-        weirdnessConstraint: optionalNumber(input.weirdnessConstraint),
-        audioWeight: optionalNumber(input.audioWeight),
-        callBackUrl: optionalString(input.callBackUrl),
-      });
-    case "/api/v1/generate/sounds":
-      return compactObject({
-        prompt: optionalString(input.prompt),
-        model: optionalString(input.model),
-        soundLoop: optionalBoolean(input.soundLoop),
-        soundTempo: pickOptionalInteger(input, "soundTempo"),
-        soundKey: optionalString(input.soundKey),
-        grabLyrics: optionalBoolean(input.grabLyrics),
-        callBackUrl: optionalString(input.callBackUrl),
-      });
-    case "/api/v1/suno/cover/generate":
-    case "/api/v1/wav/generate":
-    case "/api/v1/midi/generate":
-      return compactObject({
-        taskId: optionalString(input.taskId),
-        audioId: optionalString(input.audioId),
-        callBackUrl: optionalString(input.callBackUrl),
-      });
-    case "/api/v1/mp4/generate":
-      return compactObject({
-        taskId: optionalString(input.taskId),
-        audioId: optionalString(input.audioId),
-        callBackUrl: optionalString(input.callBackUrl),
-        author: optionalString(input.author),
-        domainName: optionalString(input.domainName),
-      });
-    case "/api/v1/generate/generate-persona":
-      return compactObject({
-        taskId: optionalString(input.taskId),
-        audioId: optionalString(input.audioId),
-        name: optionalString(input.name),
-        description: optionalString(input.description),
-        vocalStart: optionalNumber(input.vocalStart),
-        vocalEnd: optionalNumber(input.vocalEnd),
-        style: optionalString(input.style),
-      });
-    case "/api/v1/generate/get-timestamped-lyrics":
-      return compactObject({
-        taskId: optionalString(input.taskId),
-        audioId: optionalString(input.audioId),
-      });
-    case "/api/v1/style/generate":
-      return compactObject({
-        content: optionalString(input.content),
-      });
-    default:
-      return compactObject({ ...input });
-  }
-}
-
-function pickAudioEditBody(input: Record<string, unknown>, requiredTextFields: string[]): Record<string, unknown> {
-  const body: Record<string, unknown> = {
-    uploadUrl: optionalString(input.uploadUrl),
-    callBackUrl: optionalString(input.callBackUrl),
-    vocalGender: optionalString(input.vocalGender),
-    styleWeight: optionalNumber(input.styleWeight),
-    weirdnessConstraint: optionalNumber(input.weirdnessConstraint),
-    audioWeight: optionalNumber(input.audioWeight),
-    model: optionalString(input.model),
-  };
-  for (const key of requiredTextFields) {
-    body[key] = optionalString(input[key]);
-  }
-  return compactObject(body);
-}
-
-async function requestSunoApiJson(input: {
+interface SunoApiRequest {
   apiKey: string;
   fetcher: ProviderFetch;
   method: "GET" | "POST";
   path: string;
-  phase: SunoApiRequestPhase;
   signal?: AbortSignal;
   query?: Record<string, string | number | boolean | undefined>;
   body?: Record<string, unknown>;
-}): Promise<unknown> {
-  let response: Response;
-  let payload: unknown;
-  try {
-    response = await input.fetcher(buildSunoApiUrl(input.path, input.query), {
+}
+
+async function requestSunoApiJson(input: SunoApiRequest): Promise<unknown> {
+  return runProviderRequest({ label: "sunoapi", signal: input.signal }, async (signal) => {
+    const response = await input.fetcher(buildSunoApiUrl(input.path, input.query), {
       method: input.method,
-      headers: buildSunoApiHeaders(input.apiKey, Boolean(input.body)),
-      ...(input.body ? { body: JSON.stringify(input.body) } : {}),
-      signal: input.signal,
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${input.apiKey}`,
+        "user-agent": providerUserAgent,
+        "content-type": "application/json",
+      },
+      body: input.body === undefined ? undefined : JSON.stringify(input.body),
+      signal,
     });
-    payload = await readSunoApiPayload(response);
-  } catch (error) {
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `sunoapi request failed: ${error.message}` : "sunoapi request failed",
-    );
-  }
-
-  if (!response.ok) {
-    throw createSunoApiError(response, payload, input.phase);
-  }
-  if (payload === undefined || typeof payload === "string") {
-    throw new ProviderRequestError(502, "sunoapi returned invalid JSON", payload);
-  }
-
-  const code = optionalNumber(optionalRecord(payload)?.code);
-  if (code !== undefined && code !== 200) {
-    throw createSunoApiBusinessError(payload, input.phase);
-  }
-
-  return payload;
+    const text = await response.text();
+    let payload: unknown;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = text;
+    }
+    const code = optionalNumber(optionalRecord(payload)?.code);
+    if (!response.ok || (code !== undefined && code !== 200)) {
+      throw new ProviderRequestError(
+        response.ok ? 502 : response.status,
+        `${extractSunoApiErrorMessage(payload) ?? response.statusText ?? "sunoapi request failed"}${code === undefined ? ` (HTTP ${response.status})` : ` (SunoAPI code ${code}, HTTP ${response.status})`}`,
+        payload,
+      );
+    }
+    if (typeof payload === "string") {
+      throw new ProviderRequestError(502, "sunoapi returned invalid JSON", payload);
+    }
+    return payload;
+  });
 }
 
 function buildSunoApiUrl(path: string, query: Record<string, string | number | boolean | undefined> = {}): URL {
@@ -424,27 +246,6 @@ function buildSunoApiUrl(path: string, query: Record<string, string | number | b
     }
   }
   return url;
-}
-
-function buildSunoApiHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
-  return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
-    "user-agent": providerUserAgent,
-    ...(hasBody ? { "content-type": "application/json" } : {}),
-  };
-}
-
-async function readSunoApiPayload(response: Response): Promise<unknown> {
-  const text = await response.text().catch(() => "");
-  if (!text.trim()) {
-    return undefined;
-  }
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return text;
-  }
 }
 
 function readSunoApiData(payload: unknown): unknown {
@@ -463,28 +264,6 @@ function readSunoApiObjectData(payload: unknown, label: string): Record<string, 
   return object;
 }
 
-function createSunoApiBusinessError(payload: unknown, phase: SunoApiRequestPhase): ProviderRequestError {
-  const message = extractSunoApiErrorMessage(payload) ?? "sunoapi request failed";
-  return new ProviderRequestError(phase === "validate" ? 400 : 502, message, payload);
-}
-
-function createSunoApiError(response: Response, payload: unknown, phase: SunoApiRequestPhase): ProviderRequestError {
-  const message = extractSunoApiErrorMessage(payload) ?? response.statusText ?? "sunoapi request failed";
-  if (response.status === 429) {
-    return new ProviderRequestError(429, message, payload);
-  }
-  if ((response.status === 401 || response.status === 403) && phase === "validate") {
-    return new ProviderRequestError(400, message, payload);
-  }
-  if ((response.status === 401 || response.status === 403) && phase === "execute") {
-    return new ProviderRequestError(401, message, payload);
-  }
-  if (response.status === 400 || response.status === 404 || response.status === 422) {
-    return new ProviderRequestError(response.status, message, payload);
-  }
-  return new ProviderRequestError(response.status || 502, message, payload);
-}
-
 function extractSunoApiErrorMessage(payload: unknown): string | undefined {
   if (typeof payload === "string" && payload.trim()) {
     return payload;
@@ -500,12 +279,4 @@ function extractSunoApiErrorMessage(payload: unknown): string | undefined {
     optionalString(error?.message) ??
     optionalString(root.error)
   );
-}
-
-function requireString(value: unknown, fieldName: string): string {
-  const parsed = optionalString(value);
-  if (!parsed) {
-    throw new ProviderRequestError(400, `${fieldName} is required`);
-  }
-  return parsed;
 }

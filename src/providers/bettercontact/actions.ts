@@ -69,11 +69,10 @@ const submitEnrichmentInputSchema: JsonSchema = {
   ],
 };
 
-export type BettercontactActionName = "get_account_balance" | "submit_enrichment" | "get_enrichment_result";
-
 export const bettercontactActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_account_balance",
+    operationType: "read",
     description: "Get BetterContact credits for the connected account email or an optional email override.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -95,6 +94,7 @@ export const bettercontactActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "submit_enrichment",
+    operationType: "write",
     description: "Submit one or more leads to BetterContact waterfall enrichment and return the request handle.",
     requiredScopes: [],
     inputSchema: submitEnrichmentInputSchema,
@@ -109,6 +109,7 @@ export const bettercontactActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_enrichment_result",
+    operationType: "read",
     description: "Get the current BetterContact enrichment result for a submitted request ID.",
     requiredScopes: [],
     inputSchema: s.actionInput(

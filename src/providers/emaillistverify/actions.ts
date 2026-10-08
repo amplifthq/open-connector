@@ -36,19 +36,10 @@ const nullableIntegerSchema = s.nullableInteger("The provider integer value, or 
   minimum: 0,
 });
 
-export type EmailListVerifyActionName =
-  | "verify_email"
-  | "verify_email_detailed"
-  | "get_credits"
-  | "upload_email_list"
-  | "check_disposable"
-  | "get_email_list_progress"
-  | "download_email_list"
-  | "delete_email_list";
-
 export const emailListVerifyActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "verify_email",
+    operationType: "read",
     description: "Verify a single email address with EmailListVerify's real-time API.",
     requiredScopes: [],
     inputSchema: emailInputSchema,
@@ -62,6 +53,7 @@ export const emailListVerifyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "verify_email_detailed",
+    operationType: "read",
     description: "Verify and enrich a single email address with EmailListVerify's detailed API.",
     requiredScopes: [],
     inputSchema: emailInputSchema,
@@ -92,6 +84,7 @@ export const emailListVerifyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_credits",
+    operationType: "read",
     description: "Retrieve the available EmailListVerify on-demand and subscription credits.",
     requiredScopes: [],
     inputSchema: noInputSchema,
@@ -118,6 +111,7 @@ export const emailListVerifyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "upload_email_list",
+    operationType: "write",
     description: "Upload one email list file to EmailListVerify for batch verification.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -139,6 +133,7 @@ export const emailListVerifyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "check_disposable",
+    operationType: "read",
     description: "Check whether one email domain is disposable with EmailListVerify.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -167,6 +162,7 @@ export const emailListVerifyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_email_list_progress",
+    operationType: "read",
     description: "Get the current progress of one uploaded EmailListVerify email list.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -203,6 +199,7 @@ export const emailListVerifyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "download_email_list",
+    operationType: "read",
     description: "Download one finished EmailListVerify email list as base64 content.",
     requiredScopes: [],
     inputSchema: s.actionInput(
@@ -231,6 +228,7 @@ export const emailListVerifyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_email_list",
+    operationType: "destructive",
     description: "Delete one finished EmailListVerify email list.",
     requiredScopes: [],
     inputSchema: s.actionInput(

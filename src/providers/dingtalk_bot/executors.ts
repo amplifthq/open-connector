@@ -5,7 +5,7 @@ import type {
   ProviderProxyExecutor,
   ProxyExecutionResult,
 } from "../../core/types.ts";
-import type { DingtalkBotActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { createHash, createHmac } from "node:crypto";
 import { compactObject, objectArray, optionalNumber, optionalString, requiredString } from "../../core/cast.ts";
@@ -16,6 +16,7 @@ import {
   defineProviderExecutors,
   isAbortLikeError,
   normalizeProviderProxyHeaders,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
   readProviderProxyErrorMessage,
@@ -27,7 +28,6 @@ import {
 const service = "dingtalk_bot";
 const apiBaseUrl = "https://oapi.dingtalk.com";
 const webhookPath = "/robot/send";
-const requestTimeoutMs = 30_000;
 const validationProbePayload = { msgtype: "__validation_probe__" };
 const validationSuccessCodes = new Set([40035, 400105]);
 
@@ -53,7 +53,7 @@ interface DingtalkBotRequestResult {
 
 type DingtalkBotActionHandler = (input: Record<string, unknown>, context: DingtalkBotContext) => Promise<unknown>;
 
-export const dingtalkBotActionHandlers: Record<DingtalkBotActionName, DingtalkBotActionHandler> = {
+export const dingtalkBotActionHandlers: ProviderActionHandlers<"dingtalk_bot", DingtalkBotActionHandler> = {
   send_text_message(input, context) {
     return sendDingtalkBotMessage(
       compactObject({
@@ -219,7 +219,7 @@ async function requestDingtalkBot(input: {
   fetcher: typeof fetch;
   signal?: AbortSignal;
 }): Promise<DingtalkBotRequestResult> {
-  const timeout = createProviderTimeout(input.signal, requestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const response = await input.fetcher(buildWebhookUrl(input.accessToken, input.signingSecret), {
       method: "POST",
@@ -370,8 +370,4 @@ function applyWebhookAuthentication(url: URL, accessToken: string, signingSecret
 
 function buildProviderAccountId(accessToken: string): string {
   return `dingtalk_bot:${createHash("sha256").update(accessToken).digest("hex").slice(0, 24)}`;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

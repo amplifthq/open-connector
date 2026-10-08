@@ -1,16 +1,17 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
+
 import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 export const diffyApiBaseUrl = "https://app.diffy.website/api/";
-const timeoutMs = 30_000;
 interface DiffyContext {
   apiKey: string;
   fetcher: typeof fetch;
   signal?: AbortSignal;
 }
 
-export const diffyActionHandlers: Record<
-  string,
+export const diffyActionHandlers: ProviderActionHandlers<
+  "diffy",
   (input: Record<string, unknown>, context: DiffyContext) => Promise<unknown>
 > = {
   async list_projects(_input, context) {
@@ -87,7 +88,7 @@ async function requestDiffyJson(
   token?: string,
   init: RequestInit = {},
 ): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(context.signal, timeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const headers = new Headers(init.headers);
     headers.set("accept", "application/json");

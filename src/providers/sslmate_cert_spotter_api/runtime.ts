@@ -1,24 +1,22 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { CertSpotterActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
+  requiredInputString,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 export const certSpotterMonitoringApiBaseUrl: string = "https://sslmate.com/api/v3/monitoring";
 export const certSpotterCtSearchApiBaseUrl: string = "https://api.certspotter.com/v1";
 
-const certSpotterDefaultRequestTimeoutMs = 30_000;
-
 type CertSpotterRequestPhase = "validate" | "execute";
 type CertSpotterActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const certSpotterActionHandlers: Record<CertSpotterActionName, CertSpotterActionHandler> = {
+export const certSpotterActionHandlers: ProviderActionHandlers<"sslmate_cert_spotter_api", CertSpotterActionHandler> = {
   list_certificate_issuances(input, context) {
     return executeListCertificateIssuances(input, context);
   },
@@ -67,12 +65,14 @@ async function executeListCertificateIssuances(
   input: Record<string, unknown>,
   context: ApiKeyProviderContext,
 ): Promise<unknown> {
-  validateCtSearchDomain(readInputString(input.domain, "domain"));
-  const expand = Array.isArray(input.expand) ? input.expand.map((item) => readInputString(item, "expand")) : undefined;
+  validateCtSearchDomain(requiredInputString(input.domain, "domain"));
+  const expand = Array.isArray(input.expand)
+    ? input.expand.map((item) => requiredInputString(item, "expand"))
+    : undefined;
   const { payload, response } = await requestCertSpotterJson({
     context,
     url: buildCtSearchIssuancesUrl({
-      domain: readInputString(input.domain, "domain"),
+      domain: requiredInputString(input.domain, "domain"),
       after: optionalString(input.after),
       include_subdomains: typeof input.include_subdomains === "boolean" ? input.include_subdomains : undefined,
       match_wildcards: typeof input.match_wildcards === "boolean" ? input.match_wildcards : undefined,
@@ -107,7 +107,7 @@ async function executeGetMonitoredDomain(
   input: Record<string, unknown>,
   context: ApiKeyProviderContext,
 ): Promise<unknown> {
-  const name = readInputString(input.name, "name");
+  const name = requiredInputString(input.name, "name");
   validateMonitoredDomainName(name);
   const { payload } = await requestCertSpotterJson({
     context,
@@ -126,7 +126,7 @@ async function executeUpsertMonitoredDomain(
   input: Record<string, unknown>,
   context: ApiKeyProviderContext,
 ): Promise<unknown> {
-  const name = readInputString(input.name, "name");
+  const name = requiredInputString(input.name, "name");
   validateMonitoredDomainName(name);
   const { payload } = await requestCertSpotterJson({
     context,
@@ -146,7 +146,7 @@ async function executeDeleteMonitoredDomain(
   input: Record<string, unknown>,
   context: ApiKeyProviderContext,
 ): Promise<unknown> {
-  const name = readInputString(input.name, "name");
+  const name = requiredInputString(input.name, "name");
   validateMonitoredDomainName(name);
   await requestCertSpotterJson({
     context,
@@ -190,33 +190,19 @@ async function requestCertSpotterJson(input: {
   body?: string;
   phase: CertSpotterRequestPhase;
 }): Promise<{ response: Response; payload: unknown }> {
-  const timeout = createProviderTimeout(input.context.signal, certSpotterDefaultRequestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "Cert Spotter" }, async (signal) => {
     const response = await input.context.fetcher(input.url, {
       method: input.method,
       headers: buildCertSpotterHeaders(input.context.apiKey, input.body ? "application/json" : undefined),
       body: input.body,
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readCertSpotterPayload(response);
     if (!response.ok) {
       throw createCertSpotterError(response, payload, input.phase);
     }
     return { response, payload };
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Cert Spotter request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Cert Spotter request failed: ${error.message}` : "Cert Spotter request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildCertSpotterHeaders(apiKey: string, contentType?: string): Headers {
@@ -277,10 +263,6 @@ function parseRetryAfterSeconds(value: string | null): number | undefined {
   if (!value) return undefined;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
-}
-
-function readInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function validateCtSearchDomain(value: string): void {

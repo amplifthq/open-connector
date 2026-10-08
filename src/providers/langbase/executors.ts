@@ -1,9 +1,19 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { LangbaseActionName } from "./actions.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "langbase";
 const langbaseApiBaseUrl = "https://api.langbase.com";
@@ -13,7 +23,7 @@ const langbaseRetrievePath = "/v1/memory/retrieve";
 type LangbaseRequestPhase = "validate" | "execute";
 type LangbaseActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const langbaseActionHandlers: Record<LangbaseActionName, LangbaseActionHandler> = {
+export const langbaseActionHandlers: ProviderActionHandlers<"langbase", LangbaseActionHandler> = {
   list_memories(_input, context) {
     return listLangbaseMemories(context);
   },
@@ -29,6 +39,16 @@ export const langbaseActionHandlers: Record<LangbaseActionName, LangbaseActionHa
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, langbaseActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: langbaseApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

@@ -4,8 +4,8 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { RecurlyActionName } from "./actions.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -22,6 +22,7 @@ import {
   defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 const service = "recurly";
@@ -37,7 +38,7 @@ interface RecurlyListPayload {
   next?: unknown;
 }
 
-export const recurlyActionHandlers: Record<RecurlyActionName, RecurlyActionHandler> = {
+export const recurlyActionHandlers: ProviderActionHandlers<"recurly", RecurlyActionHandler> = {
   async list_accounts(input, context) {
     const payload = await requestRecurlyList(input, context, "/accounts", {
       ...buildCommonListQuery(input),
@@ -440,10 +441,6 @@ function requireRecord(value: unknown, label: string): Record<string, unknown> {
   const record = optionalRecord(value);
   if (!record) throw new ProviderRequestError(502, `Recurly response is missing ${label} object`);
   return record;
-}
-
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function requiredOutputString(value: unknown, fieldName: string): string {

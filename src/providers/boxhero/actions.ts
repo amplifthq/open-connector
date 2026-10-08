@@ -5,8 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "boxhero";
 
-export type BoxheroActionName = "get_team_info" | "list_items" | "get_item" | "list_locations";
-
 const nonNegativeIntegerField = (description: string) => s.integer(description, { minimum: 0 });
 
 const nullableStringField = (description: string) => s.nullable(s.string(description));
@@ -140,24 +138,28 @@ const listLocationsOutputSchema = s.object("The BoxHero list locations response.
 export const boxheroActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_team_info",
+    operationType: "read",
     description: "Get the linked BoxHero team information and team mode.",
     inputSchema: getTeamInfoInputSchema,
     outputSchema: getTeamInfoOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_items",
+    operationType: "read",
     description: "List BoxHero inventory items with optional location filters and cursor pagination.",
     inputSchema: listItemsInputSchema,
     outputSchema: listItemsOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_item",
+    operationType: "read",
     description: "Get a single BoxHero inventory item by item identifier.",
     inputSchema: getItemInputSchema,
     outputSchema: getItemOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_locations",
+    operationType: "read",
     description: "List BoxHero locations available to the linked team.",
     inputSchema: listLocationsInputSchema,
     outputSchema: listLocationsOutputSchema,

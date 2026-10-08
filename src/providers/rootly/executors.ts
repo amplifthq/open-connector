@@ -1,9 +1,19 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { RootlyActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { booleanString, compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  ProviderRequestError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 const service = "rootly";
 const rootlyApiBaseUrl = "https://api.rootly.com/v1";
@@ -11,7 +21,7 @@ const jsonApiContentType = "application/vnd.api+json";
 
 type RootlyActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const rootlyActionHandlers: Record<RootlyActionName, RootlyActionHandler> = {
+export const rootlyActionHandlers: ProviderActionHandlers<"rootly", RootlyActionHandler> = {
   get_current_user(_input, context) {
     return rootlyGetSingleResource("/users/me", {}, context);
   },
@@ -34,6 +44,17 @@ export const rootlyActionHandlers: Record<RootlyActionName, RootlyActionHandler>
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, rootlyActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: rootlyApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", jsonApiContentType);
+    headers.set("content-type", jsonApiContentType);
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {
@@ -152,7 +173,7 @@ function buildIncidentQuery(input: Record<string, unknown>): Record<string, stri
     "filter[search]": optionalString(input.search),
     "filter[kind]": optionalString(input.kind),
     "filter[status]": optionalString(input.status),
-    "filter[private]": readOptionalBooleanString(input.private),
+    "filter[private]": booleanString(input.private),
     "filter[user_id]": readOptionalNumberString(input.userId),
     "filter[severity]": optionalString(input.severity),
     "filter[severity_id]": optionalString(input.severityId),
@@ -181,8 +202,8 @@ function buildConfigurationQuery(
     "filter[slug]": optionalString(input.slug),
     "filter[external_id]": optionalString(input.externalId),
     ...(options.includeColor ? { "filter[color]": optionalString(input.color) } : {}),
-    "filter[alert_broadcast_enabled]": readOptionalBooleanString(input.alertBroadcastEnabled),
-    "filter[incident_broadcast_enabled]": readOptionalBooleanString(input.incidentBroadcastEnabled),
+    "filter[alert_broadcast_enabled]": booleanString(input.alertBroadcastEnabled),
+    "filter[incident_broadcast_enabled]": booleanString(input.incidentBroadcastEnabled),
     "filter[created_at][gt]": optionalString(input.createdAtGt),
     "filter[created_at][gte]": optionalString(input.createdAtGte),
     "filter[created_at][lt]": optionalString(input.createdAtLt),
@@ -255,10 +276,6 @@ function readOptionalStringArray(value: unknown): string[] | undefined {
 
 function readOptionalNumberString(value: unknown): string | undefined {
   return typeof value === "number" ? String(value) : undefined;
-}
-
-function readOptionalBooleanString(value: unknown): string | undefined {
-  return typeof value === "boolean" ? String(value) : undefined;
 }
 
 function readRootlyError(payload: unknown): string | undefined {

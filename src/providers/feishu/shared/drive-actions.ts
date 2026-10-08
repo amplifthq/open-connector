@@ -4,6 +4,7 @@ import { s } from "../../../core/json-schema.ts";
 import { defineProviderAction } from "../../../core/provider-definition.ts";
 export const feishuDriveProviderScopes = {
   metadataRead: "drive:drive.metadata:readonly",
+  folderList: "space:document:retrieve",
   search: "search:docs:read",
   folderCreate: "space:folder:create",
   copy: "docs:document:copy",
@@ -14,7 +15,7 @@ export const feishuDriveProviderScopes = {
   commentCreate: "docs:document.comment:create",
   commentUpdate: "docs:document.comment:update",
   commentDelete: "docs:document.comment:delete",
-  permissionRead: "docs:permission.member:readonly",
+  permissionRead: "docs:permission.member:retrieve",
   permissionCreate: "docs:permission.member:create",
   permissionUpdate: "docs:permission.member:update",
   permissionDelete: "docs:permission.member:delete",
@@ -100,6 +101,7 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
   return [
     defineProviderAction(service, {
       name: "inspect_drive_item",
+      operationType: "read",
       description:
         "Inspect a Feishu Drive token to resolve its canonical type, title, URL, and underlying document for Wiki nodes.",
       requiredScopes: [feishuDriveProviderScopes.metadataRead, "wiki:node:retrieve"],
@@ -141,6 +143,7 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "search_drive_items",
+      operationType: "read",
       description: "Search Feishu Drive documents, Wiki nodes, spreadsheets, Base apps, files, folders, and slides.",
       requiredScopes: [feishuDriveProviderScopes.search],
       providerPermissions: [feishuDriveProviderScopes.search],
@@ -177,9 +180,13 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "list_drive_files",
+      operationType: "read",
       description: "List files, folders, and online documents inside a Feishu Drive folder.",
-      requiredScopes: [feishuDriveProviderScopes.metadataRead],
-      providerPermissions: [feishuDriveProviderScopes.metadataRead],
+      // Measured against Feishu with a user_access_token on 2026-09-14:
+      // metadataRead is rejected with 99991679, which names folderList as the
+      // narrowest accepted permission for this endpoint.
+      requiredScopes: [feishuDriveProviderScopes.folderList],
+      providerPermissions: [feishuDriveProviderScopes.folderList],
       inputSchema: s.object(
         "Choose a folder, sort order, and page.",
         {
@@ -201,6 +208,7 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "create_drive_folder",
+      operationType: "write",
       description: "Create a folder in Feishu Drive.",
       requiredScopes: [feishuDriveProviderScopes.folderCreate],
       providerPermissions: [feishuDriveProviderScopes.folderCreate],
@@ -231,6 +239,7 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "copy_drive_file",
+      operationType: "write",
       description: "Copy a Feishu Drive file or online document into another folder.",
       requiredScopes: [feishuDriveProviderScopes.copy],
       providerPermissions: [feishuDriveProviderScopes.copy],
@@ -264,6 +273,7 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "move_drive_item",
+      operationType: "destructive",
       description:
         "Move a Feishu Drive file or folder and return a task ID when Feishu processes the move asynchronously.",
       requiredScopes: [feishuDriveProviderScopes.move],
@@ -283,6 +293,7 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "delete_drive_item",
+      operationType: "destructive",
       description:
         "Delete a Feishu Drive file or folder and return a task ID when Feishu processes the deletion asynchronously.",
       requiredScopes: [feishuDriveProviderScopes.delete, feishuDriveProviderScopes.metadataRead],
@@ -301,6 +312,7 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "get_drive_task_status",
+      operationType: "read",
       description: "Get the current state of an asynchronous Drive move, copy, or delete task.",
       requiredScopes: [feishuDriveProviderScopes.metadataRead],
       providerPermissions: [feishuDriveProviderScopes.metadataRead],
@@ -326,6 +338,7 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "list_drive_comments",
+      operationType: "read",
       description: "List comments on a Feishu Drive document or supported file.",
       requiredScopes: [feishuDriveProviderScopes.commentRead],
       providerPermissions: [feishuDriveProviderScopes.commentRead],
@@ -351,6 +364,7 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "create_drive_comment",
+      operationType: "write",
       description: "Create a full-resource or anchored rich-text comment on a Feishu Drive document or supported file.",
       requiredScopes: [feishuDriveProviderScopes.commentCreate, feishuDriveProviderScopes.commentWrite],
       providerPermissions: [feishuDriveProviderScopes.commentCreate, feishuDriveProviderScopes.commentWrite],
@@ -385,6 +399,7 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "update_drive_comment",
+      operationType: "write",
       description: "Mark a Feishu Drive comment as solved or unresolved.",
       requiredScopes: [feishuDriveProviderScopes.commentUpdate],
       providerPermissions: [feishuDriveProviderScopes.commentUpdate],
@@ -406,6 +421,7 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "delete_drive_comment",
+      operationType: "destructive",
       description: "Delete a Feishu Drive comment.",
       requiredScopes: [feishuDriveProviderScopes.commentDelete],
       providerPermissions: [feishuDriveProviderScopes.commentDelete],
@@ -414,6 +430,7 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "create_drive_comment_reply",
+      operationType: "write",
       description: "Add a rich-text reply to a Feishu Drive comment.",
       requiredScopes: [feishuDriveProviderScopes.commentCreate, feishuDriveProviderScopes.commentWrite],
       providerPermissions: [feishuDriveProviderScopes.commentCreate, feishuDriveProviderScopes.commentWrite],
@@ -437,6 +454,7 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "delete_drive_comment_reply",
+      operationType: "destructive",
       description: "Delete a reply from a Feishu Drive comment.",
       requiredScopes: [feishuDriveProviderScopes.commentDelete],
       providerPermissions: [feishuDriveProviderScopes.commentDelete],
@@ -447,13 +465,17 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "list_drive_permissions",
+      operationType: "read",
       description: "List collaborators and permission roles on a Feishu Drive resource.",
       requiredScopes: [feishuDriveProviderScopes.permissionRead],
       providerPermissions: [feishuDriveProviderScopes.permissionRead],
-      inputSchema: permissionResourceSchema({
-        fields: s.string("A comma-separated projection of permission member fields."),
-        permType: s.stringEnum("The Wiki permission scope.", ["container", "single_page"]),
-      }),
+      inputSchema: permissionResourceSchema(
+        {
+          fields: s.string("A comma-separated projection of permission member fields."),
+          permType: s.stringEnum("The Wiki permission scope.", ["container", "single_page"]),
+        },
+        ["fields", "permType"],
+      ),
       outputSchema: s.object(
         "The permission members on a Drive resource.",
         {
@@ -466,21 +488,25 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "add_drive_permission",
+      operationType: "write",
       description: "Grant a collaborator permission on a Feishu Drive resource.",
       requiredScopes: [feishuDriveProviderScopes.permissionCreate],
       providerPermissions: [feishuDriveProviderScopes.permissionCreate],
-      inputSchema: permissionResourceSchema({
-        memberId: s.string("The collaborator identifier.", { minLength: 1 }),
-        memberType: memberTypeSchema,
-        permission: permissionRoleSchema,
-        permType: s.stringEnum("The Wiki permission scope.", ["container", "single_page"]),
-        memberKind: s.stringEnum("The Wiki-space member role.", [
-          "wiki_space_member",
-          "wiki_space_viewer",
-          "wiki_space_editor",
-        ]),
-        needNotification: s.boolean("Whether Feishu should notify the collaborator."),
-      }),
+      inputSchema: permissionResourceSchema(
+        {
+          memberId: s.string("The collaborator identifier.", { minLength: 1 }),
+          memberType: memberTypeSchema,
+          permission: permissionRoleSchema,
+          permType: s.stringEnum("The Wiki permission scope.", ["container", "single_page"]),
+          memberKind: s.stringEnum("The Wiki-space member role.", [
+            "wiki_space_member",
+            "wiki_space_viewer",
+            "wiki_space_editor",
+          ]),
+          needNotification: s.boolean("Whether Feishu should notify the collaborator."),
+        },
+        ["permType", "memberKind", "needNotification"],
+      ),
       outputSchema: s.object(
         "The granted Drive permission.",
         {
@@ -496,15 +522,19 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "update_drive_permission",
+      operationType: "write",
       description: "Change a collaborator's permission role on a Feishu Drive resource.",
       requiredScopes: [feishuDriveProviderScopes.permissionUpdate],
       providerPermissions: [feishuDriveProviderScopes.permissionUpdate],
-      inputSchema: permissionResourceSchema({
-        memberId: s.string("The collaborator identifier.", { minLength: 1 }),
-        memberType: memberTypeSchema,
-        permission: permissionRoleSchema,
-        needNotification: s.boolean("Whether Feishu should notify the collaborator."),
-      }),
+      inputSchema: permissionResourceSchema(
+        {
+          memberId: s.string("The collaborator identifier.", { minLength: 1 }),
+          memberType: memberTypeSchema,
+          permission: permissionRoleSchema,
+          needNotification: s.boolean("Whether Feishu should notify the collaborator."),
+        },
+        ["needNotification"],
+      ),
       outputSchema: s.object(
         "The updated Drive permission.",
         {
@@ -520,14 +550,18 @@ export function createFeishuDriveActions(service: string): readonly ActionDefini
     }),
     defineProviderAction(service, {
       name: "remove_drive_permission",
+      operationType: "destructive",
       description: "Remove a collaborator permission from a Feishu Drive resource.",
       requiredScopes: [feishuDriveProviderScopes.permissionDelete],
       providerPermissions: [feishuDriveProviderScopes.permissionDelete],
-      inputSchema: permissionResourceSchema({
-        memberId: s.string("The collaborator identifier.", { minLength: 1 }),
-        memberType: memberTypeSchema,
-        permType: s.stringEnum("The Wiki permission scope.", ["container", "single_page"]),
-      }),
+      inputSchema: permissionResourceSchema(
+        {
+          memberId: s.string("The collaborator identifier.", { minLength: 1 }),
+          memberType: memberTypeSchema,
+          permType: s.stringEnum("The Wiki permission scope.", ["container", "single_page"]),
+        },
+        ["permType"],
+      ),
       outputSchema: deletionOutputSchema("Whether the Drive permission was removed."),
     }),
   ];
@@ -588,7 +622,7 @@ function commentIdentitySchema(extra: Record<string, JsonSchema>) {
     },
   );
 }
-function permissionResourceSchema(extra: Record<string, JsonSchema>) {
+function permissionResourceSchema(extra: Record<string, JsonSchema>, optional: readonly string[]) {
   return s.object(
     "Identify a Feishu Drive permission resource and operation.",
     {
@@ -597,7 +631,7 @@ function permissionResourceSchema(extra: Record<string, JsonSchema>) {
       ...extra,
     },
     {
-      optional: [],
+      optional,
     },
   );
 }

@@ -5,11 +5,10 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "cloudflare_docs" as const;
 
-export type CloudflareDocsActionName = "search_cloudflare_documentation" | "get_pages_to_workers_migration_guide";
-
 export const cloudflareDocsActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "search_cloudflare_documentation",
+    operationType: "read",
     description:
       "Search Cloudflare documentation for Workers, Pages, R2, Images, Stream, D1, Durable Objects, KV, Workflows, Hyperdrive, Queues, AI Search, Workers AI, Vectorize, AI Gateway, Browser Run, Zero Trust, Access, Tunnel, Gateway, Browser Isolation, WARP, DDOS, Magic Transit, Magic WAN, CDN, Cache, DNS, Zaraz, Argo, Rulesets, Terraform, Account and Billing.",
     requiredScopes: [],
@@ -20,6 +19,7 @@ export const cloudflareDocsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_pages_to_workers_migration_guide",
+    operationType: "read",
     description: "Get the guide and instructions for migrating Cloudflare Pages projects to Cloudflare Workers.",
     requiredScopes: [],
     inputSchema: s.object("Input payload for get_pages_to_workers_migration_guide", {}),

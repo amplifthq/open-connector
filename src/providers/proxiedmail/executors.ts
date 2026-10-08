@@ -4,7 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProxiedmailActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -13,21 +13,19 @@ import {
   optionalRecord,
   optionalString,
   requiredRecord,
-  requiredString,
 } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
   defineProviderExecutors,
   defineProviderProxy,
-  isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
+  requiredInputString,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 const service = "proxiedmail";
 const proxiedmailApiBaseUrl = "https://proxiedmail.com/api/v1";
-const proxiedmailRequestTimeoutMs = 30_000;
 
 type ProxiedmailRequestPhase = "validate" | "execute";
 type ProxiedmailMethod = "GET" | "POST" | "PATCH";
@@ -40,7 +38,7 @@ interface ProxiedmailActionContext {
 
 type ProxiedmailActionHandler = (input: Record<string, unknown>, context: ProxiedmailActionContext) => Promise<unknown>;
 
-export const proxiedmailActionHandlers: Record<ProxiedmailActionName, ProxiedmailActionHandler> = {
+export const proxiedmailActionHandlers: ProviderActionHandlers<"proxiedmail", ProxiedmailActionHandler> = {
   async list_proxy_bindings(_input, context) {
     const payload = await requestProxiedmailJson({
       apiKey: context.apiKey,
@@ -63,7 +61,7 @@ export const proxiedmailActionHandlers: Record<ProxiedmailActionName, Proxiedmai
           type: "proxy_bindings",
           attributes: compactObject({
             real_addresses: readStringArray(input.realAddresses, "realAddresses"),
-            proxy_address: readOptionalNonEmptyString(input.proxyAddress),
+            proxy_address: optionalString(input.proxyAddress),
             callback_url: readOptionalString(input.callbackUrl),
             is_browsable: typeof input.isBrowsable === "boolean" ? input.isBrowsable : undefined,
           }),
@@ -77,10 +75,10 @@ export const proxiedmailActionHandlers: Record<ProxiedmailActionName, Proxiedmai
   },
 
   async update_proxy_binding(input, context) {
-    const proxyBindingId = readRequiredNonEmptyString(input.proxyBindingId, "proxyBindingId");
+    const proxyBindingId = requiredInputString(input.proxyBindingId, "proxyBindingId");
     const attributes = compactObject({
       real_addresses: readOptionalRealAddressUpdates(input.realAddresses),
-      proxy_address: readOptionalNonEmptyString(input.proxyAddress),
+      proxy_address: optionalString(input.proxyAddress),
       description: typeof input.description === "string" ? input.description : undefined,
       callback_url: readOptionalString(input.callbackUrl),
       is_browsable: typeof input.isBrowsable === "boolean" ? input.isBrowsable : undefined,
@@ -109,7 +107,7 @@ export const proxiedmailActionHandlers: Record<ProxiedmailActionName, Proxiedmai
   },
 
   async list_received_email_links(input, context) {
-    const proxyBindingId = readRequiredNonEmptyString(input.proxyBindingId, "proxyBindingId");
+    const proxyBindingId = requiredInputString(input.proxyBindingId, "proxyBindingId");
     const payload = await requestProxiedmailJson({
       apiKey: context.apiKey,
       path: `/received-emails-links/${encodeURIComponent(proxyBindingId)}`,
@@ -129,7 +127,7 @@ export const proxiedmailActionHandlers: Record<ProxiedmailActionName, Proxiedmai
   },
 
   async get_received_email(input, context) {
-    const receivedEmailId = readRequiredNonEmptyString(input.receivedEmailId, "receivedEmailId");
+    const receivedEmailId = requiredInputString(input.receivedEmailId, "receivedEmailId");
     const payload = await requestProxiedmailJson({
       apiKey: context.apiKey,
       path: `/received-emails/${encodeURIComponent(receivedEmailId)}`,
@@ -207,8 +205,7 @@ async function requestProxiedmailJson(input: {
   signal?: AbortSignal;
   phase: ProxiedmailRequestPhase;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, proxiedmailRequestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: input.signal, label: "ProxiedMail" }, async (signal) => {
     const response = await input.fetcher(buildProxiedmailUrl(input.path), {
       method: input.method,
       headers: {
@@ -218,7 +215,7 @@ async function requestProxiedmailJson(input: {
         "user-agent": providerUserAgent,
       },
       body: input.body ? JSON.stringify(input.body) : undefined,
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readProxiedmailPayload(response);
 
@@ -227,20 +224,7 @@ async function requestProxiedmailJson(input: {
     }
 
     return payload ?? {};
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "ProxiedMail request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `ProxiedMail request failed: ${error.message}` : "ProxiedMail request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildProxiedmailUrl(path: string): URL {
@@ -354,14 +338,6 @@ function readOptionalRealAddressUpdates(value: unknown): Record<string, boolean>
       return [email, enabled];
     }),
   );
-}
-
-function readRequiredNonEmptyString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
-function readOptionalNonEmptyString(value: unknown): string | undefined {
-  return optionalString(value);
 }
 
 function readOptionalString(value: unknown): string | undefined {

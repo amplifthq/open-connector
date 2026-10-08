@@ -1,10 +1,17 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
   ProviderRequestError,
 } from "../provider-runtime.ts";
@@ -16,7 +23,7 @@ const weatherapiValidationQuery = "London";
 
 type WeatherapiActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
-const weatherapiActionHandlers: Record<string, WeatherapiActionHandler> = {
+const weatherapiActionHandlers: ProviderActionHandlers<"weatherapi", WeatherapiActionHandler> = {
   async search_locations(input, context): Promise<unknown> {
     const payload = await weatherapiRequestJson(
       "search.json",
@@ -164,6 +171,16 @@ const weatherapiActionHandlers: Record<string, WeatherapiActionHandler> = {
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, weatherapiActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: weatherapiApiBaseUrl,
+  auth: { type: "api_key_query", name: "key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {

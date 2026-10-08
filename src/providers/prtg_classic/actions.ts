@@ -89,16 +89,16 @@ const listDevicesOutputSchema = s.object(
 export const prtgClassicActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_sensors",
+    operationType: "read",
     description: "List PRTG sensors with status, message, and last value fields from the classic table API.",
     inputSchema: listSensorsInputSchema,
     outputSchema: listSensorsOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_devices",
+    operationType: "read",
     description: "List PRTG devices with host, status, and message fields from the classic table API.",
     inputSchema: listDevicesInputSchema,
     outputSchema: listDevicesOutputSchema,
   }),
 ];
-
-export type PrtgClassicActionName = "list_sensors" | "list_devices";

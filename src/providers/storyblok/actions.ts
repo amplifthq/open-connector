@@ -334,54 +334,52 @@ const tagsResponseSchema = s.looseRequiredObject("Storyblok tags response.", {
   tags: s.array("Tags returned by Storyblok.", tagSchema),
 });
 
-export type StoryblokActionName =
-  | "get_space"
-  | "list_stories"
-  | "get_story"
-  | "list_links"
-  | "list_datasources"
-  | "list_datasource_entries"
-  | "list_tags";
-
 export const storyblokActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_space",
+    operationType: "read",
     description: "Retrieve metadata for the Storyblok space associated with the access token.",
     inputSchema: getSpaceInputSchema,
     outputSchema: getSpaceOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_stories",
+    operationType: "read",
     description: "List Storyblok stories with pagination, content filters, language, and relation resolution options.",
     inputSchema: listStoriesInputSchema,
     outputSchema: storiesResponseSchema,
   }),
   defineProviderAction(service, {
     name: "get_story",
+    operationType: "read",
     description: "Retrieve one Storyblok story by full slug, numeric ID, or UUID.",
     inputSchema: getStoryInputSchema,
     outputSchema: storyResponseSchema,
   }),
   defineProviderAction(service, {
     name: "list_links",
+    operationType: "read",
     description: "List compact Storyblok link records for stories and folders in a space.",
     inputSchema: listLinksInputSchema,
     outputSchema: linksResponseSchema,
   }),
   defineProviderAction(service, {
     name: "list_datasources",
+    operationType: "read",
     description: "List Storyblok datasources with pagination.",
     inputSchema: listDatasourcesInputSchema,
     outputSchema: datasourcesResponseSchema,
   }),
   defineProviderAction(service, {
     name: "list_datasource_entries",
+    operationType: "read",
     description: "List Storyblok datasource entries, optionally filtered by datasource and dimension.",
     inputSchema: listDatasourceEntriesInputSchema,
     outputSchema: datasourceEntriesResponseSchema,
   }),
   defineProviderAction(service, {
     name: "list_tags",
+    operationType: "read",
     description: "List Storyblok tags assigned to stories in the current space.",
     inputSchema: listTagsInputSchema,
     outputSchema: tagsResponseSchema,

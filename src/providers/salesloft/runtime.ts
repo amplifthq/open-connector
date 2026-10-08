@@ -1,9 +1,14 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { SalesloftActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent, readProviderTextBody } from "../provider-runtime.ts";
+import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
+import {
+  ProviderRequestError,
+  providerUserAgent,
+  readProviderTextBody,
+  requiredInputString,
+} from "../provider-runtime.ts";
 
 export const salesloftApiBaseUrl = "https://api.salesloft.com";
 
@@ -23,7 +28,7 @@ interface SalesloftPayload {
   [key: string]: unknown;
 }
 
-export const salesloftActionHandlers: Record<SalesloftActionName, SalesloftActionHandler> = {
+export const salesloftActionHandlers: ProviderActionHandlers<"salesloft", SalesloftActionHandler> = {
   async get_current_user(_input, context) {
     const payload = await requestSalesloft({
       path: "/v2/me",
@@ -53,7 +58,7 @@ export const salesloftActionHandlers: Record<SalesloftActionName, SalesloftActio
   },
   async get_person(input, context) {
     const payload = await requestSalesloft({
-      path: `/v2/people/${encodeURIComponent(readRequiredInputString(input.id, "id"))}`,
+      path: `/v2/people/${encodeURIComponent(requiredInputString(input.id, "id"))}`,
       apiKey: context.apiKey,
       fetcher: context.fetcher,
       signal: context.signal,
@@ -80,7 +85,7 @@ export const salesloftActionHandlers: Record<SalesloftActionName, SalesloftActio
   },
   async get_account(input, context) {
     const payload = await requestSalesloft({
-      path: `/v2/accounts/${encodeURIComponent(readRequiredInputString(input.id, "id"))}`,
+      path: `/v2/accounts/${encodeURIComponent(requiredInputString(input.id, "id"))}`,
       apiKey: context.apiKey,
       fetcher: context.fetcher,
       signal: context.signal,
@@ -107,7 +112,7 @@ export const salesloftActionHandlers: Record<SalesloftActionName, SalesloftActio
   },
   async get_cadence(input, context) {
     const payload = await requestSalesloft({
-      path: `/v2/cadences/${encodeURIComponent(readRequiredInputString(input.id, "id"))}`,
+      path: `/v2/cadences/${encodeURIComponent(requiredInputString(input.id, "id"))}`,
       apiKey: context.apiKey,
       fetcher: context.fetcher,
       signal: context.signal,
@@ -284,8 +289,4 @@ function readResponseObjectArray(value: unknown, label: string): Array<Record<st
   }
 
   return value.map((item) => readResponseObject(item, label));
-}
-
-function readRequiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }

@@ -1,5 +1,5 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { HoneybadgerActionName } from "./actions.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
 import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
@@ -7,7 +7,6 @@ import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "
 export const defaultHoneybadgerApiBaseUrl = "https://api.honeybadger.io";
 export const honeybadgerValidationPath = "/v1/notices";
 
-const honeybadgerRequestTimeoutMs = 30_000;
 const allowedHoneybadgerApiHosts = new Set(["api.honeybadger.io", "eu-api.honeybadger.io"]);
 
 export interface HoneybadgerActionContext extends ApiKeyProviderContext {
@@ -24,7 +23,7 @@ interface HoneybadgerResponse {
   headers: Headers;
 }
 
-export const honeybadgerActionHandlers: Record<HoneybadgerActionName, HoneybadgerActionHandler> = {
+export const honeybadgerActionHandlers: ProviderActionHandlers<"honeybadger", HoneybadgerActionHandler> = {
   report_exception(input, context) {
     return reportException(input, context);
   },
@@ -261,7 +260,7 @@ async function requestHoneybadger(input: {
   contentType?: string | null;
   acceptedStatuses?: number[];
 }): Promise<HoneybadgerResponse> {
-  const timeout = createProviderTimeout(input.signal, honeybadgerRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   const headers = new Headers();
   headers.set("accept", "application/json");
   headers.set("user-agent", providerUserAgent);

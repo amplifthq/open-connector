@@ -1,10 +1,11 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
 import type { ExecutionContext } from "../../core/types.ts";
-import type { QuadernoActionName } from "./actions.ts";
+import type { ProviderActionHandlers, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { requiredString } from "../../core/cast.ts";
 import {
   defineProviderExecutors,
+  mapProviderActionSources,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
@@ -36,7 +37,7 @@ interface QuadernoAccountInfo {
   raw: Record<string, unknown>;
 }
 
-export const quadernoActionHandlers: Record<QuadernoActionName, QuadernoHandler> = {
+export const quadernoActionHandlers: ProviderActionHandlers<"quaderno", QuadernoHandler> = {
   get_account: async (input, fetcher) => ({
     account: await fetchQuadernoAccount(input.apiKey, fetcher),
   }),
@@ -139,24 +140,19 @@ export async function validateQuadernoCredential(
   };
 }
 
-export async function executeQuadernoAction(input: QuadernoExecuteInput, fetcher: typeof fetch): Promise<unknown> {
-  const handler =
-    quadernoActionHandlers[(input as QuadernoExecuteInput & { actionName: QuadernoActionName }).actionName];
-  if (!handler) {
-    throw new ProviderRequestError(400, `unknown quaderno action`);
-  }
-  return handler(input, fetcher);
-}
+const quadernoRuntimeHandlers: ProviderActionHandlers<
+  "quaderno",
+  ProviderRuntimeHandler<QuadernoRuntimeContext>
+> = mapProviderActionSources<"quaderno", typeof quadernoActionHandlers, ProviderRuntimeHandler<QuadernoRuntimeContext>>(
+  "quaderno",
+  quadernoActionHandlers,
+  (_name, handler) => (input, context) =>
+    handler({ apiKey: context.apiKey, providerMetadata: context.providerMetadata, input }, context.fetcher),
+);
 
 export const executors: ProviderExecutors = defineProviderExecutors<QuadernoRuntimeContext>({
   service: "quaderno",
-  handlers: Object.fromEntries(
-    Object.entries(quadernoActionHandlers).map(([name, handler]) => [
-      name,
-      (input: Record<string, unknown>, context: QuadernoRuntimeContext) =>
-        handler({ apiKey: context.apiKey, providerMetadata: context.providerMetadata, input }, context.fetcher),
-    ]),
-  ),
+  handlers: quadernoRuntimeHandlers,
   async createContext(context: ExecutionContext, fetcher: typeof fetch): Promise<QuadernoRuntimeContext> {
     const credential = await requireApiKeyCredential(context, "quaderno");
     return {

@@ -1,4 +1,5 @@
-import { XMLParser, XMLValidator } from "fast-xml-parser";
+import { XMLParser } from "fast-xml-parser";
+import { SyntaxValidator } from "fast-xml-validator";
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { ProviderRequestError } from "../provider-runtime.ts";
 
@@ -71,9 +72,10 @@ const monthNumbers: Record<string, string> = {
 
 /** Parse PubMed EFetch XML into normalized article records. */
 export function parsePubmedArticleSet(xml: string): PubmedArticle[] {
-  const validation = XMLValidator.validate(xml);
-  if (validation !== true) {
-    throw new ProviderRequestError(502, "PubMed returned malformed article XML", validation.err);
+  try {
+    SyntaxValidator.validate(xml);
+  } catch (error) {
+    throw new ProviderRequestError(502, "PubMed returned malformed article XML", error);
   }
 
   const document = xmlParser.parse(xml) as XmlNode[];

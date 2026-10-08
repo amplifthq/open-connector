@@ -1,25 +1,30 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { CallrailActionName } from "./actions.ts";
 
-import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
+  compactObject,
+  optionalBooleanOrNull,
+  optionalNumber,
+  optionalRecord,
+  optionalString,
+} from "../../core/cast.ts";
+import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
-  isAbortLikeError,
   ProviderRequestError,
   providerUserAgent,
+  requiredInputString,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 const service = "callrail";
 const callrailApiBaseUrl = "https://api.callrail.com";
-const requestTimeoutMs = 30_000;
 
 type CallrailRequestPhase = "validate" | "execute";
 type CallrailActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-const callrailActionHandlers: Record<CallrailActionName, CallrailActionHandler> = {
+const callrailActionHandlers: ProviderActionHandlers<"callrail", CallrailActionHandler> = {
   async list_accounts(input, context) {
     const payload = await requestCallrailJson({
       context,
@@ -34,7 +39,7 @@ const callrailActionHandlers: Record<CallrailActionName, CallrailActionHandler> 
   async list_companies(input, context) {
     const payload = await requestCallrailJson({
       context,
-      path: `/v3/a/${encodeURIComponent(readRequiredText(input.accountId, "accountId"))}/companies.json`,
+      path: `/v3/a/${encodeURIComponent(requiredInputString(input.accountId, "accountId"))}/companies.json`,
       phase: "execute",
       query: buildPaginationQuery(input),
     });
@@ -45,7 +50,7 @@ const callrailActionHandlers: Record<CallrailActionName, CallrailActionHandler> 
   async list_calls(input, context) {
     const payload = await requestCallrailJson({
       context,
-      path: `/v3/a/${encodeURIComponent(readRequiredText(input.accountId, "accountId"))}/calls.json`,
+      path: `/v3/a/${encodeURIComponent(requiredInputString(input.accountId, "accountId"))}/calls.json`,
       phase: "execute",
       query: buildListCallsQuery(input),
     });
@@ -56,8 +61,8 @@ const callrailActionHandlers: Record<CallrailActionName, CallrailActionHandler> 
   async get_call(input, context) {
     const payload = await requestCallrailJson({
       context,
-      path: `/v3/a/${encodeURIComponent(readRequiredText(input.accountId, "accountId"))}/calls/${encodeURIComponent(
-        readRequiredText(input.callId, "callId"),
+      path: `/v3/a/${encodeURIComponent(requiredInputString(input.accountId, "accountId"))}/calls/${encodeURIComponent(
+        requiredInputString(input.callId, "callId"),
       )}.json`,
       phase: "execute",
       query: buildFieldsQuery(input),
@@ -73,7 +78,7 @@ const callrailActionHandlers: Record<CallrailActionName, CallrailActionHandler> 
   async list_form_submissions(input, context) {
     const payload = await requestCallrailJson({
       context,
-      path: `/v3/a/${encodeURIComponent(readRequiredText(input.accountId, "accountId"))}/form_submissions.json`,
+      path: `/v3/a/${encodeURIComponent(requiredInputString(input.accountId, "accountId"))}/form_submissions.json`,
       phase: "execute",
       query: buildListFormSubmissionsQuery(input),
     });
@@ -85,8 +90,8 @@ const callrailActionHandlers: Record<CallrailActionName, CallrailActionHandler> 
     const payload = await requestCallrailJson({
       context,
       path: `/v3/a/${encodeURIComponent(
-        readRequiredText(input.accountId, "accountId"),
-      )}/form_submissions/${encodeURIComponent(readRequiredText(input.formSubmissionId, "formSubmissionId"))}.json`,
+        requiredInputString(input.accountId, "accountId"),
+      )}/form_submissions/${encodeURIComponent(requiredInputString(input.formSubmissionId, "formSubmissionId"))}.json`,
       phase: "execute",
     });
     const formSubmission = normalizeFormSubmission(optionalRecord(payload) ?? {});
@@ -154,13 +159,11 @@ async function requestCallrailJson(input: {
     }
   }
 
-  const timeout = createProviderTimeout(input.context.signal, requestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "CallRail" }, async (signal) => {
     const response = await input.context.fetcher(url, {
       method: "GET",
       headers: callrailHeaders(input.context.apiKey),
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readCallrailPayload(response);
 
@@ -169,20 +172,7 @@ async function requestCallrailJson(input: {
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "CallRail request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `CallRail request failed: ${error.message}` : "CallRail request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function callrailHeaders(apiKey: string): Record<string, string> {
@@ -329,8 +319,8 @@ function normalizeAccount(input: Record<string, unknown>): Record<string, unknow
   return {
     id: asNullableString(input.id),
     name: asNullableString(input.name),
-    outboundRecordingEnabled: asNullableBoolean(input.outbound_recording_enabled),
-    hipaaAccount: asNullableBoolean(input.hipaa_account),
+    outboundRecordingEnabled: optionalBooleanOrNull(input.outbound_recording_enabled),
+    hipaaAccount: optionalBooleanOrNull(input.hipaa_account),
     raw: input,
   };
 }
@@ -356,7 +346,7 @@ function normalizeCall(input: Record<string, unknown>): Record<string, unknown> 
     trackingPhoneNumber: asNullableString(input.tracking_phone_number),
     businessPhoneNumber: asNullableString(input.business_phone_number),
     direction: asNullableString(input.direction),
-    answered: asNullableBoolean(input.answered),
+    answered: optionalBooleanOrNull(input.answered),
     duration: asNullableInteger(input.duration),
     startTime: asNullableString(input.start_time),
     source: asNullableString(input.source),
@@ -392,10 +382,6 @@ function readObjectArray(input: unknown, key: string): Array<Record<string, unkn
   return value.map((item) => optionalRecord(item) ?? {});
 }
 
-function readRequiredText(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function asNullableString(value: unknown): string | null {
   return value === null ? null : (optionalString(value) ?? null);
 }
@@ -403,8 +389,4 @@ function asNullableString(value: unknown): string | null {
 function asNullableInteger(value: unknown): number | null {
   const number = optionalNumber(value);
   return number !== undefined && Number.isInteger(number) ? number : null;
-}
-
-function asNullableBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
 }

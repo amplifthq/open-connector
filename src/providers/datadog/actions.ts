@@ -2,6 +2,7 @@ import type { ActionDefinition, JsonSchema } from "../../core/types.ts";
 
 import { s } from "../../core/json-schema.ts";
 import { defineProviderAction } from "../../core/provider-definition.ts";
+import { datadogMetricsReadScope, datadogMonitorsReadScope, datadogTimeseriesQueryScope } from "./scopes.ts";
 
 const service = "datadog";
 
@@ -66,18 +67,10 @@ const metricMetadata = looseRequiredObject(
   "Datadog metric metadata.",
 );
 
-export type DatadogActionName =
-  | "validate_api_key"
-  | "list_monitors"
-  | "get_monitor"
-  | "search_monitors"
-  | "query_timeseries_points"
-  | "list_metrics"
-  | "get_metric_metadata";
-
 export const datadogActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "validate_api_key",
+    operationType: "read",
     description: "Validate the configured Datadog API key.",
     inputSchema: s.actionInput({}, [], "Input for validating the configured Datadog API key."),
     outputSchema: s.actionOutput(
@@ -90,7 +83,10 @@ export const datadogActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_monitors",
+    operationType: "read",
     description: "List Datadog monitors with optional group state and tag filters.",
+    requiredScopes: [datadogMonitorsReadScope],
+    providerPermissions: [datadogMonitorsReadScope],
     inputSchema: s.actionInput(
       {
         groupStates: s.array(monitorGroupState, { minItems: 1, description: "Monitor group states to include." }),
@@ -115,7 +111,10 @@ export const datadogActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_monitor",
+    operationType: "read",
     description: "Retrieve one Datadog monitor by ID.",
+    requiredScopes: [datadogMonitorsReadScope],
+    providerPermissions: [datadogMonitorsReadScope],
     inputSchema: s.actionInput(
       {
         monitorId: s.integer({ description: "The Datadog monitor ID." }),
@@ -129,7 +128,10 @@ export const datadogActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_monitors",
+    operationType: "read",
     description: "Search Datadog monitors by query, page, and sort options.",
+    requiredScopes: [datadogMonitorsReadScope],
+    providerPermissions: [datadogMonitorsReadScope],
     inputSchema: s.actionInput(
       {
         query: s.string({ minLength: 1, description: "Search query for monitors." }),
@@ -152,7 +154,10 @@ export const datadogActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "query_timeseries_points",
+    operationType: "read",
     description: "Query Datadog timeseries points for a metric expression and time window.",
+    requiredScopes: [datadogTimeseriesQueryScope],
+    providerPermissions: [datadogTimeseriesQueryScope],
     inputSchema: s.actionInput(
       {
         from: s.integer({ description: "Unix timestamp in seconds for the query start." }),
@@ -174,7 +179,10 @@ export const datadogActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_metrics",
+    operationType: "read",
     description: "List Datadog metric names active since a given Unix timestamp.",
+    requiredScopes: [datadogMetricsReadScope],
+    providerPermissions: [datadogMetricsReadScope],
     inputSchema: s.actionInput(
       {
         from: s.integer({ description: "Unix timestamp in seconds for the earliest active metric time." }),
@@ -196,7 +204,10 @@ export const datadogActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_metric_metadata",
+    operationType: "read",
     description: "Retrieve Datadog metadata for one metric.",
+    requiredScopes: [datadogMetricsReadScope],
+    providerPermissions: [datadogMetricsReadScope],
     inputSchema: s.actionInput(
       {
         metricName: s.string({ minLength: 1, description: "The Datadog metric name." }),

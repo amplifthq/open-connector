@@ -1,18 +1,18 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { DatabarAiActionName } from "./actions.ts";
 
-import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
+import { compactObject, optionalBoolean, optionalNumber, optionalString, recordOrEmpty } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
-const databarAiApiBaseUrl = "https://api.databar.ai";
+export const databarAiApiBaseUrl = "https://api.databar.ai";
 
 type DatabarAiHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const databarAiActionHandlers: Record<DatabarAiActionName, DatabarAiHandler> = {
+export const databarAiActionHandlers: ProviderActionHandlers<"databar_ai", DatabarAiHandler> = {
   async get_user_info(_input, context) {
-    return { user: normalizeUser(asRecord(await requestDatabarAi({ path: "/v1/user/me", context }))) };
+    return { user: normalizeUser(recordOrEmpty(await requestDatabarAi({ path: "/v1/user/me", context }))) };
   },
   async list_tables(_input, context) {
     return { tables: asRecordArray(await requestDatabarAi({ path: "/v1/table/", context })).map(normalizeTable) };
@@ -24,7 +24,7 @@ export const databarAiActionHandlers: Record<DatabarAiActionName, DatabarAiHandl
       body: compactObject({ name: input.name, columns: input.columns, rows: input.rows }),
       context,
     });
-    return { table: normalizeTable(asRecord(payload)) };
+    return { table: normalizeTable(recordOrEmpty(payload)) };
   },
   async get_table_columns(input, context) {
     const payload = await requestDatabarAi({
@@ -43,10 +43,10 @@ export const databarAiActionHandlers: Record<DatabarAiActionName, DatabarAiHandl
       ],
       context,
     });
-    return { rows: normalizeRowsEnvelope(asRecord(payload)) };
+    return { rows: normalizeRowsEnvelope(recordOrEmpty(payload)) };
   },
   async insert_rows(input, context) {
-    const payload = asRecord(
+    const payload = recordOrEmpty(
       await requestDatabarAi({
         path: `/v1/table/${encodePathSegment(input.table_uuid)}/rows`,
         method: "POST",
@@ -73,7 +73,7 @@ export const databarAiActionHandlers: Record<DatabarAiActionName, DatabarAiHandl
   },
   async get_enrichment(input, context) {
     return {
-      enrichment: asRecord(
+      enrichment: recordOrEmpty(
         await requestDatabarAi({ path: `/v1/enrichments/${encodePathSegment(input.enrichment_id)}`, context }),
       ),
     };
@@ -85,12 +85,12 @@ export const databarAiActionHandlers: Record<DatabarAiActionName, DatabarAiHandl
       body: compactObject({ params: input.params, pagination: input.pagination }),
       context,
     });
-    return { task: normalizeTask(asRecord(payload)) };
+    return { task: normalizeTask(recordOrEmpty(payload)) };
   },
   async get_task_status(input, context) {
     return {
       task: normalizeTask(
-        asRecord(await requestDatabarAi({ path: `/v1/tasks/${encodePathSegment(input.task_id)}`, context })),
+        recordOrEmpty(await requestDatabarAi({ path: `/v1/tasks/${encodePathSegment(input.task_id)}`, context })),
       ),
     };
   },
@@ -105,7 +105,7 @@ export const databarAiActionHandlers: Record<DatabarAiActionName, DatabarAiHandl
       }),
       context,
     });
-    return { task: normalizeTask(asRecord(payload)) };
+    return { task: normalizeTask(recordOrEmpty(payload)) };
   },
 };
 
@@ -115,7 +115,7 @@ export async function validateDatabarAiCredential(
   signal?: AbortSignal,
 ): Promise<CredentialValidationResult> {
   const context: ApiKeyProviderContext = { apiKey, fetcher, signal };
-  const user = normalizeUser(asRecord(await requestDatabarAi({ path: "/v1/user/me", context })));
+  const user = normalizeUser(recordOrEmpty(await requestDatabarAi({ path: "/v1/user/me", context })));
   return {
     profile: { accountId: user.email || "databar_ai:token", displayName: user.email || "Databar API Key" },
     grantedScopes: [],
@@ -212,7 +212,7 @@ function normalizeBatchResult(record: Record<string, unknown>) {
     action: optionalString(record.action) ?? null,
     id: optionalString(record.id) ?? null,
     index: optionalNumber(record.index) ?? null,
-    row_data: record.row_data ? asRecord(record.row_data) : null,
+    row_data: record.row_data ? recordOrEmpty(record.row_data) : null,
     raw: record,
   };
 }
@@ -235,7 +235,7 @@ function mapDatabarAiHttpError(status: number, payload: unknown, rawBody: string
 }
 
 function readDatabarAiErrorMessage(payload: unknown): string | undefined {
-  const record = asRecord(payload);
+  const record = recordOrEmpty(payload);
   const detail = record.detail;
   if (typeof detail === "string") return detail;
   if (detail) return JSON.stringify(detail);
@@ -250,10 +250,6 @@ function buildDatabarAiHttpErrorMessage(status: number, rawBody: string, parseEr
   return parts.join("; ");
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return optionalRecord(value) ?? {};
-}
-
 function asRecordArray(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value) ? value.map(asRecord) : [];
+  return Array.isArray(value) ? value.map(recordOrEmpty) : [];
 }

@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { EmailableActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -14,17 +14,17 @@ import {
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const emailableApiBaseUrl = "https://api.emailable.com";
-const emailableDefaultRequestTimeoutMs = 30_000;
+export const emailableApiBaseUrl = "https://api.emailable.com";
 
 type EmailableRequestPhase = "validate" | "execute";
 type EmailableActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
-export const emailableActionHandlers: Record<EmailableActionName, EmailableActionHandler> = {
+export const emailableActionHandlers: ProviderActionHandlers<"emailable", EmailableActionHandler> = {
   get_account_info(_input, context) {
     return requestEmailableAccountInfo({
       apiKey: context.apiKey,
@@ -39,7 +39,7 @@ export const emailableActionHandlers: Record<EmailableActionName, EmailableActio
       fetcher: context.fetcher,
       signal: context.signal,
       phase: "execute",
-      email: requiredString(input.email, "email", badInput),
+      email: requiredString(input.email, "email", providerInputError),
     });
   },
   verify_batch_emails(input, context) {
@@ -57,7 +57,7 @@ export const emailableActionHandlers: Record<EmailableActionName, EmailableActio
       fetcher: context.fetcher,
       signal: context.signal,
       phase: "execute",
-      batchId: requiredString(input.batch_id, "batch_id", badInput),
+      batchId: requiredString(input.batch_id, "batch_id", providerInputError),
     });
   },
 };
@@ -202,7 +202,7 @@ async function requestEmailableJson(
     }
   }
 
-  const timeout = createProviderTimeout(input.signal, emailableDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const hasJsonBody = input.body !== undefined;
     const response = await input.fetcher(url, {
@@ -365,8 +365,4 @@ function normalizeIntegerRecord(value: unknown): Record<string, number> | undefi
       number | undefined
     >,
   ) as Record<string, number>;
-}
-
-function badInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

@@ -1,17 +1,10 @@
+import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-runtime.ts";
 import type { SplunkHttpEventCollectorActionName } from "./actions.ts";
 
-import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
-
-interface ApiKeyProviderActionInput {
-  apiKey: string;
-  actionName: string;
-  input: Record<string, unknown>;
-  providerMetadata?: Record<string, unknown>;
-  values?: Record<string, string>;
-}
-
 import { createHash, randomUUID } from "node:crypto";
+import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
+import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 export interface SplunkHttpEventCollectorCredentialCheck {
   providerAccountId?: string;
@@ -30,7 +23,7 @@ interface SplunkHecExpectedResponse {
   readonly code: number;
 }
 
-interface SplunkHecActionInput extends ApiKeyProviderActionInput {
+interface SplunkHecActionInput extends ApiKeyActionRequest {
   readonly actionName: SplunkHttpEventCollectorActionName;
   readonly input: Record<string, unknown>;
 }
@@ -51,8 +44,8 @@ type SplunkHecActionHandler = (input: SplunkHecActionInput, fetcher: typeof fetc
 
 const splunkHecRequestTimeoutMs = 30_000;
 
-export const splunkHttpEventCollectorActionHandlers: Record<
-  SplunkHttpEventCollectorActionName,
+export const splunkHttpEventCollectorActionHandlers: ProviderActionHandlers<
+  "splunk_http_event_collector",
   SplunkHecActionHandler
 > = {
   send_event(input, fetcher) {
@@ -215,18 +208,20 @@ function resolveCredential(apiKey: string, baseUrlInput: unknown): SplunkHecCred
   };
 }
 
-function normalizeSplunkHecBaseUrl(value: unknown) {
+export function normalizeSplunkHecBaseUrl(
+  value: unknown,
+  allowPrivateNetwork: boolean = isPrivateNetworkAccessAllowed(),
+): string {
   const rawValue = optionalString(value)?.trim();
   if (!rawValue) {
     throw new ProviderRequestError(400, "baseUrl is required");
   }
 
-  let url: URL;
-  try {
-    url = new URL(rawValue);
-  } catch {
-    throw new ProviderRequestError(400, "baseUrl must be a valid URL");
-  }
+  const url = assertPublicHttpUrl(rawValue, {
+    fieldName: "baseUrl",
+    createError: (message) => new ProviderRequestError(400, message),
+    allowPrivateNetwork,
+  });
   if (url.protocol !== "https:") {
     throw new ProviderRequestError(400, "baseUrl must be an HTTPS URL");
   }
@@ -284,7 +279,7 @@ function mapSplunkHecError(status: number, code: number | undefined, message: st
     return new ProviderRequestError(400, message);
   }
   if (phase === "execute" && (status === 401 || status === 403 || code === 4 || code === 21 || code === 22)) {
-    return new ProviderRequestError(409, message);
+    return new ProviderRequestError(401, message);
   }
   if (status === 400 || status === 404) {
     return new ProviderRequestError(400, message);

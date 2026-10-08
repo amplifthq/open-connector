@@ -182,25 +182,17 @@ const scorecard = s.looseObject("A Demodesk scorecard result.", {
   questions: s.array(scorecardQuestion, { description: "Question-level scorecard results." }),
 });
 
-export type DemodeskActionName =
-  | "get_current_user"
-  | "list_users"
-  | "list_recordings"
-  | "get_recording"
-  | "get_recording_transcript"
-  | "batch_get_recording_transcripts"
-  | "list_recording_summaries"
-  | "list_recording_scorecards";
-
 export const demodeskActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Get the Demodesk user represented by the current API key.",
     inputSchema: s.actionInput({}, [], "Input parameters for getting the current Demodesk user."),
     outputSchema: s.actionOutput({ user }, "The current Demodesk user response."),
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List active Demodesk users visible to the current API key.",
     inputSchema: s.object(
       {
@@ -220,6 +212,7 @@ export const demodeskActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_recordings",
+    operationType: "read",
     description: "List Demodesk recordings with cursor pagination and optional filters.",
     inputSchema: s.object(
       {
@@ -239,12 +232,14 @@ export const demodeskActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_recording",
+    operationType: "read",
     description: "Get one Demodesk recording by public recording token.",
     inputSchema: tokenInput,
     outputSchema: s.actionOutput({ recording }, "The Demodesk recording detail response."),
   }),
   defineProviderAction(service, {
     name: "get_recording_transcript",
+    operationType: "read",
     description: "Get the transcript for one Demodesk recording token.",
     inputSchema: s.object(
       {
@@ -270,6 +265,7 @@ export const demodeskActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "batch_get_recording_transcripts",
+    operationType: "read",
     description: "Get transcripts for up to 100 Demodesk recording tokens in one request.",
     inputSchema: s.object(
       {
@@ -315,6 +311,7 @@ export const demodeskActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_recording_summaries",
+    operationType: "read",
     description: "List AI-generated summaries attached to a Demodesk recording.",
     inputSchema: tokenInput,
     outputSchema: s.actionOutput(
@@ -324,6 +321,7 @@ export const demodeskActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_recording_scorecards",
+    operationType: "read",
     description: "List scorecards linked to a Demodesk recording.",
     inputSchema: tokenInput,
     outputSchema: s.actionOutput(

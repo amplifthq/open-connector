@@ -5,6 +5,7 @@ import type {
   ProviderProxyExecutor,
   ProxyExecutionResult,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { optionalInteger, optionalRawString, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -26,7 +27,6 @@ const service = "gagelist";
 const gagelistApiBaseUrl = "https://gagelist.net/GageList/api";
 const gagelistTokenUrl = "https://gagelist.net/api/token";
 
-const gagelistRequestTimeoutMs = 30_000;
 const gagelistMaxResponseBytes = 10 * 1024 * 1024;
 const gagelistFetch = createProviderFetch({ skipDnsValidation: true });
 
@@ -58,7 +58,7 @@ interface GagelistRequestInput {
   readonly signal?: AbortSignal;
 }
 
-export const gagelistActionHandlers: Record<string, GagelistActionHandler> = {
+export const gagelistActionHandlers: ProviderActionHandlers<"gagelist", GagelistActionHandler> = {
   async get_account_status(_input, context) {
     const accessToken = await exchangeGagelistAccessToken(
       context.credential,
@@ -487,7 +487,7 @@ async function fetchGagelistResponse(input: {
   readonly operation: string;
   readonly signal?: AbortSignal;
 }) {
-  const timeout = createProviderTimeout(input.signal, gagelistRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     return await input.fetcher(input.url, { ...input.init, signal: timeout.signal });
   } catch (error) {

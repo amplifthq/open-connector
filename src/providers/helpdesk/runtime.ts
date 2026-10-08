@@ -1,7 +1,13 @@
+import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-runtime.ts";
 import type { HelpdeskActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  createProviderTimeout,
+  isAbortLikeError,
+  ProviderRequestError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 export interface HelpdeskCredentialCheck {
   providerAccountId?: string;
@@ -10,26 +16,17 @@ export interface HelpdeskCredentialCheck {
   providerMetadata: Record<string, unknown>;
 }
 
-interface ApiKeyProviderActionInput {
-  apiKey: string;
-  actionName: string;
-  input: Record<string, unknown>;
-  providerMetadata?: Record<string, unknown>;
-  values?: Record<string, string>;
-}
-
 export const helpdeskApiBaseUrl = "https://api.helpdesk.com";
-const helpdeskRequestTimeoutMs = 30_000;
 const helpdeskValidationEndpoint = "/v1/licenses";
 
 type HelpdeskRequestPhase = "validate" | "execute";
-type HelpdeskActionInput = ApiKeyProviderActionInput & {
+type HelpdeskActionInput = ApiKeyActionRequest & {
   actionName: HelpdeskActionName;
   input: Record<string, unknown>;
 };
 type HelpdeskActionHandler = (input: HelpdeskActionInput, fetcher: typeof fetch) => Promise<unknown>;
 
-export const helpdeskActionHandlers: Record<HelpdeskActionName, HelpdeskActionHandler> = {
+export const helpdeskActionHandlers: ProviderActionHandlers<"helpdesk", HelpdeskActionHandler> = {
   list_tickets(input, fetcher) {
     return listTickets(input, fetcher);
   },
@@ -54,11 +51,11 @@ export const helpdeskActionHandlers: Record<HelpdeskActionName, HelpdeskActionHa
   list_teams(input, fetcher) {
     return listTeams(input, fetcher);
   },
-} satisfies Record<HelpdeskActionName, HelpdeskActionHandler>;
+};
 
 export async function validateHelpdeskCredential(
   input: Record<string, string>,
-  fetcher: typeof fetch = fetch,
+  fetcher: typeof fetch,
 ): Promise<HelpdeskCredentialCheck> {
   const apiKey = requiredString(input.apiKey, "apiKey", (message) => new ProviderRequestError(400, message));
   const accountId = requireHelpdeskAccountId(input);
@@ -345,7 +342,7 @@ function readIntegerHeader(headers: Headers, name: string) {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
-function readActionCredential(input: ApiKeyProviderActionInput) {
+function readActionCredential(input: ApiKeyActionRequest) {
   return {
     apiKey: input.apiKey,
     accountId: requireStoredHelpdeskAccountId(input.values),
@@ -362,7 +359,7 @@ async function requestHelpdesk(input: {
   query?: URLSearchParams;
   body?: Record<string, unknown>;
 }) {
-  const timeout = createProviderTimeout(undefined, helpdeskRequestTimeoutMs);
+  const timeout = createProviderTimeout(undefined);
   const url = new URL(input.path, helpdeskApiBaseUrl);
   if (input.query) {
     url.search = input.query.toString();
@@ -430,7 +427,7 @@ function createHelpdeskError(status: number, payload: unknown, phase: HelpdeskRe
     return new ProviderRequestError(400, message);
   }
   if (phase === "execute" && (status === 401 || status === 403)) {
-    return new ProviderRequestError(409, message);
+    return new ProviderRequestError(401, message);
   }
   if (phase === "execute" && (status === 400 || status === 404 || status === 422)) {
     return new ProviderRequestError(400, message);
@@ -494,11 +491,4 @@ function requireOkAcknowledgement(value: unknown) {
   if (typeof value !== "string" || value.trim() !== "OK") {
     throw new ProviderRequestError(502, "HelpDesk acknowledgement response must be OK");
   }
-}
-
-function isAbortLikeError(error: unknown) {
-  return (
-    error instanceof DOMException ||
-    (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError"))
-  );
 }

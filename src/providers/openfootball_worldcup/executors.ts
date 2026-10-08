@@ -1,6 +1,7 @@
 import type { ExecutionContext, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { OpenfootballWorldcupActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
+import { optionalRawString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineProviderExecutors,
@@ -14,7 +15,6 @@ const service = "openfootball_worldcup";
 const openfootballRawBaseUrl = "https://raw.githubusercontent.com/openfootball/worldcup.json/master";
 const openfootballJsdelivrBaseUrl = "https://cdn.jsdelivr.net/gh/openfootball/worldcup.json@master";
 const openfootballEsmBaseUrl = "https://esm.sh/gh/openfootball/worldcup.json@master";
-const defaultRequestTimeoutMs = 30_000;
 
 type DatasetKind = "matches" | "groups" | "teams" | "stadiums" | "squads" | "qualiPlayoffs";
 
@@ -28,8 +28,8 @@ type OpenfootballWorldcupActionHandler = (
   context: OpenfootballWorldcupContext,
 ) => Promise<unknown>;
 
-export const openfootballWorldcupActionHandlers: Record<
-  OpenfootballWorldcupActionName,
+export const openfootballWorldcupActionHandlers: ProviderActionHandlers<
+  "openfootball_worldcup",
   OpenfootballWorldcupActionHandler
 > = {
   async list_matches(input, context) {
@@ -37,7 +37,7 @@ export const openfootballWorldcupActionHandlers: Record<
     const { payload, sourceUrl } = await requestDataset(season, "matches", context);
     const record = readObjectPayload(payload, "OpenFootball matches response");
     return {
-      tournament: { name: readString(record.name) ?? `World Cup ${season}` },
+      tournament: { name: optionalRawString(record.name) ?? `World Cup ${season}` },
       matches: Array.isArray(record.matches) ? record.matches : [],
       sourceUrl,
     };
@@ -47,7 +47,7 @@ export const openfootballWorldcupActionHandlers: Record<
     const { payload, sourceUrl } = await requestDataset(season, "groups", context);
     const record = readObjectPayload(payload, "OpenFootball groups response");
     return {
-      tournament: { name: readString(record.name) ?? `World Cup ${season}` },
+      tournament: { name: optionalRawString(record.name) ?? `World Cup ${season}` },
       groups: Array.isArray(record.groups) ? record.groups : [],
       sourceUrl,
     };
@@ -65,7 +65,7 @@ export const openfootballWorldcupActionHandlers: Record<
     const { payload, sourceUrl } = await requestDataset(season, "stadiums", context);
     const record = readObjectPayload(payload, "OpenFootball stadiums response");
     return {
-      tournament: { name: readString(record.name) ?? `World Cup ${season}` },
+      tournament: { name: optionalRawString(record.name) ?? `World Cup ${season}` },
       stadiums: Array.isArray(record.stadiums) ? record.stadiums : [],
       sourceUrl,
     };
@@ -83,7 +83,7 @@ export const openfootballWorldcupActionHandlers: Record<
     const { payload, sourceUrl } = await requestDataset(season, "qualiPlayoffs", context);
     const record = readObjectPayload(payload, "OpenFootball qualification playoffs response");
     return {
-      tournament: { name: readString(record.name) ?? `World Cup ${season} Qualifying` },
+      tournament: { name: optionalRawString(record.name) ?? `World Cup ${season} Qualifying` },
       matches: Array.isArray(record.matches) ? record.matches : [],
       sourceUrl,
     };
@@ -148,7 +148,7 @@ function buildDatasetUrls(season: number, kind: DatasetKind): string[] {
 }
 
 async function requestJson(url: string, context: OpenfootballWorldcupContext, label: string): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, defaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       method: "GET",
@@ -198,10 +198,6 @@ function readObjectPayload(value: unknown, label: string): Record<string, unknow
     throw new ProviderRequestError(502, `${label} was not an object`);
   }
   return value as Record<string, unknown>;
-}
-
-function readString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
 }
 
 export const proxy: ProviderProxyExecutor = defineProviderProxy({

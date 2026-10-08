@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -13,14 +14,13 @@ import {
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
 } from "../provider-runtime.ts";
 
 export const wootApiBaseUrl = "https://developer.woot.com";
-
-const wootRequestTimeoutMs = 30_000;
 
 type WootRequestPhase = "validate" | "execute";
 
@@ -38,9 +38,9 @@ interface WootJsonRequest {
   phase: WootRequestPhase;
 }
 
-export const wootActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const wootActionHandlers: ProviderActionHandlers<"woot", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   async list_feed(input, context) {
-    const feedName = requiredString(input.feedName, "feedName", inputError);
+    const feedName = requiredString(input.feedName, "feedName", providerInputError);
     const page = optionalInteger(input.page);
     const url = new URL(`/feed/${encodeURIComponent(feedName)}`, wootApiBaseUrl);
     if (page !== undefined) url.searchParams.set("page", String(page));
@@ -49,7 +49,7 @@ export const wootActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyPro
   },
 
   async get_offers(input, context) {
-    const offerIds = requiredStringArray(input.offerIds, "offerIds", inputError);
+    const offerIds = requiredStringArray(input.offerIds, "offerIds", providerInputError);
     const payload = await requestWootJson({
       context,
       url: new URL("/getoffers", wootApiBaseUrl),
@@ -64,7 +64,7 @@ export const wootActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyPro
   },
 
   async get_offer(input, context) {
-    const offerId = requiredString(input.offerId, "offerId", inputError);
+    const offerId = requiredString(input.offerId, "offerId", providerInputError);
     const payload = await requestWootJson({
       context,
       url: new URL(`/offers/${encodeURIComponent(offerId)}`, wootApiBaseUrl),
@@ -103,7 +103,7 @@ export async function validateWootCredential(
 }
 
 async function requestWootJson(input: WootJsonRequest): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, wootRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const response = await input.context.fetcher(input.url, {
       method: input.method,
@@ -316,8 +316,4 @@ function nullableInteger(value: unknown): number | null {
 
 function nullableBoolean(value: unknown): boolean | null {
   return optionalBoolean(value) ?? null;
-}
-
-function inputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

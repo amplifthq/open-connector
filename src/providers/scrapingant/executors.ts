@@ -4,13 +4,14 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ScrapingantActionName } from "./actions.ts";
 
 import {
   compactObject,
   optionalBoolean,
   optionalInteger,
+  optionalRawString,
   optionalRecord,
   optionalString,
   requiredString,
@@ -20,6 +21,7 @@ import {
   defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 const service = "scrapingant";
@@ -41,7 +43,7 @@ interface ScrapingantRequestInput {
   phase: ScrapingantPhase;
 }
 
-export const scrapingantActionHandlers: Record<ScrapingantActionName, ScrapingantActionHandler> = {
+export const scrapingantActionHandlers: ProviderActionHandlers<"scrapingant", ScrapingantActionHandler> = {
   scrape_with_extended_json_output(input, context) {
     return requestScrapingantExtended(input, context);
   },
@@ -172,7 +174,7 @@ function buildScrapingantQuery(
     timeout: stringifyOptionalInteger(optionalInteger(input.timeout)),
     return_page_source: stringifyOptionalBoolean(optionalBoolean(input.returnPageSource)),
     cookies: optionalString(input.cookies),
-    js_snippet: encodeOptionalBase64(optionalRawInputString(input.jsSnippet)),
+    js_snippet: encodeOptionalBase64(optionalRawString(input.jsSnippet)),
     proxy_type: optionalString(input.proxyType),
     proxy_country: normalizeProxyCountry(input.proxyCountry),
     wait_for_selector: optionalString(input.waitForSelector),
@@ -197,7 +199,7 @@ function buildScrapingantBody(input: Record<string, unknown>): string | undefine
   if (input.bodyJson !== undefined) {
     return JSON.stringify(input.bodyJson);
   }
-  return optionalRawInputString(input.bodyText);
+  return optionalRawString(input.bodyText);
 }
 
 function buildConnectorTimeoutMs(input: Record<string, unknown>): number {
@@ -372,7 +374,7 @@ function createScrapingantError(status: number, payload: unknown, phase: Scrapin
     return new ProviderRequestError(400, message);
   }
   if (phase === "execute" && status === 403) {
-    return new ProviderRequestError(409, message);
+    return new ProviderRequestError(403, message);
   }
   if (phase === "execute" && (status === 400 || status === 404 || status === 405 || status === 422)) {
     return new ProviderRequestError(400, message);
@@ -439,14 +441,6 @@ function stringifyOptionalBoolean(value: boolean | undefined): string | undefine
 
 function stringifyOptionalInteger(value: number | undefined): string | undefined {
   return value === undefined ? undefined : String(value);
-}
-
-function optionalRawInputString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function mergeAbortSignals(timeoutSignal: AbortSignal, contextSignal: AbortSignal | undefined): AbortSignal {

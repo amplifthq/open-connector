@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { createHash } from "node:crypto";
@@ -14,7 +15,6 @@ import {
 
 const service = "respond_io";
 const apiBaseUrl = "https://api.respond.io/v2";
-const requestTimeoutMs = 30_000;
 const maxResponseBytes = 10 * 1024 * 1024;
 const mutableContactFields = [
   "firstName",
@@ -41,7 +41,7 @@ interface RespondIoRequest {
 
 type RespondIoActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const respondIoActionHandlers: Record<string, RespondIoActionHandler> = {
+export const respondIoActionHandlers: ProviderActionHandlers<"respond_io", RespondIoActionHandler> = {
   get_contact(input, context) {
     return requestContact(input, context, "GET");
   },
@@ -219,7 +219,7 @@ async function requestRespondIoJson(input: RespondIoRequest): Promise<unknown> {
       url.searchParams.set(key, String(value));
     }
   }
-  const timeout = createProviderTimeout(input.context.signal, requestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const response = await input.context.fetcher(url, {
       method: input.method,

@@ -2,18 +2,9 @@ import type { ActionDefinition } from "../../core/types.ts";
 
 import { s } from "../../core/json-schema.ts";
 import { defineProviderAction } from "../../core/provider-definition.ts";
+import { supabaseScopes } from "./scopes.ts";
 
 const service = "supabase";
-
-export const supabaseProviderScopes: string[] = [
-  "organizations:read",
-  "projects:read",
-  "secrets:read",
-  "secrets:write",
-  "database:read",
-  "storage:read",
-  "edge_functions:read",
-];
 
 const projectStatuses = [
   "ACTIVE_HEALTHY",
@@ -218,6 +209,19 @@ const healthRecord = s.object(
     description: "A Supabase service health result.",
   },
 );
+const downloadedStorageObject = s.requiredObject("A downloaded Supabase Storage object in local transit storage.", {
+  fileId: s.nonEmptyString("The bucket-qualified Supabase Storage object path."),
+  name: s.nonEmptyString("The filename used for the local transit file."),
+  mimeType: s.nonEmptyString("The downloaded object MIME type."),
+  sizeBytes: s.nonNegativeInteger("The downloaded object size in bytes."),
+  file: s.requiredObject("The downloaded object in local transit file storage.", {
+    fileId: s.nonEmptyString("The local transit file identifier."),
+    downloadUrl: s.url("The local transit URL for downloading the stored object."),
+    sizeBytes: s.nonNegativeInteger("The stored transit file size in bytes."),
+    name: s.nonEmptyString("The stored transit file name."),
+    mimeType: s.nonEmptyString("The stored transit file MIME type."),
+  }),
+});
 const projectRefInput = s.actionInput(
   { projectRef },
   ["projectRef"],
@@ -227,8 +231,9 @@ const projectRefInput = s.actionInput(
 export const supabaseActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_organizations",
+    operationType: "read",
     description: "List the organizations available to the authenticated Supabase account.",
-    requiredScopes: ["organizations:read"],
+    requiredScopes: [supabaseScopes.organizationsRead],
     inputSchema: s.actionInput({}, [], "No input parameters are required for this action."),
     outputSchema: s.actionOutput({
       organizations: s.array(organizationSummary, { description: "The list of organizations." }),
@@ -236,8 +241,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_organization",
+    operationType: "read",
     description: "Get details for a Supabase organization by slug.",
-    requiredScopes: ["organizations:read"],
+    requiredScopes: [supabaseScopes.organizationsRead],
     inputSchema: s.actionInput(
       { organizationSlug },
       ["organizationSlug"],
@@ -247,8 +253,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_organization_members",
+    operationType: "read",
     description: "List members of a Supabase organization.",
-    requiredScopes: ["organizations:read"],
+    requiredScopes: [supabaseScopes.organizationsRead],
     inputSchema: s.actionInput(
       { organizationSlug },
       ["organizationSlug"],
@@ -260,8 +267,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_organization_projects",
+    operationType: "read",
     description: "List projects in a Supabase organization with optional search and pagination.",
-    requiredScopes: ["projects:read"],
+    requiredScopes: [supabaseScopes.projectsRead],
     inputSchema: s.actionInput(
       {
         organizationSlug,
@@ -285,22 +293,25 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_projects",
+    operationType: "read",
     description: "List Supabase projects visible to the authenticated account.",
-    requiredScopes: ["projects:read"],
+    requiredScopes: [supabaseScopes.projectsRead],
     inputSchema: s.actionInput({}, [], "No input parameters are required for this action."),
     outputSchema: s.actionOutput({ projects: s.array(projectSummary, { description: "The list of projects." }) }),
   }),
   defineProviderAction(service, {
     name: "get_project",
+    operationType: "read",
     description: "Get detailed metadata for a Supabase project by project ref.",
-    requiredScopes: ["projects:read"],
+    requiredScopes: [supabaseScopes.projectsRead],
     inputSchema: projectRefInput,
     outputSchema: s.actionOutput({ project: projectDetail }),
   }),
   defineProviderAction(service, {
     name: "list_available_regions",
+    operationType: "read",
     description: "List Supabase regions available for creating projects in an organization.",
-    requiredScopes: ["organizations:read"],
+    requiredScopes: [supabaseScopes.organizationsRead],
     inputSchema: s.actionInput(
       {
         organizationSlug,
@@ -314,8 +325,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_project_health",
+    operationType: "read",
     description: "Check health for selected services in a Supabase project.",
-    requiredScopes: ["projects:read"],
+    requiredScopes: [supabaseScopes.projectsRead],
     inputSchema: s.actionInput(
       {
         projectRef,
@@ -335,8 +347,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_project_api_keys",
+    operationType: "read",
     description: "List API keys for a Supabase project.",
-    requiredScopes: ["secrets:read"],
+    requiredScopes: [supabaseScopes.secretsRead],
     inputSchema: s.actionInput(
       { projectRef, reveal: s.boolean({ description: "Whether to reveal the full API key values." }) },
       ["projectRef"],
@@ -346,8 +359,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_project_api_key",
+    operationType: "read",
     description: "Get one API key record from a Supabase project.",
-    requiredScopes: ["secrets:read"],
+    requiredScopes: [supabaseScopes.secretsRead],
     inputSchema: s.actionInput(
       {
         projectRef,
@@ -361,8 +375,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_project_api_key",
+    operationType: "write",
     description: "Create a publishable or secret API key for a Supabase project.",
-    requiredScopes: ["secrets:write"],
+    requiredScopes: [supabaseScopes.secretsWrite],
     inputSchema: s.actionInput(
       {
         projectRef,
@@ -379,8 +394,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_project_api_key",
+    operationType: "write",
     description: "Update the name, description, or JWT template for a Supabase project API key.",
-    requiredScopes: ["secrets:write"],
+    requiredScopes: [supabaseScopes.secretsWrite],
     inputSchema: s.actionInput(
       {
         projectRef,
@@ -397,8 +413,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_project_api_key",
+    operationType: "destructive",
     description: "Delete a Supabase project API key.",
-    requiredScopes: ["secrets:write"],
+    requiredScopes: [supabaseScopes.secretsWrite],
     inputSchema: s.actionInput(
       {
         projectRef,
@@ -414,8 +431,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_project_secrets",
+    operationType: "read",
     description: "List secrets configured for a Supabase project.",
-    requiredScopes: ["secrets:read"],
+    requiredScopes: [supabaseScopes.secretsRead],
     inputSchema: projectRefInput,
     outputSchema: s.actionOutput({
       secrets: s.array(secretRecord, { description: "The project secrets returned by Supabase." }),
@@ -423,8 +441,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "upsert_project_secrets",
+    operationType: "write",
     description: "Bulk create or update secrets for a Supabase project.",
-    requiredScopes: ["secrets:write"],
+    requiredScopes: [supabaseScopes.secretsWrite],
     inputSchema: s.actionInput(
       { projectRef, secrets: s.array(secretInput, { minItems: 1, description: "The secrets to create or update." }) },
       ["projectRef", "secrets"],
@@ -436,8 +455,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_project_secrets",
+    operationType: "destructive",
     description: "Bulk delete secrets from a Supabase project.",
-    requiredScopes: ["secrets:write"],
+    requiredScopes: [supabaseScopes.secretsWrite],
     inputSchema: s.actionInput(
       {
         projectRef,
@@ -455,8 +475,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "generate_typescript_types",
+    operationType: "read",
     description: "Generate TypeScript database types for a Supabase project.",
-    requiredScopes: ["database:read"],
+    requiredScopes: [supabaseScopes.databaseRead],
     inputSchema: s.actionInput(
       {
         projectRef,
@@ -471,8 +492,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "run_read_only_query",
+    operationType: "read",
     description: "Run a SQL query through Supabase as the read-only database user.",
-    requiredScopes: ["database:read"],
+    requiredScopes: [supabaseScopes.databaseRead],
     inputSchema: s.actionInput(
       {
         projectRef,
@@ -490,17 +512,90 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_storage_buckets",
+    operationType: "read",
     description: "List Storage buckets for a Supabase project.",
-    requiredScopes: ["storage:read"],
+    requiredScopes: [supabaseScopes.storageRead],
     inputSchema: projectRefInput,
     outputSchema: s.actionOutput({
       buckets: s.array(jsonRecord, { description: "The Storage buckets returned by Supabase." }),
     }),
   }),
   defineProviderAction(service, {
+    name: "download_storage_object",
+    operationType: "read",
+    description: "Download an object from Supabase Storage into local transit file storage.",
+    requiredScopes: [supabaseScopes.storageRead, supabaseScopes.secretsRead],
+    inputSchema: s.actionInput(
+      {
+        projectRef: s.string({
+          minLength: 1,
+          maxLength: 64,
+          pattern: "^[a-z0-9]+$",
+          description: "The lowercase Supabase project reference used by the project API hostname.",
+        }),
+        bucketId: s.nonEmptyString("The Storage bucket identifier."),
+        objectPath: s.nonEmptyString("The complete object path inside the bucket, without a leading slash."),
+        apiKeyId: s.nonEmptyString(
+          "An optional secret or legacy service_role API key ID. When omitted, the first revealed elevated key is used.",
+        ),
+        fileName: s.nonEmptyString("An optional filename override for the local transit file."),
+      },
+      ["projectRef", "bucketId", "objectPath"],
+      "Input parameters for downloading one Supabase Storage object.",
+    ),
+    outputSchema: downloadedStorageObject,
+  }),
+  defineProviderAction(service, {
+    name: "upload_storage_object",
+    operationType: "write",
+    description: "Upload a local transit file to Supabase Storage.",
+    requiredScopes: [supabaseScopes.storageRead, supabaseScopes.secretsRead],
+    inputSchema: s.actionInput(
+      {
+        projectRef: s.string({
+          minLength: 1,
+          maxLength: 64,
+          pattern: "^[a-z0-9]+$",
+          description: "The lowercase Supabase project reference used by the project API hostname.",
+        }),
+        bucketId: s.nonEmptyString("The Storage bucket identifier."),
+        objectPath: s.nonEmptyString("The complete object path inside the bucket, without a leading slash."),
+        file: s.object(
+          "A local transit file reference to upload.",
+          {
+            fileId: s.nonEmptyString("The transit file identifier."),
+            mimeType: s.nonEmptyString("Optional MIME type override."),
+          },
+          { optional: ["mimeType"] },
+        ),
+        apiKeyId: s.nonEmptyString(
+          "An optional secret or legacy service_role API key ID. When omitted, the first revealed elevated key is used.",
+        ),
+        contentType: s.nonEmptyString("Optional Content-Type override; defaults to the transit file MIME type."),
+        upsert: s.boolean({
+          description: "When true, replace an existing object if it already exists. Defaults to false.",
+          default: false,
+        }),
+        cacheControl: s.nonEmptyString("Optional complete Cache-Control header value, for example max-age=3600."),
+      },
+      ["projectRef", "bucketId", "objectPath", "file"],
+      "Input parameters for uploading one Supabase Storage object.",
+    ),
+    outputSchema: s.actionOutput({
+      bucketId: s.nonEmptyString("The bucket that received the object."),
+      objectPath: s.nonEmptyString("The uploaded object path."),
+      fileId: s.nonEmptyString("The bucket-qualified Supabase Storage object path."),
+      name: s.nonEmptyString("The stored object name derived from objectPath."),
+      mimeType: s.nonEmptyString("The MIME type of the uploaded object."),
+      sizeBytes: s.nonNegativeInteger("The uploaded object size in bytes."),
+      etag: s.nullable(s.string("The uploaded object ETag, or null when Storage did not return it.")),
+    }),
+  }),
+  defineProviderAction(service, {
     name: "list_edge_functions",
+    operationType: "read",
     description: "List Edge Functions in a Supabase project.",
-    requiredScopes: ["edge_functions:read"],
+    requiredScopes: [supabaseScopes.edgeFunctionsRead],
     inputSchema: projectRefInput,
     outputSchema: s.actionOutput({
       functions: s.array(jsonRecord, { description: "The Edge Functions returned by Supabase." }),
@@ -508,8 +603,9 @@ export const supabaseActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_edge_function",
+    operationType: "read",
     description: "Get metadata for one Supabase Edge Function by slug.",
-    requiredScopes: ["edge_functions:read"],
+    requiredScopes: [supabaseScopes.edgeFunctionsRead],
     inputSchema: s.actionInput(
       {
         projectRef,

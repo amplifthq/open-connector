@@ -1,6 +1,8 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { IntegrationDefinition } from "../../triggers/common/integration.ts";
+import type { PollDefinition } from "../../triggers/common/poll.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { OAuthProviderContext } from "../provider-runtime.ts";
-import type { GooglecalendarActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -10,7 +12,12 @@ import {
   pickOptionalString,
   requiredRecord,
 } from "../../core/cast.ts";
-import { defineOAuthProviderExecutors, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineGoogleProviderExecutors,
+  googleBearerProxyAuth,
+  googleServiceAccountValidator,
+} from "../googledrive/runtime-auth.ts";
+import { combineProviderActionHandlers, defineProviderProxy, ProviderRequestError } from "../provider-runtime.ts";
 import { googlecalendarEventActionHandlers } from "./runtime-events.ts";
 import {
   googlecalendarApiBaseUrl,
@@ -20,6 +27,8 @@ import {
   resolveRuleId,
   resolveSettingId,
 } from "./runtime-shared.ts";
+import { googlecalendarOAuthScopes } from "./scopes.ts";
+import { googleCalendarEventChanged } from "./trigger-on-event-changed.ts";
 
 type GooglecalendarRuntimeDeps = OAuthProviderContext;
 
@@ -74,104 +83,101 @@ const calendarListEntryWritableKeys = [
 ] as const;
 const aclRuleWritableKeys = ["scope", "role"] as const;
 
-export const googlecalendarActionHandlers: Record<GooglecalendarActionName, GooglecalendarActionHandler> = {
-  list_calendars(input, deps) {
-    return listCalendars(input, deps);
-  },
-  get_calendar_list_entry(input, deps) {
-    return getCalendarListEntry(input, deps);
-  },
-  add_calendar_to_list(input, deps) {
-    return addCalendarToList(input, deps);
-  },
-  update_calendar_list_entry(input, deps) {
-    return updateCalendarListEntry(input, deps);
-  },
-  patch_calendar_list_entry(input, deps) {
-    return patchCalendarListEntry(input, deps);
-  },
-  remove_calendar_from_list(input, deps) {
-    return removeCalendarFromList(input, deps);
-  },
-  get_calendar(input, deps) {
-    return getCalendar(input, deps);
-  },
-  create_calendar(input, deps) {
-    return createCalendar(input, deps);
-  },
-  update_calendar(input, deps) {
-    return updateCalendar(input, deps);
-  },
-  patch_calendar(input, deps) {
-    return patchCalendar(input, deps);
-  },
-  delete_calendar(input, deps) {
-    return deleteCalendar(input, deps);
-  },
-  clear_calendar(input, deps) {
-    return clearCalendar(input, deps);
-  },
-  list_events: googlecalendarEventActionHandlers.list_events,
-  list_events_all_calendars: googlecalendarEventActionHandlers.list_events_all_calendars,
-  get_event: googlecalendarEventActionHandlers.get_event,
-  create_event: googlecalendarEventActionHandlers.create_event,
-  update_event: googlecalendarEventActionHandlers.update_event,
-  patch_event: googlecalendarEventActionHandlers.patch_event,
-  delete_event: googlecalendarEventActionHandlers.delete_event,
-  import_event: googlecalendarEventActionHandlers.import_event,
-  move_event: googlecalendarEventActionHandlers.move_event,
-  list_event_instances: googlecalendarEventActionHandlers.list_event_instances,
-  quick_add_event: googlecalendarEventActionHandlers.quick_add_event,
-  sync_events: googlecalendarEventActionHandlers.sync_events,
-  free_busy_query(input, deps) {
-    return freeBusyQuery(input, deps);
-  },
-  find_free_slots(input, deps) {
-    return findFreeSlots(input, deps);
-  },
-  get_colors(input, deps) {
-    return getColors(input, deps);
-  },
-  list_settings(input, deps) {
-    return listSettings(input, deps);
-  },
-  get_setting(input, deps) {
-    return getSetting(input, deps);
-  },
-  list_acl(input, deps) {
-    return listAcl(input, deps);
-  },
-  get_acl_rule(input, deps) {
-    return getAclRule(input, deps);
-  },
-  create_acl_rule(input, deps) {
-    return createAclRule(input, deps);
-  },
-  update_acl_rule(input, deps) {
-    return updateAclRule(input, deps);
-  },
-  patch_acl_rule(input, deps) {
-    return patchAclRule(input, deps);
-  },
-  delete_acl_rule(input, deps) {
-    return deleteAclRule(input, deps);
-  },
-  find_event: googlecalendarEventActionHandlers.find_event,
-  remove_attendee: googlecalendarEventActionHandlers.remove_attendee,
-};
+export const googlecalendarActionHandlers: ProviderActionHandlers<"googlecalendar", GooglecalendarActionHandler> =
+  combineProviderActionHandlers<"googlecalendar", GooglecalendarActionHandler>(
+    "googlecalendar",
+    {
+      list_calendars(input, deps) {
+        return listCalendars(input, deps);
+      },
+      get_calendar_list_entry(input, deps) {
+        return getCalendarListEntry(input, deps);
+      },
+      add_calendar_to_list(input, deps) {
+        return addCalendarToList(input, deps);
+      },
+      update_calendar_list_entry(input, deps) {
+        return updateCalendarListEntry(input, deps);
+      },
+      patch_calendar_list_entry(input, deps) {
+        return patchCalendarListEntry(input, deps);
+      },
+      remove_calendar_from_list(input, deps) {
+        return removeCalendarFromList(input, deps);
+      },
+      get_calendar(input, deps) {
+        return getCalendar(input, deps);
+      },
+      create_calendar(input, deps) {
+        return createCalendar(input, deps);
+      },
+      update_calendar(input, deps) {
+        return updateCalendar(input, deps);
+      },
+      patch_calendar(input, deps) {
+        return patchCalendar(input, deps);
+      },
+      delete_calendar(input, deps) {
+        return deleteCalendar(input, deps);
+      },
+      clear_calendar(input, deps) {
+        return clearCalendar(input, deps);
+      },
+      free_busy_query(input, deps) {
+        return freeBusyQuery(input, deps);
+      },
+      find_free_slots(input, deps) {
+        return findFreeSlots(input, deps);
+      },
+      get_colors(input, deps) {
+        return getColors(input, deps);
+      },
+      list_settings(input, deps) {
+        return listSettings(input, deps);
+      },
+      get_setting(input, deps) {
+        return getSetting(input, deps);
+      },
+      list_acl(input, deps) {
+        return listAcl(input, deps);
+      },
+      get_acl_rule(input, deps) {
+        return getAclRule(input, deps);
+      },
+      create_acl_rule(input, deps) {
+        return createAclRule(input, deps);
+      },
+      update_acl_rule(input, deps) {
+        return updateAclRule(input, deps);
+      },
+      patch_acl_rule(input, deps) {
+        return patchAclRule(input, deps);
+      },
+      delete_acl_rule(input, deps) {
+        return deleteAclRule(input, deps);
+      },
+    },
+    googlecalendarEventActionHandlers,
+  );
 
-export const executors: ProviderExecutors = defineOAuthProviderExecutors(
+export const executors: ProviderExecutors = defineGoogleProviderExecutors(
   "googlecalendar",
   googlecalendarActionHandlers,
+  {
+    scopes: googlecalendarOAuthScopes,
+  },
 );
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service: "googlecalendar",
+  baseUrl: googlecalendarApiBaseUrl,
+  auth: googleBearerProxyAuth(googlecalendarOAuthScopes),
+  skipDnsValidation: true,
+});
 
 export const credentialValidators: CredentialValidators = {
   async oauth2(input, { fetcher, signal }) {
-    const profile: {
-      email?: string;
-      name?: string;
-      sub?: string;
-    } = await googlecalendarJsonRequest<{
+    const profile = await googlecalendarJsonRequest<{
       email?: string;
       name?: string;
       sub?: string;
@@ -179,20 +185,7 @@ export const credentialValidators: CredentialValidators = {
       accessToken: input.accessToken,
       fetcher,
       signal,
-    }).catch(
-      async (): Promise<{
-        email?: string;
-        name?: string;
-        sub?: string;
-      }> => {
-        await googlecalendarJsonRequest<Record<string, unknown>>(`${googlecalendarApiBaseUrl}/users/me/calendarList`, {
-          accessToken: input.accessToken,
-          fetcher,
-          signal,
-        });
-        return {};
-      },
-    );
+    });
 
     return {
       profile: {
@@ -204,6 +197,7 @@ export const credentialValidators: CredentialValidators = {
       },
     };
   },
+  customCredential: googleServiceAccountValidator("googlecalendar", googlecalendarOAuthScopes),
 };
 
 async function listCalendars(input: Record<string, unknown>, { accessToken, fetcher }: GooglecalendarRuntimeDeps) {
@@ -744,3 +738,5 @@ function asRecord<T>(value: unknown) {
 
   return value as Record<string, T | undefined>;
 }
+
+export const triggers: readonly (IntegrationDefinition | PollDefinition)[] = [googleCalendarEventChanged];

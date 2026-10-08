@@ -1,4 +1,5 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import {
@@ -12,12 +13,13 @@ import {
 import {
   defineApiKeyProviderExecutors,
   ProviderRequestError,
+  providerResponseError,
   providerUserAgent,
   readTransitFileInput,
 } from "../provider-runtime.ts";
 
 const service = "platerecognizer";
-const apiBaseUrl = "https://api.platerecognizer.com";
+export const platerecognizerApiBaseUrl = "https://api.platerecognizer.com";
 const plateReaderPath = "/v1/plate-reader/";
 const statisticsPath = "/v1/statistics/";
 
@@ -27,7 +29,7 @@ type PlateRecognizerActionHandler = (
   context: ApiKeyProviderContext,
 ) => Promise<unknown>;
 
-export const platerecognizerActionHandlers: Record<string, PlateRecognizerActionHandler> = {
+export const platerecognizerActionHandlers: ProviderActionHandlers<"platerecognizer", PlateRecognizerActionHandler> = {
   async read_number_plates(input, context) {
     return normalizePlateReaderPayload(
       await requestPlateRecognizerJson({
@@ -65,7 +67,7 @@ export async function validatePlaterecognizerCredential(
   return {
     profile: { accountId: "platerecognizer-api-token", displayName: "Plate Recognizer API Token", grantedScopes: [] },
     metadata: compactObject({
-      apiBaseUrl,
+      apiBaseUrl: platerecognizerApiBaseUrl,
       validationEndpoint: statisticsPath,
       usageCalls: stats.usage.calls,
       totalCalls: stats.totalCalls,
@@ -82,7 +84,7 @@ async function requestPlateRecognizerJson(input: {
 }): Promise<unknown> {
   let response: Response;
   try {
-    response = await input.context.fetcher(new URL(input.path, apiBaseUrl), {
+    response = await input.context.fetcher(new URL(input.path, platerecognizerApiBaseUrl), {
       method: input.method,
       headers: {
         accept: "application/json",
@@ -282,8 +284,4 @@ function readRequiredInteger(value: unknown, fieldName: string): number {
     return value;
   }
   throw new ProviderRequestError(502, `${fieldName} must be an integer`);
-}
-
-function providerResponseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

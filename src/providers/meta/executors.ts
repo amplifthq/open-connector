@@ -1,14 +1,15 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
-import type { MetaActionName } from "./actions.ts";
 
-import { optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
   defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 export const metaGraphApiVersion: string = "v25.0";
@@ -17,7 +18,6 @@ export const metaGraphApiBaseUrl: string = `https://graph.facebook.com/${metaGra
 const service = "meta";
 const metaValidationPath = "/me";
 const metaMeFields = "id,name";
-const metaDefaultTimeoutMs = 30_000;
 const defaultAdAccountFields = "id,account_id,name,currency,timezone_name,account_status,business_name";
 const defaultCampaignFields = "id,name,status,effective_status,objective,buying_type,created_time,updated_time";
 const defaultInsightFields =
@@ -32,7 +32,7 @@ interface MetaListPayload {
   paging?: unknown;
 }
 
-export const metaActionHandlers: Record<MetaActionName, MetaActionHandler> = {
+export const metaActionHandlers: ProviderActionHandlers<"meta", MetaActionHandler> = {
   get_current_user(_input, context) {
     return getCurrentUser(context);
   },
@@ -134,7 +134,7 @@ async function listCampaigns(
   input: Record<string, unknown>,
   context: MetaActionContext,
 ): Promise<Record<string, unknown>> {
-  const adAccountId = normalizeAdAccountId(readInputString(input.adAccountId, "adAccountId"));
+  const adAccountId = normalizeAdAccountId(requiredInputString(input.adAccountId, "adAccountId"));
   const payload = await requestMetaJson<MetaListPayload>({
     apiKey: context.apiKey,
     path: `/${adAccountId}/campaigns`,
@@ -161,7 +161,7 @@ async function getInsights(
   input: Record<string, unknown>,
   context: MetaActionContext,
 ): Promise<Record<string, unknown>> {
-  const objectId = readInputString(input.objectId, "objectId");
+  const objectId = requiredInputString(input.objectId, "objectId");
   const payload = await requestMetaJson<MetaListPayload>({
     apiKey: context.apiKey,
     path: `/${encodeURIComponent(objectId)}/insights`,
@@ -197,7 +197,7 @@ async function requestMetaJson<T>(input: {
   phase: MetaRequestPhase;
   signal?: AbortSignal;
 }): Promise<T> {
-  const timeout = createProviderTimeout(input.signal, metaDefaultTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const response = await input.fetcher(buildMetaUrl(input.path, input.query), {
       method: "GET",
@@ -393,10 +393,6 @@ function requireRecordPayload(value: unknown): Record<string, unknown> {
     throw new ProviderRequestError(502, "Meta returned a non-object list item");
   }
   return record;
-}
-
-function readInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function readRequiredPayloadString(payload: Record<string, unknown>, fieldName: string, label: string): string {

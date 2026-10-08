@@ -76,22 +76,17 @@ const ticketListInputSchema = s.object(
   },
 );
 
-export type RepairshoprActionName =
-  | "get_current_user"
-  | "list_customers"
-  | "get_customer"
-  | "list_tickets"
-  | "get_ticket";
-
 export const repairshoprActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Retrieve the current RepairShopr API user and account details.",
     inputSchema: s.object("Input for retrieving the current RepairShopr user.", {}, { required: [] }),
     outputSchema: s.looseObject("Current RepairShopr user object returned by the API."),
   }),
   defineProviderAction(service, {
     name: "list_customers",
+    operationType: "read",
     description: "Return a paginated list of RepairShopr customers.",
     inputSchema: customerListInputSchema,
     outputSchema: s.object(
@@ -105,6 +100,7 @@ export const repairshoprActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_customer",
+    operationType: "read",
     description: "Retrieve a RepairShopr customer by ID.",
     inputSchema: s.object("Input for retrieving a RepairShopr customer.", { id: idSchema }, { required: ["id"] }),
     outputSchema: s.object(
@@ -117,6 +113,7 @@ export const repairshoprActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tickets",
+    operationType: "read",
     description: "Return a paginated list of RepairShopr tickets.",
     inputSchema: ticketListInputSchema,
     outputSchema: s.object(
@@ -130,6 +127,7 @@ export const repairshoprActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_ticket",
+    operationType: "read",
     description: "Retrieve a RepairShopr ticket by ID.",
     inputSchema: s.object("Input for retrieving a RepairShopr ticket.", { id: idSchema }, { required: ["id"] }),
     outputSchema: s.object(

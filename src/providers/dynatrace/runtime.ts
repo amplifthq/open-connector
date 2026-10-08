@@ -1,7 +1,14 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { DynatraceActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import {
+  compactObject,
+  optionalInteger,
+  optionalRecord,
+  optionalString,
+  rawStringOrNull,
+  requiredString,
+} from "../../core/cast.ts";
 import { assertPublicHttpUrl, queryParams } from "../../core/request.ts";
 import {
   createProviderTimeout,
@@ -33,7 +40,6 @@ interface DynatraceRequestOptions {
   query?: Record<string, string | number | undefined>;
 }
 
-const dynatraceDefaultRequestTimeoutMs = 30_000;
 const dynatraceCredentialHelpUrl =
   "https://docs.dynatrace.com/docs/manage/identity-access-management/access-tokens-and-oauth-clients/access-tokens";
 const validationChecks: DynatraceValidationCheck[] = [
@@ -55,7 +61,7 @@ const validationChecks: DynatraceValidationCheck[] = [
 type DynatraceRequestPhase = "validate" | "execute";
 type DynatraceActionHandler = (input: Record<string, unknown>, context: DynatraceContext) => Promise<unknown>;
 
-export const dynatraceActionHandlers: Record<DynatraceActionName, DynatraceActionHandler> = {
+export const dynatraceActionHandlers: ProviderActionHandlers<"dynatrace", DynatraceActionHandler> = {
   async list_problems(input, context) {
     const payload = await requestDynatraceJson({
       ...context,
@@ -68,7 +74,7 @@ export const dynatraceActionHandlers: Record<DynatraceActionName, DynatraceActio
       problems: readObjectArray(record.problems).map(normalizeProblem),
       totalCount: readNullableInteger(record.totalCount),
       pageSize: readNullableInteger(record.pageSize),
-      nextPageKey: readNullableString(record.nextPageKey),
+      nextPageKey: rawStringOrNull(record.nextPageKey),
       raw: record,
     };
   },
@@ -84,7 +90,7 @@ export const dynatraceActionHandlers: Record<DynatraceActionName, DynatraceActio
       entities: readObjectArray(record.entities).map(normalizeEntity),
       totalCount: readNullableInteger(record.totalCount),
       pageSize: readNullableInteger(record.pageSize),
-      nextPageKey: readNullableString(record.nextPageKey),
+      nextPageKey: rawStringOrNull(record.nextPageKey),
       raw: record,
     };
   },
@@ -192,7 +198,7 @@ async function requestDynatraceJson(options: DynatraceRequestOptions): Promise<u
     url.searchParams.set(key, value);
   }
 
-  const timeout = createProviderTimeout(options.signal, dynatraceDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(options.signal);
   try {
     const response = await options.fetcher(url, {
       method: "GET",
@@ -252,20 +258,20 @@ function buildEntityListQuery(input: Record<string, unknown>): Record<string, st
 
 function normalizeProblem(record: Record<string, unknown>): Record<string, unknown> {
   return {
-    problemId: readNullableString(record.problemId),
-    displayId: readNullableString(record.displayId),
-    title: readNullableString(record.title),
-    status: readNullableString(record.status),
-    severityLevel: readNullableString(record.severityLevel),
+    problemId: rawStringOrNull(record.problemId),
+    displayId: rawStringOrNull(record.displayId),
+    title: rawStringOrNull(record.title),
+    status: rawStringOrNull(record.status),
+    severityLevel: rawStringOrNull(record.severityLevel),
     raw: record,
   };
 }
 
 function normalizeEntity(record: Record<string, unknown>): Record<string, unknown> {
   return {
-    entityId: readNullableString(record.entityId),
-    displayName: readNullableString(record.displayName),
-    type: readNullableString(record.type),
+    entityId: rawStringOrNull(record.entityId),
+    displayName: rawStringOrNull(record.displayName),
+    type: rawStringOrNull(record.type),
     raw: record,
   };
 }
@@ -286,10 +292,6 @@ function readDynatraceAccountLabel(environmentUrl: string): string {
 
 function trimTrailingSlash(value: string): string {
   return value.endsWith("/") ? value.slice(0, -1) : value;
-}
-
-function readNullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
 }
 
 function readNullableInteger(value: unknown): number | null {

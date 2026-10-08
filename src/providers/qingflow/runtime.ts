@@ -1,16 +1,17 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
+
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 export const qingflowApiBaseUrl = "https://api.qingflow.com";
 
 const qingflowValidationPath = "/app";
-const qingflowRequestTimeoutMs = 30_000;
 
 type QingflowRequestPhase = "validate" | "execute";
 type QingflowActionContext = { accessToken: string; fetcher: typeof fetch };
 type QingflowActionHandler = (input: Record<string, unknown>, context: QingflowActionContext) => Promise<unknown>;
 
-export const qingflowActionHandlers: Record<string, QingflowActionHandler> = {
+export const qingflowActionHandlers: ProviderActionHandlers<"qingflow", QingflowActionHandler> = {
   list_apps(input, context) {
     if (input.favoritesOnly === true && !optionalString(input.userId)?.trim()) {
       throw new ProviderRequestError(400, "userId is required when favoritesOnly is true");
@@ -348,7 +349,7 @@ async function requestQingflowEnvelope(input: QingflowRequestInput) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
 
-  const timeout = createProviderTimeout(undefined, qingflowRequestTimeoutMs);
+  const timeout = createProviderTimeout(undefined);
   try {
     const response = await input.fetcher(url, {
       method: input.method ?? "GET",

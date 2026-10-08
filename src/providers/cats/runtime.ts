@@ -1,15 +1,16 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalIntegerLike, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent, setSearchParams } from "../provider-runtime.ts";
+import { providerInputError, ProviderRequestError, providerUserAgent, setSearchParams } from "../provider-runtime.ts";
 
 export const catsApiBaseUrl = "https://api.catsone.com/v3";
 
 type CatsListResource = "candidates" | "companies" | "jobs";
 type CatsActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const catsActionHandlers: Record<string, CatsActionHandler> = {
+export const catsActionHandlers: ProviderActionHandlers<"cats", CatsActionHandler> = {
   get_site(_input, context) {
     return getSite(context);
   },
@@ -301,8 +302,4 @@ function readString(value: unknown): string | undefined {
     : typeof value === "number" && Number.isFinite(value)
       ? String(value)
       : undefined;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

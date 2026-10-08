@@ -5,8 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "kandji";
 
-export type KandjiActionName = "list_blueprints" | "get_blueprint" | "list_users" | "get_user";
-
 const cursorSchema = s.nonEmptyString("The opaque pagination cursor returned by a previous Kandji response.");
 const uuidSchema = s.uuid("A Kandji UUID value.");
 const nullableStringSchema = s.nullable(s.string("A string value returned by Kandji when present."));
@@ -40,6 +38,7 @@ const userSchema = s.object("A normalized Kandji directory user record.", {
 export const kandjiActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_blueprints",
+    operationType: "read",
     description: "List Kandji blueprints with optional ID, name, and pagination filters.",
     inputSchema: s.object(
       "The input payload for listing Kandji blueprints.",
@@ -63,6 +62,7 @@ export const kandjiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_blueprint",
+    operationType: "read",
     description: "Get a Kandji blueprint by ID.",
     inputSchema: s.object("The input payload for getting a Kandji blueprint.", {
       blueprintId: s.uuid("The unique identifier of the Kandji blueprint to retrieve."),
@@ -73,6 +73,7 @@ export const kandjiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List Kandji directory users with optional filters and cursor pagination.",
     inputSchema: s.object(
       "The input payload for listing Kandji users.",
@@ -96,6 +97,7 @@ export const kandjiActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Get a Kandji directory user by ID.",
     inputSchema: s.object("The input payload for getting a Kandji user.", {
       userId: s.uuid("The unique identifier of the Kandji directory user to retrieve."),

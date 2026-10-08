@@ -59,19 +59,10 @@ const sourceDocumentOptionsSchema = {
   ...httpAuthSchema,
 };
 
-export type PdfCoActionName =
-  | "get_account_balance"
-  | "html_to_pdf"
-  | "url_to_pdf"
-  | "get_pdf_info"
-  | "merge_pdfs"
-  | "split_pdf"
-  | "compress_pdf"
-  | "pdf_to_text";
-
 export const pdfCoActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_account_balance",
+    operationType: "read",
     description: "Get the current PDF.co account credit balance for the API key.",
     requiredScopes: [],
     inputSchema: s.object("No input parameters are required for this action.", {}),
@@ -84,6 +75,7 @@ export const pdfCoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "html_to_pdf",
+    operationType: "read",
     description: "Convert raw HTML into a PDF document and return the generated file URL.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -118,6 +110,7 @@ export const pdfCoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "url_to_pdf",
+    operationType: "read",
     description: "Convert a publicly reachable web page URL into a PDF document.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -153,6 +146,7 @@ export const pdfCoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_pdf_info",
+    operationType: "read",
     description: "Read metadata, page information, and security details from a PDF URL.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -188,6 +182,7 @@ export const pdfCoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "merge_pdfs",
+    operationType: "write",
     description: "Merge multiple PDF URLs into one PDF document.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -208,6 +203,7 @@ export const pdfCoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "split_pdf",
+    operationType: "read",
     description: "Split a PDF URL into one or more output files by page numbers or ranges.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -236,6 +232,7 @@ export const pdfCoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "compress_pdf",
+    operationType: "write",
     description: "Compress a PDF URL and return the generated compressed PDF file URL.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -251,6 +248,7 @@ export const pdfCoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "pdf_to_text",
+    operationType: "read",
     description: "Convert a PDF URL to text and return either a file URL or inline text payload.",
     requiredScopes: [],
     inputSchema: s.object(

@@ -1,20 +1,19 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { CloudflareDocsActionName } from "./actions.ts";
 
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { optionalString } from "../../core/cast.ts";
+import { withMcpClient } from "../mcp-client.ts";
 import { ProviderRequestError } from "../provider-runtime.ts";
 
-const cloudflareDocsMcpUrl = "https://docs.mcp.cloudflare.com/mcp";
+export const cloudflareDocsMcpUrl = "https://docs.mcp.cloudflare.com/mcp";
 
 export interface CloudflareDocsActionContext {
   fetcher?: typeof fetch;
   signal?: AbortSignal;
 }
 
-export const cloudflareDocsActionHandlers: Record<
-  CloudflareDocsActionName,
+export const cloudflareDocsActionHandlers: ProviderActionHandlers<
+  "cloudflare_docs",
   ProviderRuntimeHandler<CloudflareDocsActionContext>
 > = {
   search_cloudflare_documentation(input, context) {
@@ -50,28 +49,22 @@ async function callCloudflareDocsTool(
   context: CloudflareDocsActionContext,
 ): Promise<Record<string, unknown>> {
   try {
-    const transportOptions: Record<string, unknown> = {};
-    if (context.fetcher) {
-      transportOptions.fetch = context.fetcher;
-    }
-    const transport = new StreamableHTTPClientTransport(new URL(cloudflareDocsMcpUrl), transportOptions);
-    const client = new Client({ name: "open-connector", version: "1.0.0" }, { capabilities: {} });
-    await client.connect(transport);
-
-    try {
-      const result = await client.callTool({
-        name: toolName,
-        arguments: args,
-      });
-      if (result.isError) {
-        const content = result.content as Array<{ type?: string; text?: string }> | undefined;
-        const text = content?.find((c) => c.type === "text")?.text;
-        throw new ProviderRequestError(502, text ?? "Cloudflare Docs MCP tool returned an unknown error.");
-      }
-      return result as Record<string, unknown>;
-    } finally {
-      await client.close().catch(() => {});
-    }
+    return await withMcpClient(
+      {
+        endpoint: new URL(cloudflareDocsMcpUrl),
+        transport: "streamable_http",
+        fetcher: context.fetcher,
+      },
+      async (client) => {
+        const result = await client.callTool({ name: toolName, arguments: args });
+        if (result.isError) {
+          const content = result.content as Array<{ type?: string; text?: string }> | undefined;
+          const text = content?.find((c) => c.type === "text")?.text;
+          throw new ProviderRequestError(502, text ?? "Cloudflare Docs MCP tool returned an unknown error.");
+        }
+        return result as Record<string, unknown>;
+      },
+    );
   } catch (error) {
     if (error instanceof ProviderRequestError) throw error;
     throw new ProviderRequestError(

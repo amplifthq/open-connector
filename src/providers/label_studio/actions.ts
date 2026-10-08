@@ -58,17 +58,10 @@ const taskFilterSchema = {
   view: s.integer("The Label Studio view ID."),
 };
 
-export type LabelStudioActionName =
-  | "get_current_user"
-  | "list_projects"
-  | "get_project"
-  | "create_project"
-  | "list_tasks"
-  | "create_task";
-
 export const labelStudioActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Retrieve the Label Studio user associated with the connected API key.",
     inputSchema: s.object("The input payload for reading the current Label Studio user.", {}),
     outputSchema: s.object("The current Label Studio user response.", {
@@ -77,6 +70,7 @@ export const labelStudioActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_projects",
+    operationType: "read",
     description: "List Label Studio projects visible to the connected API key.",
     followUpActions: ["label_studio.get_project", "label_studio.list_tasks"],
     inputSchema: s.object(
@@ -109,6 +103,7 @@ export const labelStudioActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_project",
+    operationType: "read",
     description: "Retrieve one Label Studio project by ID.",
     followUpActions: ["label_studio.list_tasks"],
     inputSchema: s.object(
@@ -125,6 +120,7 @@ export const labelStudioActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_project",
+    operationType: "write",
     description: "Create a Label Studio project with a title and optional labeling configuration.",
     followUpActions: ["label_studio.get_project", "label_studio.create_task"],
     inputSchema: s.object(
@@ -144,6 +140,7 @@ export const labelStudioActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tasks",
+    operationType: "read",
     description: "List Label Studio tasks, optionally filtered by project and Data Manager query.",
     followUpActions: ["label_studio.create_task"],
     inputSchema: s.object(
@@ -175,6 +172,7 @@ export const labelStudioActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_task",
+    operationType: "write",
     description: "Create one Label Studio task from JSON task data.",
     inputSchema: s.object(
       "The input payload for creating a Label Studio task.",

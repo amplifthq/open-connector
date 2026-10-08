@@ -1,6 +1,7 @@
+import type { ApiKeyActionRequest } from "../provider-runtime.ts";
 import type { InfolobbyActionName } from "./actions.ts";
 
-import { requiredString } from "../../core/cast.ts";
+import { compactObject, requiredString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 export interface InfolobbyCredentialCheck {
@@ -8,14 +9,6 @@ export interface InfolobbyCredentialCheck {
   accountLabel: string;
   providerScopes: string[];
   providerMetadata: Record<string, unknown>;
-}
-
-interface ApiKeyProviderActionInput {
-  apiKey: string;
-  actionName: string;
-  input: Record<string, unknown>;
-  providerMetadata?: Record<string, unknown>;
-  values?: Record<string, string>;
 }
 
 export const infolobbyApiBaseUrl = "https://infolobby.com/api";
@@ -55,7 +48,7 @@ export async function validateInfolobbyCredential(
 }
 
 export async function executeInfolobbyAction(
-  input: ApiKeyProviderActionInput & {
+  input: ApiKeyActionRequest & {
     actionName: InfolobbyActionName;
     input: Record<string, unknown>;
   },
@@ -185,7 +178,7 @@ async function requestInfolobby(options: RequestOptions) {
 function mapInfolobbyError(status: number, text: string, mode: "validate" | "execute") {
   const message = text.trim() || `InfoLobby API request failed with status ${status}`;
   if (status === 401) {
-    return mode === "validate" ? new ProviderRequestError(400, message) : new ProviderRequestError(409, message);
+    return mode === "validate" ? new ProviderRequestError(400, message) : new ProviderRequestError(401, message);
   }
   if (status === 403 || status === 405) {
     return new ProviderRequestError(400, message);
@@ -244,8 +237,4 @@ function optionalRecord(value: unknown) {
 
 function readOptionalString(value: unknown) {
   return typeof value === "string" && value ? value : undefined;
-}
-
-function compactObject(value: Record<string, unknown>) {
-  return Object.fromEntries(Object.entries(value).filter((entry) => entry[1] !== undefined));
 }

@@ -1,22 +1,22 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { DaffyActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { encodePathSegment, queryParams } from "../../core/request.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const daffyApiBaseUrl = "https://public.daffy.org/v1";
+export const daffyApiBaseUrl = "https://public.daffy.org/v1";
 
 type DaffyPhase = "validate" | "execute";
 type DaffyHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const daffyActionHandlers: Record<DaffyActionName, DaffyHandler> = {
+export const daffyActionHandlers: ProviderActionHandlers<"daffy", DaffyHandler> = {
   async get_current_user(_input, context) {
     return { user: await daffyGetObject("/users/me", {}, context, "execute") };
   },
   async get_user(input, context) {
-    const username = requiredString(input.username, "username", badInput);
+    const username = requiredString(input.username, "username", providerInputError);
     return { user: await daffyGetObject(`/users/${encodePathSegment(username)}`, {}, context, "execute") };
   },
   async get_balance(_input, context) {
@@ -42,7 +42,7 @@ export const daffyActionHandlers: Record<DaffyActionName, DaffyHandler> = {
     );
   },
   async get_nonprofit(input, context) {
-    const ein = requiredString(input.ein, "ein", badInput);
+    const ein = requiredString(input.ein, "ein", providerInputError);
     return { nonprofit: await daffyGetObject(`/non_profits/${encodePathSegment(ein)}`, {}, context, "execute") };
   },
   async list_contributions(input, context) {
@@ -250,7 +250,7 @@ function requiredPathSegment(value: unknown, fieldName: string): string {
   if (typeof value === "number" && Number.isInteger(value) && value > 0) {
     return String(value);
   }
-  return requiredString(value, fieldName, badInput);
+  return requiredString(value, fieldName, providerInputError);
 }
 
 function readStringField(input: Record<string, unknown>, fieldName: string): string | undefined {
@@ -263,8 +263,4 @@ function readStringOrNumberField(input: Record<string, unknown>, fieldName: stri
     return String(value);
   }
   return readStringField(input, fieldName);
-}
-
-function badInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

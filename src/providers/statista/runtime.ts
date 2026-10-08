@@ -1,8 +1,8 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { StatistaActionName } from "./actions.ts";
 
-import { optionalRecord, optionalString } from "../../core/cast.ts";
+import { looseArray, optionalRecord, optionalString, rawStringOrNull } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
@@ -13,7 +13,6 @@ import {
 export const statistaApiBaseUrl = "https://api.statista.ai";
 
 const statistaValidationPath = "/v1/search/statistics";
-const statistaDefaultTimeoutMs = 30_000;
 
 type StatistaMode = "validate" | "execute";
 type StatistaQuery = Record<string, string | undefined>;
@@ -25,7 +24,7 @@ interface StatistaRequestOptions {
   query?: StatistaQuery;
 }
 
-export const statistaActionHandlers: Record<StatistaActionName, StatistaActionHandler> = {
+export const statistaActionHandlers: ProviderActionHandlers<"statista", StatistaActionHandler> = {
   async search_statistics(input, context) {
     const payload = await requestStatistaJson(
       {
@@ -120,7 +119,7 @@ async function requestStatistaJson(
     }
   }
 
-  const timeout = createProviderTimeout(context.signal, statistaDefaultTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   let response: Response;
   try {
     response = await context.fetcher(url, {
@@ -158,11 +157,11 @@ function statistaHeaders(apiKey: string): Record<string, string> {
 
 function statisticsSearchQuery(input: Record<string, unknown>): StatistaQuery {
   return {
-    q: readOptionalNonEmptyString(input.q),
+    q: optionalString(input.q),
     offset: readOptionalIntegerString(input.offset),
     size: readOptionalIntegerString(input.size),
-    date_from: readOptionalNonEmptyString(input.date_from),
-    date_to: readOptionalNonEmptyString(input.date_to),
+    date_from: optionalString(input.date_from),
+    date_to: optionalString(input.date_to),
     premium: typeof input.premium === "boolean" ? String(input.premium) : undefined,
   };
 }
@@ -176,7 +175,7 @@ function requiredSearchQuery(input: Record<string, unknown>): StatistaQuery {
 
 function normalizeStatisticsSearchResponse(payload: Record<string, unknown>): Record<string, unknown> {
   return {
-    items: readArray(payload.items).map((item, index) => normalizeStatisticSearchItem(item, `items[${index}]`)),
+    items: looseArray(payload.items).map((item, index) => normalizeStatisticSearchItem(item, `items[${index}]`)),
     totalCount: readRequiredInteger(payload.total_count, "total_count"),
     took: optionalRecord(payload.took) ?? null,
     raw: payload,
@@ -190,11 +189,11 @@ function normalizeStatisticSearchItem(value: unknown, fieldName: string): Record
     title: readRequiredString(record.title, `${fieldName}.title`),
     subject: readRequiredString(record.subject, `${fieldName}.subject`),
     isPremium: readRequiredBoolean(record.is_premium, `${fieldName}.is_premium`),
-    description: readNullableString(record.description),
+    description: rawStringOrNull(record.description),
     link: readRequiredString(record.link, `${fieldName}.link`),
-    date: readNullableString(record.date),
+    date: rawStringOrNull(record.date),
     platform: readRequiredString(record.platform, `${fieldName}.platform`),
-    teaserImageUrls: readArray(record.teaser_image_urls).map((image, index) =>
+    teaserImageUrls: looseArray(record.teaser_image_urls).map((image, index) =>
       normalizeTeaserImage(image, `${fieldName}.teaser_image_urls[${index}]`),
     ),
     rankingScore: readNullableNumber(record.ranking_score),
@@ -208,11 +207,11 @@ function normalizeStatisticData(payload: Record<string, unknown>): Record<string
     title: readRequiredString(payload.title, "title"),
     subject: readRequiredString(payload.subject, "subject"),
     isPremium: readRequiredBoolean(payload.is_premium, "is_premium"),
-    description: readNullableString(payload.description),
+    description: rawStringOrNull(payload.description),
     link: readRequiredString(payload.link, "link"),
-    date: readNullableString(payload.date),
+    date: rawStringOrNull(payload.date),
     platform: readRequiredString(payload.platform, "platform"),
-    teaserImageUrls: readArray(payload.teaser_image_urls).map((image, index) =>
+    teaserImageUrls: looseArray(payload.teaser_image_urls).map((image, index) =>
       normalizeTeaserImage(image, `teaser_image_urls[${index}]`),
     ),
     chart: optionalRecord(payload.chart) ?? {},
@@ -222,7 +221,7 @@ function normalizeStatisticData(payload: Record<string, unknown>): Record<string
 
 function normalizeMarketInsightsSearchResponse(payload: Record<string, unknown>): Record<string, unknown> {
   return {
-    items: readArray(payload.items).map((item, index) => normalizeMarketInsightItem(item, `items[${index}]`)),
+    items: looseArray(payload.items).map((item, index) => normalizeMarketInsightItem(item, `items[${index}]`)),
     totalCount: readRequiredInteger(payload.total_count, "total_count"),
     raw: payload,
   };
@@ -234,21 +233,23 @@ function normalizeMarketInsightItem(value: unknown, fieldName: string): Record<s
     identifier: readRequiredString(record.identifier, `${fieldName}.identifier`),
     title: readRequiredString(record.title, `${fieldName}.title`),
     subject: readRequiredString(record.subject, `${fieldName}.subject`),
-    description: readNullableString(record.description),
+    description: rawStringOrNull(record.description),
     link: readRequiredString(record.link, `${fieldName}.link`),
-    updatedAt: readNullableString(record.updated_at),
+    updatedAt: rawStringOrNull(record.updated_at),
     industries: readObjectArray(record.industries),
     coveredTimeframe: optionalRecord(record.covered_timeframe) ?? null,
     coveredGeos: optionalRecord(record.covered_geos) ?? null,
-    marketType: readNullableString(record.market_type),
-    marketTypeDescription: readNullableString(record.market_type_description),
+    marketType: rawStringOrNull(record.market_type),
+    marketTypeDescription: rawStringOrNull(record.market_type_description),
     raw: record,
   };
 }
 
 function normalizeConsumerInsightsSearchResponse(payload: Record<string, unknown>): Record<string, unknown> {
   return {
-    results: readArray(payload.results).map((item, index) => normalizeConsumerInsightResult(item, `results[${index}]`)),
+    results: looseArray(payload.results).map((item, index) =>
+      normalizeConsumerInsightResult(item, `results[${index}]`),
+    ),
     raw: payload,
   };
 }
@@ -261,7 +262,7 @@ function normalizeConsumerInsightResult(value: unknown, fieldName: string): Reco
     label: readRequiredString(record.label, `${fieldName}.label`),
     questionType: readRequiredString(record.question_type, `${fieldName}.question_type`),
     metadata: optionalRecord(record.metadata) ?? {},
-    answersSubset: readArray(record.answers_subset).map((answer, index) =>
+    answersSubset: looseArray(record.answers_subset).map((answer, index) =>
       normalizeConsumerInsightAnswer(answer, `${fieldName}.answers_subset[${index}]`),
     ),
     totalAnswers: readRequiredInteger(record.total_answers, `${fieldName}.total_answers`),
@@ -325,7 +326,7 @@ function readStatistaErrorMessage(payload: unknown): string | undefined {
     return undefined;
   }
 
-  const direct = readOptionalNonEmptyString(record.message) ?? readOptionalNonEmptyString(record.error);
+  const direct = optionalString(record.message) ?? optionalString(record.error);
   if (direct) {
     return direct;
   }
@@ -334,9 +335,7 @@ function readStatistaErrorMessage(payload: unknown): string | undefined {
   for (const error of errors) {
     const errorRecord = optionalRecord(error);
     const message =
-      readOptionalNonEmptyString(errorRecord?.message) ??
-      readOptionalNonEmptyString(errorRecord?.detail) ??
-      readOptionalNonEmptyString(errorRecord?.title);
+      optionalString(errorRecord?.message) ?? optionalString(errorRecord?.detail) ?? optionalString(errorRecord?.title);
     if (message) {
       return message;
     }
@@ -357,31 +356,19 @@ function readObject(value: unknown, fieldName: string): Record<string, unknown> 
   return record;
 }
 
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
 function readObjectArray(value: unknown): Array<Record<string, unknown>> {
-  return readArray(value).flatMap((item) => {
+  return looseArray(value).flatMap((item) => {
     const record = optionalRecord(item);
     return record ? [record] : [];
   });
 }
 
 function readRequiredString(value: unknown, fieldName: string): string {
-  const text = readOptionalNonEmptyString(value);
+  const text = optionalString(value);
   if (!text) {
     throw new ProviderRequestError(502, `Statista returned invalid ${fieldName}`, value);
   }
   return text;
-}
-
-function readOptionalNonEmptyString(value: unknown): string | undefined {
-  return optionalString(value);
-}
-
-function readNullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
 }
 
 function readRequiredInteger(value: unknown, fieldName: string): number {

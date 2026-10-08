@@ -30,11 +30,10 @@ const paginationSchema = s.object("Pagination information returned with the temp
   totalPages: s.integer("The total number of pages."),
 });
 
-export type PdflessActionName = "get_workspace" | "list_document_templates";
-
 export const pdflessActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_workspace",
+    operationType: "read",
     description: "Get the current Pdfless workspace details resolved by the provided API key.",
     requiredScopes: [],
     inputSchema: s.object("No input parameters are required for this action.", {}),
@@ -44,6 +43,7 @@ export const pdflessActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_document_templates",
+    operationType: "read",
     description: "List document templates in the current Pdfless workspace with optional pagination.",
     requiredScopes: [],
     inputSchema: s.object(

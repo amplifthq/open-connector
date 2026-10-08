@@ -1,9 +1,17 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { DocmosisActionName } from "./actions.ts";
 
 import { Buffer } from "node:buffer";
-import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
+import {
+  compactObject,
+  optionalBoolean,
+  optionalBooleanOrNull,
+  optionalNumber,
+  optionalRecord,
+  optionalString,
+  rawStringOrNull,
+} from "../../core/cast.ts";
 import { compactJson } from "../../core/request.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
@@ -42,7 +50,7 @@ interface DocmosisEnvironmentSummary {
 
 type DocmosisActionHandler = (input: Record<string, unknown>, context: DocmosisActionContext) => Promise<unknown>;
 
-export const docmosisActionHandlers: Record<DocmosisActionName, DocmosisActionHandler> = {
+export const docmosisActionHandlers: ProviderActionHandlers<"docmosis", DocmosisActionHandler> = {
   get_environment_summary(_input, context) {
     return getEnvironmentSummary(context);
   },
@@ -163,8 +171,8 @@ async function listTemplates(input: Record<string, unknown>, context: DocmosisAc
 
   const items = Array.isArray(payload.templateList) ? payload.templateList : [];
   return {
-    templateListStale: readNullableBoolean(payload.templateListStale),
-    nextPageToken: readNullableString(payload.nextPageToken),
+    templateListStale: optionalBooleanOrNull(payload.templateListStale),
+    nextPageToken: rawStringOrNull(payload.nextPageToken),
     pageSize: readNullableInteger(payload.pageSize),
     templates: items.map((item) => normalizeTemplateDetails(item)),
   };
@@ -205,8 +213,8 @@ async function getTemplateStructure(input: Record<string, unknown>, context: Doc
   });
 
   return {
-    templateHasErrors: readNullableBoolean(payload.templateHasErrors),
-    templateErrorMessage: readNullableString(payload.templateErrorMessage),
+    templateHasErrors: optionalBooleanOrNull(payload.templateHasErrors),
+    templateErrorMessage: rawStringOrNull(payload.templateErrorMessage),
     templateStructure: Array.isArray(payload.templateStructure) ? payload.templateStructure : [],
   };
 }
@@ -260,10 +268,10 @@ async function renderDocument(input: Record<string, unknown>, context: DocmosisA
     succeeded: readSucceeded(payload) !== false,
     shortMsg: readOptionalMessage(payload, "shortMsg"),
     longMsg: readOptionalMessage(payload, "longMsg"),
-    requestId: readNullableString(payload.requestId) ?? responseHeaders.requestId,
-    resultFileBase64: readNullableString(payload.resultFile),
+    requestId: rawStringOrNull(payload.requestId) ?? responseHeaders.requestId,
+    resultFileBase64: rawStringOrNull(payload.resultFile),
     queue: {
-      rejected: readNullableBoolean(queueRecord?.rejected),
+      rejected: optionalBooleanOrNull(queueRecord?.rejected),
       availablePct: readNullableInteger(queueRecord?.availablePct),
       delaySeconds: readNullableInteger(queueRecord?.delaySeconds),
     },
@@ -310,20 +318,20 @@ function normalizeEnvironmentSummary(payload: Record<string, unknown>): Docmosis
   const pageQuota = optionalRecord(summaryRoot?.pageQuota);
 
   return {
-    environmentName: readNullableString(accountEnvDetails?.name),
-    ready: readNullableBoolean(summaryRoot?.ready),
-    planName: readNullableString(plan?.name),
-    isActivated: readNullableBoolean(accountEnvDetails?.isActivated),
-    isDeleted: readNullableBoolean(accountEnvDetails?.isDeleted),
-    isDisabled: readNullableBoolean(accountEnvDetails?.isDisabled),
-    lastUpdatedByUser: readNullableString(auditInfo?.lastUpdatedByUser),
+    environmentName: rawStringOrNull(accountEnvDetails?.name),
+    ready: optionalBooleanOrNull(summaryRoot?.ready),
+    planName: rawStringOrNull(plan?.name),
+    isActivated: optionalBooleanOrNull(accountEnvDetails?.isActivated),
+    isDeleted: optionalBooleanOrNull(accountEnvDetails?.isDeleted),
+    isDisabled: optionalBooleanOrNull(accountEnvDetails?.isDisabled),
+    lastUpdatedByUser: rawStringOrNull(auditInfo?.lastUpdatedByUser),
     lastUpdatedTime: readNullableInteger(auditInfo?.lastUpdatedTime),
     pageQuota: {
       quota: readNullableInteger(pageQuota?.quota),
       used: readNullableInteger(pageQuota?.used),
       pctUsed: readNullableNumber(pageQuota?.pctUsed),
-      pctUsedStr: readNullableString(pageQuota?.pctUsedStr),
-      isHardLimited: readNullableBoolean(pageQuota?.isHardLimited),
+      pctUsedStr: rawStringOrNull(pageQuota?.pctUsedStr),
+      isHardLimited: optionalBooleanOrNull(pageQuota?.isHardLimited),
     },
     raw: summaryRoot ?? {},
   };
@@ -334,14 +342,14 @@ function normalizeTemplateDetails(value: unknown): Record<string, unknown> {
   return {
     name: requireTemplateName(record.name),
     lastModifiedMillisSinceEpoch: readNullableInteger(record.lastModifiedMillisSinceEpoch),
-    lastModifiedISO8601: readNullableString(record.lastModifiedISO8601),
+    lastModifiedISO8601: rawStringOrNull(record.lastModifiedISO8601),
     sizeBytes: readNullableInteger(record.sizeBytes),
-    md5: readNullableString(record.md5),
-    templatePlainTextFieldPrefix: readNullableString(record.templatePlainTextFieldPrefix),
-    templatePlainTextFieldSuffix: readNullableString(record.templatePlainTextFieldSuffix),
-    templateHasErrors: readNullableBoolean(record.templateHasErrors),
-    templateDevMode: readNullableBoolean(record.templateDevMode),
-    templateDescription: readNullableString(record.templateDescription),
+    md5: rawStringOrNull(record.md5),
+    templatePlainTextFieldPrefix: rawStringOrNull(record.templatePlainTextFieldPrefix),
+    templatePlainTextFieldSuffix: rawStringOrNull(record.templatePlainTextFieldSuffix),
+    templateHasErrors: optionalBooleanOrNull(record.templateHasErrors),
+    templateDevMode: optionalBooleanOrNull(record.templateDevMode),
+    templateDescription: rawStringOrNull(record.templateDescription),
     raw: record,
   };
 }
@@ -539,10 +547,6 @@ function readOptionalInteger(value: unknown, fieldName: string): number | undefi
   return value;
 }
 
-function readNullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
-
 function readNullableInteger(value: unknown): number | null {
   if (value == null) {
     return null;
@@ -559,12 +563,8 @@ function readNullableNumber(value: unknown): number | null {
   return typeof parsed === "number" ? parsed : null;
 }
 
-function readNullableBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
-}
-
 function readOptionalMessage(payload: Record<string, unknown>, key: string): string | null {
-  return readNullableString(payload[key]);
+  return rawStringOrNull(payload[key]);
 }
 
 function readSucceeded(payload: Record<string, unknown>): boolean | undefined {

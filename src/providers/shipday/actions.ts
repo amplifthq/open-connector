@@ -239,18 +239,10 @@ const trackingProgressOutputSchema = s.actionOutput(
   "The Shipday delivery progress response.",
 );
 
-export type ShipdayActionName =
-  | "list_active_orders"
-  | "get_order"
-  | "create_order"
-  | "edit_order"
-  | "delete_order"
-  | "list_carriers"
-  | "get_order_progress";
-
 export const shipdayActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_active_orders",
+    operationType: "read",
     description: "Retrieve active delivery orders from Shipday.",
     requiredScopes: [],
     inputSchema: s.actionInput({}, [], "The input payload for listing active Shipday orders."),
@@ -258,6 +250,7 @@ export const shipdayActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_order",
+    operationType: "read",
     description: "Retrieve one Shipday delivery order by order number.",
     requiredScopes: [],
     inputSchema: getOrderInputSchema,
@@ -265,6 +258,7 @@ export const shipdayActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_order",
+    operationType: "write",
     description: "Insert a Shipday delivery order.",
     requiredScopes: [],
     inputSchema: createOrderInputSchema,
@@ -272,6 +266,7 @@ export const shipdayActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "edit_order",
+    operationType: "write",
     description: "Edit an existing Shipday delivery order.",
     requiredScopes: [],
     inputSchema: editOrderInputSchema,
@@ -279,6 +274,7 @@ export const shipdayActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_order",
+    operationType: "destructive",
     description: "Delete a Shipday delivery order by order ID.",
     requiredScopes: [],
     inputSchema: orderIdInputSchema,
@@ -286,6 +282,7 @@ export const shipdayActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_carriers",
+    operationType: "read",
     description: "Retrieve carriers configured in Shipday.",
     requiredScopes: [],
     inputSchema: s.actionInput({}, [], "The input payload for listing Shipday carriers."),
@@ -293,6 +290,7 @@ export const shipdayActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_order_progress",
+    operationType: "read",
     description: "Retrieve real-time delivery progress and ETA for a Shipday order.",
     requiredScopes: [],
     inputSchema: trackingProgressInputSchema,

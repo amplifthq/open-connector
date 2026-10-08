@@ -1,9 +1,18 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
-import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import {
+  compactObject,
+  optionalBoolean,
+  optionalInteger,
+  optionalRecord,
+  optionalString,
+  recordOrEmpty,
+} from "../../core/cast.ts";
 import {
   defineProviderExecutors,
+  defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
   requireApiKeyCredential,
@@ -16,7 +25,7 @@ const baserowValidationPath = "/api/database/tables/all-tables/";
 type BaserowPhase = "validate" | "execute";
 type BaserowActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const baserowActionHandlers: Record<string, BaserowActionHandler> = {
+export const baserowActionHandlers: ProviderActionHandlers<"baserow", BaserowActionHandler> = {
   async list_tables(_input, context) {
     const tables = asObjectArray(
       await requestBaserowJson({
@@ -45,7 +54,7 @@ export const baserowActionHandlers: Record<string, BaserowActionHandler> = {
     };
   },
   async list_table_rows(input, context) {
-    const payload = asObject(
+    const payload = recordOrEmpty(
       await requestBaserowJson({
         context,
         path: `/api/database/rows/table/${requireTableId(input)}/`,
@@ -67,11 +76,11 @@ export const baserowActionHandlers: Record<string, BaserowActionHandler> = {
       count: optionalInteger(payload.count) ?? 0,
       next: optionalString(payload.next) ?? null,
       previous: optionalString(payload.previous) ?? null,
-      rows: Array.isArray(payload.results) ? payload.results.map((row) => asObject(row)) : [],
+      rows: Array.isArray(payload.results) ? payload.results.map((row) => recordOrEmpty(row)) : [],
     };
   },
   async get_table_row(input, context) {
-    const row = asObject(
+    const row = recordOrEmpty(
       await requestBaserowJson({
         context,
         path: `/api/database/rows/table/${requireTableId(input)}/${requireRowId(input)}/`,
@@ -88,7 +97,7 @@ export const baserowActionHandlers: Record<string, BaserowActionHandler> = {
     };
   },
   async create_table_row(input, context) {
-    const row = asObject(
+    const row = recordOrEmpty(
       await requestBaserowJson({
         context,
         path: `/api/database/rows/table/${requireTableId(input)}/`,
@@ -107,7 +116,7 @@ export const baserowActionHandlers: Record<string, BaserowActionHandler> = {
     };
   },
   async update_table_row(input, context) {
-    const row = asObject(
+    const row = recordOrEmpty(
       await requestBaserowJson({
         context,
         path: `/api/database/rows/table/${requireTableId(input)}/${requireRowId(input)}/`,
@@ -153,6 +162,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<ApiKeyProvid
       signal: context.signal,
       transitFiles: context.transitFiles,
     };
+  },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: baserowApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Token " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
   },
 });
 
@@ -326,12 +345,8 @@ function readFilters(input: Record<string, unknown>): string | undefined {
   return filters ? JSON.stringify(filters) : undefined;
 }
 
-function asObject(value: unknown): Record<string, unknown> {
-  return optionalRecord(value) ?? {};
-}
-
 function asObjectArray(value: unknown): Array<Record<string, unknown>> {
-  return Array.isArray(value) ? value.map((item) => asObject(item)) : [];
+  return Array.isArray(value) ? value.map((item) => recordOrEmpty(item)) : [];
 }
 
 function isAbortError(error: unknown): boolean {

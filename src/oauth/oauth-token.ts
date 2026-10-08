@@ -1,15 +1,72 @@
-import type { OAuth2AuthDefinition, ResolvedCredential } from "../core/types.ts";
+import type { OAuth2AuthDefinition } from "../core/types.ts";
+import type { OAuthClientConfig } from "./oauth-client-config-service.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../core/cast.ts";
-import { readBoundedResponseBytes } from "../core/request.ts";
-import { providerFetch } from "../providers/provider-runtime.ts";
+import { assertPublicHttpUrl, readBoundedResponseBytes } from "../core/request.ts";
+import {
+  basicAuthorizationHeader,
+  createProviderTimeout,
+  isAbortLikeError,
+  providerFetch,
+  ProviderDispatchRequestError,
+  providerUserAgent,
+} from "../providers/provider-runtime.ts";
 
-const oauthTokenRequestTimeoutMs = 30_000;
 const oauthTokenResponseMaxBytes = 1024 * 1024;
+/**
+ * A revocation is best effort and runs inside a disconnect the user is waiting
+ * on, so it gets a short deadline rather than the provider request default.
+ */
+const oauthRevocationTimeoutMs = 5_000;
 /** Longest `expires_in` we accept; anything larger overflows the ECMAScript `Date` range. */
 const maxExpiresInSeconds = 100 * 365 * 24 * 60 * 60;
 
 class OAuthTokenResponseSizeError extends Error {}
+
+/** Normalized provider token data returned to the shared OAuth lifecycle. */
+export interface OAuthTokenResult {
+  accessToken: string;
+  refreshToken?: string;
+  tokenType: string;
+  expiresAt?: string;
+  /** Provider-owned secret state that must follow token rotation. */
+  providerSecret?: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+}
+
+export interface OAuthCodeExchangeInput {
+  code: string;
+  /** Provider callback parameters other than code and state. */
+  callbackParameters?: Record<string, string>;
+  clientConfig: OAuthClientConfig;
+  redirectUri: string;
+  tokenUrl: string;
+  fetcher: typeof fetch;
+  signal?: AbortSignal;
+  createError(message: string): Error;
+}
+
+export interface OAuthAccessTokenRefreshInput {
+  refreshToken: string;
+  clientConfig: OAuthClientConfig;
+  /** Metadata stored with the existing connection. */
+  metadata: Record<string, unknown>;
+  /** Provider-owned secret state stored with the existing connection. */
+  providerSecret?: Record<string, unknown>;
+  fetcher: typeof fetch;
+  createError(message: string): Error;
+}
+
+/** Provider-local overrides for token protocols that do not follow the standard OAuth request shape. */
+export interface ProviderOAuthRuntime {
+  buildAuthorizationUrl?(input: {
+    authorizationUrl: URL;
+    clientConfig: OAuthClientConfig;
+    now: Date;
+  }): string | Promise<string>;
+  exchangeCode?(input: OAuthCodeExchangeInput): Promise<OAuthTokenResult>;
+  refreshAccessToken?(input: OAuthAccessTokenRefreshInput): Promise<OAuthTokenResult>;
+}
 
 export interface OAuthTokenRequestOptions {
   clientId: string;
@@ -19,10 +76,12 @@ export interface OAuthTokenRequestOptions {
   tokenEndpointAuthMethod: "client_secret_basic" | "client_secret_post" | "none";
   tokenRequestFormat?: "form" | "json";
   tokenUrl: string;
+  signal?: AbortSignal;
 }
 
 interface AuthorizationCodeTokenRequest extends OAuthTokenRequestOptions {
   code: string;
+  state?: string;
   redirectUri: string;
   extraFields?: Record<string, string>;
   createError: OAuthTokenErrorFactory;
@@ -30,6 +89,7 @@ interface AuthorizationCodeTokenRequest extends OAuthTokenRequestOptions {
 
 interface RefreshTokenRequest extends OAuthTokenRequestOptions {
   refreshToken: string;
+  extraFields?: Record<string, string>;
   createError: OAuthTokenErrorFactory;
 }
 
@@ -40,25 +100,120 @@ interface TokenRequest extends OAuthTokenRequestOptions {
 
 export type OAuthTokenErrorFactory = (message: string) => Error;
 
-export async function requestAuthorizationCodeToken(
-  input: AuthorizationCodeTokenRequest,
-): Promise<Extract<ResolvedCredential, { authType: "oauth2" }>> {
+interface TokenRevocationRequest {
+  revocationUrl: string;
+  token: string;
+  tokenTypeHint: "access_token" | "refresh_token";
+  clientId?: string;
+  clientSecret?: string;
+  tokenRequestFields?: OAuth2AuthDefinition["tokenRequestFields"];
+  tokenEndpointAuthMethod: "client_secret_basic" | "client_secret_post" | "none";
+  signal?: AbortSignal;
+  createError: OAuthTokenErrorFactory;
+}
+
+/**
+ * Revoke a token at the provider's revocation endpoint (RFC 7009 §2.1): a form
+ * POST of `token` and `token_type_hint`, authenticated the way the provider's
+ * token endpoint is: `client_secret_basic` sends the client id and secret in
+ * the Authorization header alone, `client_secret_post` sends both in the form,
+ * and a public client sends its client id alone. A 2xx is success; anything
+ * else — a non-2xx, no response, the deadline — is thrown through
+ * `createError`, with only the HTTP status and the provider's `error` code in
+ * the message, never the body.
+ */
+export async function requestTokenRevocation(input: TokenRevocationRequest): Promise<void> {
+  const url = assertPublicHttpUrl(input.revocationUrl, {
+    fieldName: "OAuth revocation URL",
+    createError: input.createError,
+  });
+  if (url.protocol !== "https:") {
+    throw input.createError("OAuth revocation URL must use https.");
+  }
+  const fields: Record<string, string> = { token: input.token, token_type_hint: input.tokenTypeHint };
+  const headers: Record<string, string> = {
+    accept: "application/json",
+    "content-type": "application/x-www-form-urlencoded",
+    "user-agent": providerUserAgent,
+  };
+  if (input.clientId) {
+    if (input.tokenEndpointAuthMethod === "client_secret_basic") {
+      // The header carries the client's identity; the body does not repeat it.
+      headers.authorization = basicAuthorizationHeader(
+        `${encodeOAuthBasicCredential(input.clientId)}:${encodeOAuthBasicCredential(input.clientSecret ?? "")}`,
+      );
+    } else {
+      const clientIdField = input.tokenRequestFields?.clientId;
+      if (clientIdField !== false) {
+        fields[clientIdField ?? "client_id"] = input.clientId;
+      }
+      if (input.tokenEndpointAuthMethod === "client_secret_post" && input.clientSecret) {
+        const clientSecretField = input.tokenRequestFields?.clientSecret;
+        if (clientSecretField !== false) {
+          fields[clientSecretField ?? "client_secret"] = input.clientSecret;
+        }
+      }
+    }
+  }
+
+  const timeout = createProviderTimeout(input.signal, oauthRevocationTimeoutMs);
+  let response: Response;
+  try {
+    response = await providerFetch(input.revocationUrl, {
+      method: "POST",
+      headers,
+      body: new URLSearchParams(fields),
+      signal: timeout.signal,
+      redirect: "manual",
+    });
+  } catch (error) {
+    timeout.cleanup();
+    if (input.signal?.aborted) {
+      throw input.createError("OAuth token revocation was cancelled.");
+    }
+    if (timeout.didTimeout() || isAbortLikeError(error)) {
+      throw input.createError("OAuth token revocation timed out.");
+    }
+    throw input.createError(`OAuth token revocation failed without an HTTP response: ${describeCause(error)}`);
+  }
+  try {
+    if (response.ok) {
+      void response.body?.cancel().catch(() => undefined);
+      return;
+    }
+    let code: string | undefined;
+    try {
+      const bytes = await readBoundedResponseBytes(response, {
+        maxBytes: oauthTokenResponseMaxBytes,
+        fieldName: "OAuth revocation response",
+        signal: timeout.signal,
+        createError: (message) => new OAuthTokenResponseSizeError(message),
+      });
+      code = optionalString(decodeTokenPayload(bytes).error);
+    } catch {
+      code = undefined;
+    }
+    throw input.createError(`OAuth token revocation failed (HTTP ${response.status}${code ? `, ${code}` : ""}).`);
+  } finally {
+    timeout.cleanup();
+  }
+}
+
+export async function requestAuthorizationCodeToken(input: AuthorizationCodeTokenRequest): Promise<OAuthTokenResult> {
   return requestToken({
     ...input,
     fields: createAuthorizationCodeFields(input),
   });
 }
 
-export async function requestRefreshToken(
-  input: RefreshTokenRequest,
-): Promise<Extract<ResolvedCredential, { authType: "oauth2" }>> {
+export async function requestRefreshToken(input: RefreshTokenRequest): Promise<OAuthTokenResult> {
   return requestToken({
     ...input,
     fields: createRefreshTokenFields(input),
   });
 }
 
-async function requestToken(input: TokenRequest): Promise<Extract<ResolvedCredential, { authType: "oauth2" }>> {
+async function requestToken(input: TokenRequest): Promise<OAuthTokenResult> {
   const fields: Record<string, string> = { ...input.fields };
   const clientIdField = input.tokenRequestFields?.clientId;
   if (clientIdField !== false) {
@@ -66,13 +221,14 @@ async function requestToken(input: TokenRequest): Promise<Extract<ResolvedCreden
   }
   const headers: Record<string, string> = {
     accept: "application/json",
+    "user-agent": providerUserAgent,
   };
   let body: BodyInit;
 
   if (input.tokenEndpointAuthMethod === "client_secret_basic") {
-    headers.authorization = `Basic ${Buffer.from(
+    headers.authorization = basicAuthorizationHeader(
       `${encodeOAuthBasicCredential(input.clientId)}:${encodeOAuthBasicCredential(input.clientSecret)}`,
-    ).toString("base64")}`;
+    );
   } else if (input.tokenEndpointAuthMethod === "client_secret_post") {
     const clientSecretField = input.tokenRequestFields?.clientSecret;
     if (clientSecretField !== false) {
@@ -88,56 +244,60 @@ async function requestToken(input: TokenRequest): Promise<Extract<ResolvedCreden
     body = new URLSearchParams(fields);
   }
 
+  const timeout = createProviderTimeout(input.signal);
   let response: Response;
   try {
     response = await providerFetch(input.tokenUrl, {
       method: "POST",
       headers,
       body,
-      signal: AbortSignal.timeout(oauthTokenRequestTimeoutMs),
+      signal: timeout.signal,
       // Workers has no "error" redirect mode; "manual" surfaces any 3xx as a
       // non-ok response, which the check below rejects. Same intent as "error"
       // (never follow a redirect from the token endpoint), edge-compatible.
       redirect: "manual",
     });
   } catch (error) {
-    if (error instanceof Error && error.name === "TimeoutError") {
+    timeout.cleanup();
+    if (error instanceof ProviderDispatchRequestError) throw error;
+    if (input.signal?.aborted) {
+      throw input.createError("OAuth token request was cancelled.");
+    }
+    if (timeout.didTimeout() || isAbortLikeError(error)) {
       throw input.createError("OAuth token request timed out.");
     }
     // A rejected fetch has no HTTP response to inspect, but the request may
     // still have reached the provider before the connection failed.
     throw input.createError(`OAuth token request failed without an HTTP response: ${describeCause(error)}`);
   }
-  const bytes = await readTokenResponseBytes(response, input.createError);
-  const rawPayload = decodeTokenPayload(bytes);
-  const payload = unwrapTokenPayload(rawPayload, input.responseEnvelope);
-  if (!response.ok || !isEnvelopeSuccess(rawPayload, input.responseEnvelope)) {
-    const providerMessage = readTokenErrorMessage(rawPayload, payload, input.responseEnvelope);
-    const bodyDescription = bytes.byteLength === 0 ? "empty body" : "unrecognized response body";
-    throw input.createError(
-      providerMessage ??
-        // Token endpoints and intermediaries can echo request credentials. Keep
-        // arbitrary response bytes out of the public error while distinguishing
-        // an empty body from a non-conforming one.
-        `OAuth token request failed (HTTP ${response.status}, ${bodyDescription}).`,
-    );
-  }
+  try {
+    const bytes = await readTokenResponseBytes(response, input.createError);
+    const rawPayload = decodeTokenPayload(bytes);
+    const payload = unwrapTokenPayload(rawPayload, input.responseEnvelope);
+    if (!response.ok || !isEnvelopeSuccess(rawPayload, input.responseEnvelope)) {
+      const providerMessage = readTokenErrorMessage(rawPayload, payload, input.responseEnvelope);
+      const bodyDescription = bytes.byteLength === 0 ? "empty body" : "unrecognized response body";
+      throw input.createError(
+        providerMessage ??
+          // Token endpoints and intermediaries can echo request credentials. Keep
+          // arbitrary response bytes out of the public error while distinguishing
+          // an empty body from a non-conforming one.
+          `OAuth token request failed (HTTP ${response.status}, ${bodyDescription}).`,
+      );
+    }
 
-  const accessToken = requiredString(payload.access_token ?? payload.token, "access_token", input.createError);
-  const tokenType = optionalString(payload.token_type) ?? "Bearer";
-  return {
-    authType: "oauth2",
-    accessToken,
-    tokenType,
-    refreshToken: optionalString(payload.refresh_token),
-    expiresAt: expiresAtFromLifetime(payload.expires_in),
-    profile: {
-      accountId: "oauth2",
-      displayName: "OAuth Credential",
-      grantedScopes: [],
-    },
-    metadata: createTokenMetadata(payload),
-  };
+    const accessToken = requiredString(payload.access_token ?? payload.token, "access_token", input.createError);
+    const tokenType = optionalString(payload.token_type) ?? "Bearer";
+    return {
+      accessToken,
+      tokenType,
+      refreshToken: optionalString(payload.refresh_token),
+      expiresAt: expiresAtFromLifetime(payload.expires_in),
+      metadata: createTokenMetadata(payload),
+    };
+  } finally {
+    timeout.cleanup();
+  }
 }
 
 /** Read a bounded token response and map body-stream failures to a safe OAuth error. */
@@ -253,6 +413,10 @@ function createAuthorizationCodeFields(input: AuthorizationCodeTokenRequest): Re
     "redirect_uri",
     input.redirectUri,
   );
+  const stateField = fieldMap?.authorizationCode?.state;
+  if (input.state !== undefined && stateField !== undefined) {
+    setMappedField(fields, stateField, "state", input.state);
+  }
   return {
     ...fields,
     ...(input.extraFields ?? {}),
@@ -269,7 +433,10 @@ function createRefreshTokenFields(input: RefreshTokenRequest): Record<string, st
     "refresh_token",
     input.refreshToken,
   );
-  return fields;
+  return {
+    ...fields,
+    ...(input.extraFields ?? {}),
+  };
 }
 
 function setMappedField(

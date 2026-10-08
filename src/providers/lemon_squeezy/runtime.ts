@@ -1,18 +1,18 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { LemonSqueezyActionName } from "./actions.ts";
 
-import { compactObject, optionalInteger, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
+import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
+  requiredResponseRecord,
 } from "../provider-runtime.ts";
 
-const lemonSqueezyApiBaseUrl = "https://api.lemonsqueezy.com/v1";
+export const lemonSqueezyApiBaseUrl = "https://api.lemonsqueezy.com/v1";
 const lemonSqueezyValidationPath = "/users/me";
-const lemonSqueezyDefaultRequestTimeoutMs = 30_000;
 
 type LemonSqueezyRequestPhase = "validate" | "execute";
 type LemonSqueezyActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -31,7 +31,7 @@ interface LemonSqueezySingleResponse {
   data: unknown;
 }
 
-export const lemonSqueezyActionHandlers: Record<LemonSqueezyActionName, LemonSqueezyActionHandler> = {
+export const lemonSqueezyActionHandlers: ProviderActionHandlers<"lemon_squeezy", LemonSqueezyActionHandler> = {
   async retrieve_authenticated_user(_input, context) {
     const response = await requestLemonSqueezyJson<LemonSqueezySingleResponse>({
       context,
@@ -384,7 +384,7 @@ async function requestLemonSqueezy(input: LemonSqueezyRequestInput): Promise<Res
       url.searchParams.set(key, String(value));
     }
   }
-  const timeout = createProviderTimeout(input.context.signal, lemonSqueezyDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
 
   try {
     return await input.context.fetcher(url, {
@@ -481,15 +481,11 @@ function readResourceArray(response: LemonSqueezyListResponse): Array<Record<str
   if (!Array.isArray(response.data)) {
     throw new ProviderRequestError(502, "Lemon Squeezy list response did not return an array", response);
   }
-  return response.data.map((item) => readResource(item, "Lemon Squeezy resource"));
+  return response.data.map((item) => requiredResponseRecord(item, "Lemon Squeezy resource"));
 }
 
 function readSingleResource(response: LemonSqueezySingleResponse): Record<string, unknown> {
-  return readResource(response.data, "Lemon Squeezy resource");
-}
-
-function readResource(value: unknown, label: string): Record<string, unknown> {
-  return requiredRecord(value, label, (message) => new ProviderRequestError(502, message));
+  return requiredResponseRecord(response.data, "Lemon Squeezy resource");
 }
 
 function readOptionalTopLevelTestMode(response: LemonSqueezySingleResponse): boolean | undefined {

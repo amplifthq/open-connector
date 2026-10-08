@@ -1,4 +1,4 @@
-import type { JsonSchema } from "../../core/types.ts";
+import type { ActionDefinition, JsonSchema } from "../../core/types.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { s } from "../../core/json-schema.ts";
@@ -88,47 +88,6 @@ const governedTailnetSettings: readonly { scope: string; fields: readonly string
   { scope: "policy_file", fields: ["aclsExternallyManagedOn", "aclsExternalLink"] },
 ];
 
-/** Official endpoints that cannot be called with Tailscale OAuth client access tokens. */
-interface TailscaleUnsupportedOAuthClientOperation {
-  operationId: string;
-  reason: string;
-}
-
-export const tailscaleUnsupportedOAuthClientOperations: readonly TailscaleUnsupportedOAuthClientOperation[] = [
-  {
-    operationId: "createDeviceInvites",
-    reason: "Device invite creation is scoped to a user-owned access key.",
-  },
-  {
-    operationId: "listUserInvites",
-    reason: "User invite workflows do not expose an OAuth client scope.",
-  },
-  {
-    operationId: "createUserInvites",
-    reason: "User invite creation requires an inviting user and a user-owned access key.",
-  },
-  {
-    operationId: "getUserInvite",
-    reason: "User invite workflows do not expose an OAuth client scope.",
-  },
-  {
-    operationId: "deleteUserInvite",
-    reason: "User invite deletion requires a user-owned access key.",
-  },
-  {
-    operationId: "resendUserInvite",
-    reason: "User invite resend requires an inviting user and a user-owned access key.",
-  },
-  {
-    operationId: "resendDeviceInvite",
-    reason: "Device invite resend is scoped to a user-owned access key.",
-  },
-  {
-    operationId: "acceptDeviceInvite",
-    reason: "Device invite acceptance is scoped to a user and cannot use an OAuth client token.",
-  },
-];
-
 export interface TailscaleQueryParameter {
   inputName: string;
   parameterName: string;
@@ -139,6 +98,7 @@ export interface TailscaleQueryParameter {
 
 export interface TailscaleOperationDefinition {
   name: string;
+  operationType: ActionDefinition["operationType"];
   description: string;
   method: "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
   path: string;
@@ -222,6 +182,7 @@ const logTypeInput = s.actionInput(
 export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   {
     name: "list_devices",
+    operationType: "read",
     description: "List all devices in the configured Tailscale tailnet.",
     method: "GET",
     path: "/tailnet/-/devices",
@@ -234,6 +195,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_device",
+    operationType: "read",
     description: "Get one Tailscale device by its preferred node ID or legacy device ID.",
     method: "GET",
     path: "/device/{deviceId}",
@@ -244,6 +206,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "list_device_routes",
+    operationType: "read",
     description: "List the subnet routes advertised and enabled for a Tailscale device.",
     method: "GET",
     path: "/device/{deviceId}/routes",
@@ -254,6 +217,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_device_posture_attributes",
+    operationType: "read",
     description: "Get the posture attributes currently reported for a Tailscale device.",
     method: "GET",
     path: "/device/{deviceId}/attributes",
@@ -264,6 +228,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "list_configuration_audit_logs",
+    operationType: "read",
     description: "List configuration audit logs for an RFC 3339 time window, with optional filters.",
     method: "GET",
     path: "/tailnet/-/logging/configuration",
@@ -290,6 +255,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_log_streaming_status",
+    operationType: "read",
     description: "Get the current publishing status for configuration or network log streaming.",
     method: "GET",
     path: "/tailnet/-/logging/{logType}/stream/status",
@@ -300,6 +266,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "list_dns_nameservers",
+    operationType: "read",
     description: "List the global DNS nameservers configured for the tailnet.",
     method: "GET",
     path: "/tailnet/-/dns/nameservers",
@@ -309,6 +276,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_dns_preferences",
+    operationType: "read",
     description: "Get the tailnet DNS preferences, including MagicDNS state.",
     method: "GET",
     path: "/tailnet/-/dns/preferences",
@@ -318,6 +286,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "list_dns_search_paths",
+    operationType: "read",
     description: "List the DNS search paths configured for the tailnet.",
     method: "GET",
     path: "/tailnet/-/dns/searchpaths",
@@ -327,6 +296,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_split_dns",
+    operationType: "read",
     description: "Get the split DNS nameserver mapping for the tailnet.",
     method: "GET",
     path: "/tailnet/-/dns/split-dns",
@@ -336,6 +306,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_dns_configuration",
+    operationType: "read",
     description: "Get the complete DNS configuration for the tailnet.",
     method: "GET",
     path: "/tailnet/-/dns/configuration",
@@ -345,6 +316,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "list_users",
+    operationType: "read",
     description: "List tailnet users with optional user-type and role filters.",
     method: "GET",
     path: "/tailnet/-/users",
@@ -372,6 +344,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_user",
+    operationType: "read",
     description: "Get a Tailscale user by user ID.",
     method: "GET",
     path: "/users/{userId}",
@@ -382,6 +355,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_contacts",
+    operationType: "read",
     description: "Get the account, support, and security contacts for the tailnet.",
     method: "GET",
     path: "/tailnet/-/contacts",
@@ -391,6 +365,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_tailnet_settings",
+    operationType: "read",
     description: "Get the tailnet feature, logging, networking, and policy settings visible to the OAuth client.",
     method: "GET",
     path: "/tailnet/-/settings",
@@ -407,6 +382,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "list_services",
+    operationType: "read",
     description: "List the Services configured in the tailnet.",
     method: "GET",
     path: "/tailnet/-/services",
@@ -416,6 +392,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_service",
+    operationType: "read",
     description: "Get a Tailscale Service by name.",
     method: "GET",
     path: "/tailnet/-/services/{serviceName}",
@@ -426,6 +403,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_device_routes",
+    operationType: "destructive",
     description: "Replace the enabled subnet routes for a Tailscale device.",
     method: "POST",
     path: "/device/{deviceId}/routes",
@@ -444,6 +422,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_device_authorized",
+    operationType: "destructive",
     description: "Authorize or deauthorize a Tailscale device.",
     method: "POST",
     path: "/device/{deviceId}/authorized",
@@ -462,6 +441,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_device_name",
+    operationType: "destructive",
     description: "Set a Tailscale device name, or reset it from the OS hostname with an empty name.",
     method: "POST",
     path: "/device/{deviceId}/name",
@@ -480,6 +460,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_device_tags",
+    operationType: "destructive",
     description: "Replace all ACL tags assigned to a Tailscale device.",
     method: "POST",
     path: "/device/{deviceId}/tags",
@@ -498,6 +479,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_device_ip",
+    operationType: "write",
     description: "Set the Tailscale IPv4 address for a device.",
     method: "POST",
     path: "/device/{deviceId}/ip",
@@ -516,6 +498,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_device_posture_attribute",
+    operationType: "destructive",
     description: "Set one custom posture attribute on a Tailscale device.",
     method: "POST",
     path: "/device/{deviceId}/attributes/{attributeKey}",
@@ -539,6 +522,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_dns_nameservers",
+    operationType: "destructive",
     description: "Replace the global DNS nameservers configured for the tailnet.",
     method: "POST",
     path: "/tailnet/-/dns/nameservers",
@@ -553,6 +537,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_dns_preferences",
+    operationType: "destructive",
     description: "Enable or disable MagicDNS for the tailnet.",
     method: "POST",
     path: "/tailnet/-/dns/preferences",
@@ -567,6 +552,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_dns_search_paths",
+    operationType: "destructive",
     description: "Replace the DNS search paths configured for the tailnet.",
     method: "POST",
     path: "/tailnet/-/dns/searchpaths",
@@ -581,6 +567,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "update_split_dns",
+    operationType: "destructive",
     description: "Merge domain-to-resolver entries into the tailnet split DNS configuration.",
     method: "PATCH",
     path: "/tailnet/-/dns/split-dns",
@@ -595,6 +582,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_split_dns",
+    operationType: "destructive",
     description: "Replace the entire tailnet split DNS configuration.",
     method: "PUT",
     path: "/tailnet/-/dns/split-dns",
@@ -609,6 +597,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_dns_configuration",
+    operationType: "destructive",
     description:
       "Replace the entire tailnet DNS configuration, including nameservers, split DNS, search paths, and preferences.",
     method: "POST",
@@ -628,6 +617,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "update_tailnet_settings",
+    operationType: "destructive",
     description: "Update reversible feature, logging, networking, or policy-link settings for the tailnet.",
     method: "PATCH",
     path: "/tailnet/-/settings",
@@ -655,6 +645,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "update_service",
+    operationType: "destructive",
     description: "Create or replace a named Tailscale Service definition.",
     method: "PUT",
     path: "/tailnet/-/services/{serviceName}",
@@ -673,6 +664,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "list_service_hosts",
+    operationType: "read",
     description: "List devices currently hosting a named Tailscale Service.",
     method: "GET",
     path: "/tailnet/-/services/{serviceName}/devices",
@@ -683,6 +675,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_service_device_approval",
+    operationType: "read",
     description: "Get whether a Service is approved on a specific device.",
     method: "GET",
     path: "/tailnet/-/services/{serviceName}/device/{deviceId}/approved",
@@ -700,6 +693,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "update_service_device_approval",
+    operationType: "destructive",
     description: "Approve or revoke approval for a Service on a device.",
     method: "POST",
     path: "/tailnet/-/services/{serviceName}/device/{deviceId}/approved",
@@ -719,6 +713,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "batch_update_device_posture_attributes",
+    operationType: "destructive",
     description: "Set or remove custom posture attributes across multiple Tailscale devices.",
     method: "PATCH",
     path: "/tailnet/-/device-attributes",
@@ -740,6 +735,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "delete_device",
+    operationType: "destructive",
     description: "Permanently delete a device from its Tailscale tailnet.",
     method: "DELETE",
     path: "/device/{deviceId}",
@@ -750,6 +746,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "expire_device_key",
+    operationType: "write",
     description: "Immediately expire a device key and require the device to authenticate again.",
     method: "POST",
     path: "/device/{deviceId}/expire",
@@ -760,6 +757,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_device_key_expiry",
+    operationType: "destructive",
     description: "Enable or disable key expiry for a Tailscale device.",
     method: "POST",
     path: "/device/{deviceId}/key",
@@ -778,6 +776,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "delete_device_posture_attribute",
+    operationType: "destructive",
     description: "Permanently remove one custom posture attribute from a Tailscale device.",
     method: "DELETE",
     path: "/device/{deviceId}/attributes/{attributeKey}",
@@ -795,6 +794,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_log_streaming_configuration",
+    operationType: "read",
     description: "Get the potentially sensitive destination configuration for a Tailscale log stream.",
     method: "GET",
     path: "/tailnet/-/logging/{logType}/stream",
@@ -805,6 +805,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_log_streaming_configuration",
+    operationType: "destructive",
     description: "Create or replace a Tailscale log streaming destination configuration.",
     method: "PUT",
     path: "/tailnet/-/logging/{logType}/stream",
@@ -829,6 +830,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "disable_log_streaming",
+    operationType: "destructive",
     description: "Disable and remove the destination configuration for a Tailscale log stream.",
     method: "DELETE",
     path: "/tailnet/-/logging/{logType}/stream",
@@ -839,6 +841,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_aws_external_id",
+    operationType: "write",
     description: "Create or retrieve the AWS external ID used by Tailscale log streaming.",
     method: "POST",
     path: "/tailnet/-/aws-external-id",
@@ -857,6 +860,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "validate_aws_external_id",
+    operationType: "read",
     description: "Validate an AWS IAM role trust policy against a Tailscale external ID.",
     method: "POST",
     path: "/tailnet/-/aws-external-id/{externalId}/validate-aws-trust-policy",
@@ -875,6 +879,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "list_keys",
+    operationType: "read",
     description: "List trust credentials and keys visible to the OAuth client.",
     method: "GET",
     path: "/tailnet/-/keys",
@@ -896,6 +901,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "create_key",
+    operationType: "write",
     description: "Create an auth key, OAuth client credential, or federated trust credential and return its secret.",
     method: "POST",
     path: "/tailnet/-/keys",
@@ -917,6 +923,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_key",
+    operationType: "read",
     description: "Get metadata for a Tailscale trust credential or key.",
     method: "GET",
     path: "/tailnet/-/keys/{keyId}",
@@ -934,6 +941,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "delete_key",
+    operationType: "destructive",
     description: "Permanently revoke and delete a Tailscale trust credential or key.",
     method: "DELETE",
     path: "/tailnet/-/keys/{keyId}",
@@ -946,6 +954,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "update_key",
+    operationType: "destructive",
     description: "Replace the mutable configuration of an OAuth or federated Tailscale trust credential.",
     method: "PUT",
     path: "/tailnet/-/keys/{keyId}",
@@ -966,6 +975,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_policy_file",
+    operationType: "read",
     description: "Get the current Tailscale policy file as JSON, optionally with validation details.",
     method: "GET",
     path: "/tailnet/-/acl",
@@ -989,6 +999,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "set_policy_file",
+    operationType: "destructive",
     description: "Replace the Tailscale policy file after its embedded tests pass.",
     method: "POST",
     path: "/tailnet/-/acl",
@@ -1009,6 +1020,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "update_user_role",
+    operationType: "write",
     description: "Change a Tailscale user's administrative role.",
     method: "POST",
     path: "/users/{userId}/role",
@@ -1027,6 +1039,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "approve_user",
+    operationType: "write",
     description: "Approve a pending Tailscale user for the tailnet.",
     method: "POST",
     path: "/users/{userId}/approve",
@@ -1037,6 +1050,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "suspend_user",
+    operationType: "destructive",
     description: "Suspend a Tailscale user and their access to the tailnet.",
     method: "POST",
     path: "/users/{userId}/suspend",
@@ -1047,6 +1061,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "restore_user",
+    operationType: "write",
     description: "Restore a suspended Tailscale user.",
     method: "POST",
     path: "/users/{userId}/restore",
@@ -1057,6 +1072,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "delete_user",
+    operationType: "destructive",
     description: "Permanently delete a Tailscale user from the tailnet.",
     method: "POST",
     path: "/users/{userId}/delete",
@@ -1067,6 +1083,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "update_contact",
+    operationType: "write",
     description: "Change the account, support, or security contact email for the tailnet.",
     method: "PATCH",
     path: "/tailnet/-/contacts/{contactType}",
@@ -1087,6 +1104,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "resend_contact_verification_email",
+    operationType: "write",
     description: "Resend the verification email for a tailnet contact.",
     method: "POST",
     path: "/tailnet/-/contacts/{contactType}/resend-verification-email",
@@ -1105,6 +1123,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "list_webhooks",
+    operationType: "read",
     description: "List webhook endpoints configured for the tailnet.",
     method: "GET",
     path: "/tailnet/-/webhooks",
@@ -1114,6 +1133,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "create_webhook",
+    operationType: "write",
     description: "Create a webhook endpoint and return its signing secret.",
     method: "POST",
     path: "/tailnet/-/webhooks",
@@ -1128,6 +1148,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_webhook",
+    operationType: "read",
     description: "Get a Tailscale webhook endpoint by ID.",
     method: "GET",
     path: "/webhooks/{endpointId}",
@@ -1138,6 +1159,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "update_webhook",
+    operationType: "destructive",
     description: "Replace the subscribed events for a Tailscale webhook endpoint.",
     method: "PATCH",
     path: "/webhooks/{endpointId}",
@@ -1156,6 +1178,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "delete_webhook",
+    operationType: "destructive",
     description: "Permanently delete a Tailscale webhook endpoint.",
     method: "DELETE",
     path: "/webhooks/{endpointId}",
@@ -1166,6 +1189,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "test_webhook",
+    operationType: "write",
     description: "Send a test event to a Tailscale webhook endpoint.",
     method: "POST",
     path: "/webhooks/{endpointId}/test",
@@ -1176,6 +1200,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "rotate_webhook_secret",
+    operationType: "read",
     description: "Rotate a webhook signing secret and return the new secret once.",
     method: "POST",
     path: "/webhooks/{endpointId}/rotate",
@@ -1186,6 +1211,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "delete_service",
+    operationType: "destructive",
     description: "Permanently delete a named Tailscale Service.",
     method: "DELETE",
     path: "/tailnet/-/services/{serviceName}",
@@ -1196,6 +1222,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "list_oauth_apps",
+    operationType: "read",
     description: "List OAuth applications configured for the tailnet.",
     method: "GET",
     path: "/tailnet/-/oauth-apps",
@@ -1205,6 +1232,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "create_oauth_app",
+    operationType: "write",
     description: "Create a Tailscale OAuth application and return its client secret.",
     method: "POST",
     path: "/tailnet/-/oauth-apps",
@@ -1224,6 +1252,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_oauth_app",
+    operationType: "read",
     description: "Get a Tailscale OAuth application by app ID.",
     method: "GET",
     path: "/tailnet/-/oauth-apps/{appId}",
@@ -1234,6 +1263,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "update_oauth_app",
+    operationType: "destructive",
     description: "Replace the configuration of a Tailscale OAuth application.",
     method: "PUT",
     path: "/tailnet/-/oauth-apps/{appId}",
@@ -1259,6 +1289,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "delete_oauth_app",
+    operationType: "destructive",
     description: "Permanently delete a Tailscale OAuth application and revoke its access.",
     method: "DELETE",
     path: "/tailnet/-/oauth-apps/{appId}",
@@ -1269,6 +1300,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "list_device_invites",
+    operationType: "read",
     description: "List all share invites for a Tailscale device.",
     method: "GET",
     path: "/device/{deviceId}/device-invites",
@@ -1281,6 +1313,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_device_invite",
+    operationType: "read",
     description: "Get one Tailscale device share invite.",
     method: "GET",
     path: "/device-invites/{deviceInviteId}",
@@ -1291,6 +1324,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "delete_device_invite",
+    operationType: "destructive",
     description: "Delete a Tailscale device share invite.",
     method: "DELETE",
     path: "/device-invites/{deviceInviteId}",
@@ -1301,6 +1335,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "list_network_flow_logs",
+    operationType: "read",
     description: "List network flow logs for an RFC 3339 time window.",
     method: "GET",
     path: "/tailnet/-/logging/network",
@@ -1321,6 +1356,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "preview_policy_rule_matches",
+    operationType: "read",
     description: "Preview which rules in a proposed policy match a user or IP address and port without saving it.",
     method: "POST",
     path: "/tailnet/-/acl/preview",
@@ -1360,6 +1396,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "validate_policy_file",
+    operationType: "read",
     description: "Validate a proposed policy file or run ACL tests without changing the tailnet policy.",
     method: "POST",
     path: "/tailnet/-/acl/validate",
@@ -1374,6 +1411,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "list_posture_integrations",
+    operationType: "read",
     description: "List the device posture integrations configured for the tailnet.",
     method: "GET",
     path: "/tailnet/-/posture/integrations",
@@ -1383,6 +1421,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "create_posture_integration",
+    operationType: "write",
     description: "Create a device posture integration using its external provider credentials.",
     method: "POST",
     path: "/tailnet/-/posture/integrations",
@@ -1397,6 +1436,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "get_posture_integration",
+    operationType: "read",
     description: "Get one device posture integration by ID.",
     method: "GET",
     path: "/posture/integrations/{integrationId}",
@@ -1407,6 +1447,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "update_posture_integration",
+    operationType: "destructive",
     description: "Update a device posture integration and optionally replace its client secret.",
     method: "PATCH",
     path: "/posture/integrations/{integrationId}",
@@ -1425,6 +1466,7 @@ export const tailscaleOperations: readonly TailscaleOperationDefinition[] = [
   },
   {
     name: "delete_posture_integration",
+    operationType: "destructive",
     description: "Delete a device posture integration.",
     method: "DELETE",
     path: "/posture/integrations/{integrationId}",

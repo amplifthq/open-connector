@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { ZerobounceActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -14,17 +14,17 @@ import { queryParams } from "../../core/request.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const zerobounceApiBaseUrl = "https://api.zerobounce.net";
-const zerobounceDefaultRequestTimeoutMs = 30_000;
+export const zerobounceApiBaseUrl = "https://api.zerobounce.net";
 
 type ZerobounceRequestPhase = "validate" | "execute";
 type ZerobounceActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
-export const zerobounceActionHandlers: Record<ZerobounceActionName, ZerobounceActionHandler> = {
+export const zerobounceActionHandlers: ProviderActionHandlers<"zerobounce", ZerobounceActionHandler> = {
   get_credit_balance(_input, context) {
     return requestZerobounceCreditBalance({
       apiKey: context.apiKey,
@@ -39,8 +39,8 @@ export const zerobounceActionHandlers: Record<ZerobounceActionName, ZerobounceAc
       fetcher: context.fetcher,
       signal: context.signal,
       phase: "execute",
-      startDate: requiredString(input.start_date, "start_date", badInput),
-      endDate: requiredString(input.end_date, "end_date", badInput),
+      startDate: requiredString(input.start_date, "start_date", providerInputError),
+      endDate: requiredString(input.end_date, "end_date", providerInputError),
     });
   },
   validate_email(input, context) {
@@ -49,7 +49,7 @@ export const zerobounceActionHandlers: Record<ZerobounceActionName, ZerobounceAc
       fetcher: context.fetcher,
       signal: context.signal,
       phase: "execute",
-      email: requiredString(input.email, "email", badInput),
+      email: requiredString(input.email, "email", providerInputError),
       ipAddress: optionalString(input.ip_address),
       creditsInfo: optionalBoolean(input.credits_info),
     });
@@ -60,7 +60,7 @@ export const zerobounceActionHandlers: Record<ZerobounceActionName, ZerobounceAc
       fetcher: context.fetcher,
       signal: context.signal,
       phase: "execute",
-      email: requiredString(input.email, "email", badInput),
+      email: requiredString(input.email, "email", providerInputError),
     });
   },
   create_filter_rule(input, context) {
@@ -69,9 +69,9 @@ export const zerobounceActionHandlers: Record<ZerobounceActionName, ZerobounceAc
       fetcher: context.fetcher,
       signal: context.signal,
       phase: "execute",
-      rule: requiredString(input.rule, "rule", badInput),
-      target: requiredString(input.target, "target", badInput),
-      value: requiredString(input.value, "value", badInput),
+      rule: requiredString(input.rule, "rule", providerInputError),
+      target: requiredString(input.target, "target", providerInputError),
+      value: requiredString(input.value, "value", providerInputError),
     });
   },
   list_filter_rules(_input, context) {
@@ -244,7 +244,7 @@ async function requestZerobounceJson(
     url.searchParams.set(key, value);
   }
 
-  const timeout = createProviderTimeout(input.signal, zerobounceDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const response = await input.fetcher(url, {
       method: "GET",
@@ -339,10 +339,6 @@ function parseZerobounceBooleanField(value: unknown, path: string, fieldName: st
   }
 
   throw new ProviderRequestError(502, `ZeroBounce ${path} returned invalid ${fieldName}`);
-}
-
-function badInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 async function readZerobouncePayload(response: Response): Promise<unknown> {

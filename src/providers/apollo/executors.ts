@@ -1,8 +1,15 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  isAbortLikeError,
+  ProviderRequestError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 const service = "apollo";
 const apolloApiBaseUrl = "https://api.apollo.io";
@@ -12,7 +19,7 @@ type ApolloQueryValue = boolean | number | string | string[] | undefined;
 type ApolloRequestPhase = "validate" | "execute";
 type ApolloActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const apolloActionHandlers: Record<string, ApolloActionHandler> = {
+export const apolloActionHandlers: ProviderActionHandlers<"apollo", ApolloActionHandler> = {
   get_api_usage_stats(_input, context) {
     return getApiUsageStats(context);
   },
@@ -31,6 +38,16 @@ export const apolloActionHandlers: Record<string, ApolloActionHandler> = {
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, apolloActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apolloApiBaseUrl,
+  auth: { type: "api_key_header", name: "x-api-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -383,8 +400,4 @@ function asStringList(value: unknown): string[] | undefined {
 
   const normalized = value.map((item) => optionalString(item)).filter((item): item is string => !!item);
   return normalized.length > 0 ? normalized : undefined;
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError";
 }

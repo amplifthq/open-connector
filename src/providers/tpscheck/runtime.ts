@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import {
@@ -12,17 +13,17 @@ import {
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
 } from "../provider-runtime.ts";
 
-const tpscheckApiBaseUrl = "https://api.tpscheck.uk";
-const tpscheckDefaultRequestTimeoutMs = 30_000;
+export const tpscheckApiBaseUrl: string = "https://api.tpscheck.uk";
 
 type TpscheckRequestPhase = "validate" | "execute";
 type TpscheckActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const tpscheckActionHandlers: Record<string, TpscheckActionHandler> = {
+export const tpscheckActionHandlers: ProviderActionHandlers<"tpscheck", TpscheckActionHandler> = {
   get_credits(_input, context) {
     return requestTpscheckJson(context, {
       method: "GET",
@@ -97,7 +98,7 @@ async function requestTpscheckJson(
     if (value) url.searchParams.set(key, value);
   }
 
-  const timeout = createProviderTimeout(context.signal, tpscheckDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   let response: Response;
   let payload: unknown;
   try {
@@ -179,8 +180,4 @@ function requireTpscheckObject(payload: unknown, endpoint: string): Record<strin
     throw new ProviderRequestError(502, `TPSCheck ${endpoint} returned a non-object response`);
   }
   return record;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

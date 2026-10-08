@@ -1,9 +1,14 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { FormcarryActionName } from "./actions.ts";
 
 import { compactObject, optionalRawString, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "formcarry";
 const formcarryApiBaseUrl = "https://formcarry.com";
@@ -12,7 +17,7 @@ type FormcarryRequestPhase = "validate" | "execute";
 type FormcarryActionContext = ApiKeyProviderContext;
 type FormcarryActionHandler = (input: Record<string, unknown>, context: FormcarryActionContext) => Promise<unknown>;
 
-export const formcarryActionHandlers: Record<FormcarryActionName, FormcarryActionHandler> = {
+export const formcarryActionHandlers: ProviderActionHandlers<"formcarry", FormcarryActionHandler> = {
   async create_form(input, context) {
     const response = await context.fetcher(`${formcarryApiBaseUrl}/api/form`, {
       method: "PUT",
@@ -63,6 +68,16 @@ export const formcarryActionHandlers: Record<FormcarryActionName, FormcarryActio
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, formcarryActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: formcarryApiBaseUrl,
+  auth: { type: "api_key_header", name: "api_key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

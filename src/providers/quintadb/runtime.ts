@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -12,7 +13,7 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { providerInputError, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 export const quintaDbApiBaseUrl = "https://quintadb.com";
 const quintaDbValidationPath = "/apps.json";
@@ -31,7 +32,7 @@ interface QuintaDbRequestInput extends QuintaDbContext {
   phase: "validate" | "execute";
 }
 
-export const quintaDbActionHandlers: Record<string, ProviderRuntimeHandler<QuintaDbContext>> = {
+export const quintaDbActionHandlers: ProviderActionHandlers<"quintadb", ProviderRuntimeHandler<QuintaDbContext>> = {
   async list_databases(input, context) {
     const payload = await requestQuintaDbJson({
       ...context,
@@ -46,7 +47,7 @@ export const quintaDbActionHandlers: Record<string, ProviderRuntimeHandler<Quint
     };
   },
   async get_database(input, context) {
-    const databaseId = requiredString(input.databaseId, "databaseId", inputError);
+    const databaseId = requiredString(input.databaseId, "databaseId", providerInputError);
     const payload = await requestQuintaDbJson({
       ...context,
       path: `/apps/${encodeURIComponent(databaseId)}.json`,
@@ -57,7 +58,7 @@ export const quintaDbActionHandlers: Record<string, ProviderRuntimeHandler<Quint
     };
   },
   async list_forms(input, context) {
-    const databaseId = requiredString(input.databaseId, "databaseId", inputError);
+    const databaseId = requiredString(input.databaseId, "databaseId", providerInputError);
     const payload = await requestQuintaDbJson({
       ...context,
       path: `/apps/${encodeURIComponent(databaseId)}/entities.json`,
@@ -68,8 +69,8 @@ export const quintaDbActionHandlers: Record<string, ProviderRuntimeHandler<Quint
     };
   },
   async list_fields(input, context) {
-    const databaseId = requiredString(input.databaseId, "databaseId", inputError);
-    const formId = requiredString(input.formId, "formId", inputError);
+    const databaseId = requiredString(input.databaseId, "databaseId", providerInputError);
+    const formId = requiredString(input.formId, "formId", providerInputError);
     const payload = await requestQuintaDbJson({
       ...context,
       path: `/apps/${encodeURIComponent(databaseId)}/entities/${encodeURIComponent(formId)}/properties.json`,
@@ -80,8 +81,8 @@ export const quintaDbActionHandlers: Record<string, ProviderRuntimeHandler<Quint
     };
   },
   async list_records(input, context) {
-    const databaseId = requiredString(input.databaseId, "databaseId", inputError);
-    const formId = requiredString(input.formId, "formId", inputError);
+    const databaseId = requiredString(input.databaseId, "databaseId", providerInputError);
+    const formId = requiredString(input.formId, "formId", providerInputError);
     const payload = await requestQuintaDbJson({
       ...context,
       path: `/apps/${encodeURIComponent(databaseId)}/dtypes/entity/${encodeURIComponent(formId)}.json`,
@@ -98,8 +99,8 @@ export const quintaDbActionHandlers: Record<string, ProviderRuntimeHandler<Quint
     };
   },
   async get_record(input, context) {
-    const databaseId = requiredString(input.databaseId, "databaseId", inputError);
-    const recordId = requiredString(input.recordId, "recordId", inputError);
+    const databaseId = requiredString(input.databaseId, "databaseId", providerInputError);
+    const recordId = requiredString(input.recordId, "recordId", providerInputError);
     const payload = await requestQuintaDbJson({
       ...context,
       path: `/apps/${encodeURIComponent(databaseId)}/dtypes/${encodeURIComponent(recordId)}.json`,
@@ -113,15 +114,15 @@ export const quintaDbActionHandlers: Record<string, ProviderRuntimeHandler<Quint
     };
   },
   async create_record(input, context) {
-    const databaseId = requiredString(input.databaseId, "databaseId", inputError);
-    const formId = requiredString(input.formId, "formId", inputError);
+    const databaseId = requiredString(input.databaseId, "databaseId", providerInputError);
+    const formId = requiredString(input.formId, "formId", providerInputError);
     const payload = await requestQuintaDbJson({
       ...context,
       path: `/apps/${encodeURIComponent(databaseId)}/dtypes.json`,
       method: "POST",
       body: {
         values: {
-          ...requiredRecord(input.values, "values", inputError),
+          ...requiredRecord(input.values, "values", providerInputError),
           entity_id: formId,
         },
       },
@@ -132,14 +133,14 @@ export const quintaDbActionHandlers: Record<string, ProviderRuntimeHandler<Quint
     };
   },
   async update_record(input, context) {
-    const databaseId = requiredString(input.databaseId, "databaseId", inputError);
-    const recordId = requiredString(input.recordId, "recordId", inputError);
+    const databaseId = requiredString(input.databaseId, "databaseId", providerInputError);
+    const recordId = requiredString(input.recordId, "recordId", providerInputError);
     const payload = await requestQuintaDbJson({
       ...context,
       path: `/apps/${encodeURIComponent(databaseId)}/dtypes/${encodeURIComponent(recordId)}.json`,
       method: "PUT",
       body: {
-        values: requiredRecord(input.values, "values", inputError),
+        values: requiredRecord(input.values, "values", providerInputError),
       },
       phase: "execute",
     });
@@ -148,8 +149,8 @@ export const quintaDbActionHandlers: Record<string, ProviderRuntimeHandler<Quint
     };
   },
   async delete_record(input, context) {
-    const databaseId = requiredString(input.databaseId, "databaseId", inputError);
-    const recordId = requiredString(input.recordId, "recordId", inputError);
+    const databaseId = requiredString(input.databaseId, "databaseId", providerInputError);
+    const recordId = requiredString(input.recordId, "recordId", providerInputError);
     const payload = await requestQuintaDbJson({
       ...context,
       path: `/apps/${encodeURIComponent(databaseId)}/dtypes/${encodeURIComponent(recordId)}.json`,
@@ -289,8 +290,4 @@ function requireObjectArrayField(payload: unknown, fieldName: string) {
   return objectArray(value, fieldName, () => {
     return new ProviderRequestError(502, `QuintaDB response has an invalid ${fieldName} array`);
   });
-}
-
-function inputError(message: string) {
-  return new ProviderRequestError(400, message);
 }

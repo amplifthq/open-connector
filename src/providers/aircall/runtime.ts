@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { AircallActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import { optionalInteger, optionalRecord, optionalString, pickOptionalInteger } from "../../core/cast.ts";
@@ -9,7 +9,6 @@ import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "
 export const aircallApiBaseUrl = "https://api.aircall.io";
 const aircallRequestBaseUrl = "https://api.aircall.io/";
 const aircallValidationPath = "/v1/ping";
-const aircallDefaultTimeoutMs = 30_000;
 
 type AircallRequestPhase = "validate" | "execute";
 
@@ -34,7 +33,7 @@ interface AircallListRequest {
 
 type AircallActionHandler = (input: Record<string, unknown>, context: AircallActionContext) => Promise<unknown>;
 
-export const aircallActionHandlers: Record<AircallActionName, AircallActionHandler> = {
+export const aircallActionHandlers: ProviderActionHandlers<"aircall", AircallActionHandler> = {
   list_users(input, context) {
     return executeListResources(context, {
       path: "/v2/users",
@@ -178,7 +177,7 @@ async function requestAircallJson(context: AircallActionContext, input: AircallR
     }
   }
 
-  const timeout = createProviderTimeout(context.signal, aircallDefaultTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       method: "GET",
@@ -257,8 +256,8 @@ function createAircallError(status: number, payload: unknown, phase: AircallRequ
     return new ProviderRequestError(400, message, payload);
   }
 
-  if (phase === "execute" && [401, 402, 403].includes(status)) {
-    return new ProviderRequestError(409, message, payload);
+  if (phase === "execute" && [401, 403].includes(status)) {
+    return new ProviderRequestError(401, message, payload);
   }
 
   if (phase === "execute" && [400, 404, 405, 422].includes(status)) {

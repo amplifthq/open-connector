@@ -1,21 +1,21 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
   defineApiKeyProviderExecutors,
   defineProviderProxy,
-  isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
+  requiredInputString,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 const service = "hub_planner";
 const hubPlannerApiBaseUrl = "https://api.hubplanner.com/v1";
 const hubPlannerValidationPath = "/project";
-const hubPlannerRequestTimeoutMs = 30_000;
 const hubPlannerMaxResponseBytes = 10 * 1024 * 1024;
 
 type HubPlannerPhase = "validate" | "execute";
@@ -23,12 +23,12 @@ type HubPlannerExpectedPayload = "array" | "object";
 type HubPlannerQueryValue = number | string | string[] | undefined;
 type HubPlannerActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const hubPlannerActionHandlers: Record<string, HubPlannerActionHandler> = {
+export const hubPlannerActionHandlers: ProviderActionHandlers<"hub_planner", HubPlannerActionHandler> = {
   list_projects(input, context) {
     return listHubPlannerCollection("project", "projects", input, context);
   },
   get_project(input, context) {
-    return getHubPlannerObject("project", "project", readRequiredString(input.projectId, "projectId"), context);
+    return getHubPlannerObject("project", "project", requiredInputString(input.projectId, "projectId"), context);
   },
   create_project(input, context) {
     return createHubPlannerObject("project", "project", buildProjectBody(input), context);
@@ -37,7 +37,7 @@ export const hubPlannerActionHandlers: Record<string, HubPlannerActionHandler> =
     return listHubPlannerCollection("resource", "resources", input, context);
   },
   get_resource(input, context) {
-    return getHubPlannerObject("resource", "resource", readRequiredString(input.resourceId, "resourceId"), context);
+    return getHubPlannerObject("resource", "resource", requiredInputString(input.resourceId, "resourceId"), context);
   },
   create_resource(input, context) {
     return createHubPlannerObject("resource", "resource", buildResourceBody(input), context);
@@ -149,14 +149,14 @@ function buildListQuery(input: Record<string, unknown>) {
   return compactObject({
     page: typeof input.page === "number" ? input.page : undefined,
     limit: typeof input.limit === "number" ? input.limit : undefined,
-    sort: Array.isArray(input.sort) ? input.sort.map((value) => readRequiredString(value, "sort")) : undefined,
+    sort: Array.isArray(input.sort) ? input.sort.map((value) => requiredInputString(value, "sort")) : undefined,
   });
 }
 
 function buildProjectBody(input: Record<string, unknown>) {
   validateProjectInput(input);
   return compactObject({
-    name: readRequiredString(input.name, "name"),
+    name: requiredInputString(input.name, "name"),
     note: input.note,
     status: input.status,
     projectCode: optionalString(input.projectCode),
@@ -181,7 +181,7 @@ function buildProjectBody(input: Record<string, unknown>) {
 function buildResourceBody(input: Record<string, unknown>) {
   validateResourceInput(input);
   return compactObject({
-    firstName: readRequiredString(input.firstName, "firstName"),
+    firstName: requiredInputString(input.firstName, "firstName"),
     lastName: input.lastName,
     email: input.email,
     note: input.note,
@@ -206,8 +206,7 @@ async function requestHubPlannerJson<T>(input: {
   signal?: AbortSignal;
 }): Promise<T> {
   const url = buildHubPlannerUrl(input.path, input.query);
-  const timeout = createProviderTimeout(input.signal, hubPlannerRequestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: input.signal, label: "Hub Planner" }, async (signal) => {
     const response = await input.fetcher(url, {
       method: input.method,
       headers: {
@@ -216,7 +215,7 @@ async function requestHubPlannerJson<T>(input: {
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },
-      signal: timeout.signal,
+      signal,
       ...(input.body ? { body: JSON.stringify(input.body) } : {}),
     });
     const payload = await readHubPlannerPayload(response, !response.ok);
@@ -232,21 +231,7 @@ async function requestHubPlannerJson<T>(input: {
     }
 
     return payload as T;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Hub Planner request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Hub Planner request failed: ${error.message}` : "Hub Planner request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildHubPlannerUrl(path: string, query: Record<string, HubPlannerQueryValue> = {}) {
@@ -321,10 +306,6 @@ function extractHubPlannerErrorMessage(payload: unknown): string | undefined {
   return undefined;
 }
 
-function readRequiredString(value: unknown, fieldName: string) {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function trimStringArray(value: unknown, fieldName: string): string[] | undefined {
   if (value === undefined) {
     return undefined;
@@ -332,7 +313,7 @@ function trimStringArray(value: unknown, fieldName: string): string[] | undefine
   if (!Array.isArray(value)) {
     throw new ProviderRequestError(400, `${fieldName} must be an array`);
   }
-  return value.map((item) => readRequiredString(item, fieldName));
+  return value.map((item) => requiredInputString(item, fieldName));
 }
 
 function validateProjectInput(input: Record<string, unknown>): void {

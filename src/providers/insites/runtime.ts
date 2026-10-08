@@ -11,7 +11,6 @@ export interface InsitesCredentialCheck {
 }
 
 export const insitesApiBaseUrl = "https://api.insites.com/api/v1";
-const insitesDefaultRequestTimeoutMs = 30_000;
 
 type InsitesRequestPhase = "validate" | "execute";
 
@@ -164,7 +163,7 @@ async function requestInsites(input: {
     init.body = JSON.stringify(input.body);
   }
 
-  const timeout = createProviderTimeout(undefined, insitesDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(undefined);
   init.signal = timeout.signal;
   try {
     const response = await input.fetcher(url, init);
@@ -204,7 +203,7 @@ async function readInsitesPayload(response: Response) {
 function createInsitesError(response: Response, payload: unknown, phase: InsitesRequestPhase) {
   const message = extractInsitesErrorMessage(payload) ?? response.statusText ?? "Insites request failed";
   if (response.status === 401 || response.status === 403) {
-    return new ProviderRequestError(phase === "validate" ? 400 : 409, message);
+    return new ProviderRequestError(phase === "validate" ? 400 : 401, message);
   }
   if (response.status === 429) {
     return new ProviderRequestError(429, message);

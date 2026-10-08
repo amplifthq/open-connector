@@ -1,12 +1,14 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { GrafanaCloudActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
+import { encodePathSegment } from "../../core/request.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
+  requiredResponseRecord,
 } from "../provider-runtime.ts";
 
 export const grafanaCloudApiBaseUrl = "https://grafana.com/api";
@@ -21,10 +23,10 @@ export interface GrafanaCloudContext {
   signal?: AbortSignal;
 }
 
-export const grafanaCloudActionHandlers: Record<GrafanaCloudActionName, GrafanaCloudActionHandler> = {
+export const grafanaCloudActionHandlers: ProviderActionHandlers<"grafana_cloud", GrafanaCloudActionHandler> = {
   async list_regions(_input, context) {
     const payload = await requestGrafanaCloud(context, buildGrafanaCloudUrl("/stack-regions"), "execute");
-    const record = requireRecord(payload, "Grafana Cloud regions response");
+    const record = requiredResponseRecord(payload, "Grafana Cloud regions response");
     return {
       regions: recordArray(record.items).map(normalizeRegion),
       raw: record,
@@ -42,7 +44,7 @@ export const grafanaCloudActionHandlers: Record<GrafanaCloudActionName, GrafanaC
       ),
       "execute",
     );
-    const record = requireRecord(payload, "Grafana Cloud stacks response");
+    const record = requiredResponseRecord(payload, "Grafana Cloud stacks response");
     const metadata = optionalRecord(record.metadata);
     const pagination = optionalRecord(metadata?.pagination);
     const nextPage = optionalString(pagination?.nextPage) ?? null;
@@ -62,7 +64,7 @@ export const grafanaCloudActionHandlers: Record<GrafanaCloudActionName, GrafanaC
       "execute",
     );
     return {
-      connectivity: requireRecord(payload, "Grafana Cloud stack connectivity response"),
+      connectivity: requiredResponseRecord(payload, "Grafana Cloud stack connectivity response"),
     };
   },
   async get_billed_usage(input, context) {
@@ -74,7 +76,7 @@ export const grafanaCloudActionHandlers: Record<GrafanaCloudActionName, GrafanaC
       }),
       "execute",
     );
-    const record = requireRecord(payload, "Grafana Cloud billed usage response");
+    const record = requiredResponseRecord(payload, "Grafana Cloud billed usage response");
     return {
       usage: recordArray(record.items).map(normalizeBilledUsage),
       raw: record,
@@ -95,7 +97,7 @@ export async function validateGrafanaCloudCredential(
     buildGrafanaCloudUrl(`/orgs/${encodePathSegment(orgSlug)}/instances`, { pageSize: 1 }),
     "validate",
   );
-  const record = requireRecord(payload, "Grafana Cloud stacks response");
+  const record = requiredResponseRecord(payload, "Grafana Cloud stacks response");
   const stacks = recordArray(record.items);
   const firstStack = optionalRecord(stacks[0]);
   const firstStackSlug = optionalString(firstStack?.slug);
@@ -137,7 +139,7 @@ async function requestGrafanaCloud(
   url: URL,
   phase: GrafanaCloudRequestPhase,
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, 30_000);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       method: "GET",
@@ -251,14 +253,6 @@ function normalizeBilledUsage(input: Record<string, unknown>): Record<string, un
   };
 }
 
-function requireRecord(value: unknown, label: string): Record<string, unknown> {
-  const record = optionalRecord(value);
-  if (!record) {
-    throw new ProviderRequestError(502, `${label} must be an object`);
-  }
-  return record;
-}
-
 function recordArray(value: unknown): Array<Record<string, unknown>> {
   return Array.isArray(value)
     ? value.flatMap((item) => {
@@ -286,8 +280,4 @@ function requireTrimmedString(value: unknown, fieldName: string): string {
     throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return trimmed;
-}
-
-function encodePathSegment(value: string): string {
-  return encodeURIComponent(value);
 }

@@ -1,7 +1,8 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
-import { optionalInteger, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
+import { looseArray, optionalInteger, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 export const bestbuyApiOrigin = "https://api.bestbuy.com";
@@ -11,7 +12,7 @@ const bestbuyValidationCategoryId = "abcat0010000";
 type BestbuyActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type BestbuyActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
-export const bestbuyActionHandlers: Record<string, BestbuyActionHandler> = {
+export const bestbuyActionHandlers: ProviderActionHandlers<"bestbuy", BestbuyActionHandler> = {
   get_categories(input, context) {
     return getCategories(input, context);
   },
@@ -52,7 +53,7 @@ export async function validateBestbuyCredential(
     { apiKey, fetcher, signal },
     "validate",
   );
-  const categories = readArray(payload.categories);
+  const categories = looseArray(payload.categories);
 
   return {
     profile: {
@@ -430,7 +431,7 @@ function pickFirstCollectionItem(
   collectionKey: string,
   label: string,
 ): Record<string, unknown> {
-  const items = readArray(payload[collectionKey]);
+  const items = looseArray(payload[collectionKey]);
   if (items.length === 0) {
     throw new ProviderRequestError(404, `${label} was not found`);
   }
@@ -512,10 +513,6 @@ async function readJsonObject(response: Response): Promise<Record<string, unknow
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error && error.message ? error.message : "bestbuy request failed";
-}
-
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
 }
 
 function readRequiredNumber(value: unknown, fieldName: string): number {

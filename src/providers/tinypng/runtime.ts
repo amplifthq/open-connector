@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 import type { TinypngActionName } from "./actions.ts";
 
@@ -26,7 +27,7 @@ interface TinypngImageInfo {
   url?: unknown;
 }
 
-export const tinypngActionHandlers: Record<TinypngActionName, TinypngActionHandler> = {
+export const tinypngActionHandlers: ProviderActionHandlers<"tinypng", TinypngActionHandler> = {
   shrink_image(input, context) {
     return shrinkImage(input, context);
   },
@@ -152,9 +153,8 @@ async function outputImage(input: Record<string, unknown>, context: ApiKeyProvid
     imageHeight: readHeaderInteger(response.headers, "Image-Height"),
     image: {
       name,
-      mimetype: mimeType,
+      mimeType,
       downloadUrl: upload.downloadUrl,
-      fileId: upload.fileId,
       sizeBytes: upload.sizeBytes,
     },
   });

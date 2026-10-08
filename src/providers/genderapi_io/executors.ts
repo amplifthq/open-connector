@@ -1,9 +1,14 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { GenderapiIoActionName } from "./actions.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "genderapi_io";
 const genderapiIoApiBaseUrl = "https://api.genderapi.io";
@@ -27,7 +32,7 @@ interface GenderapiIoNormalizedPrediction {
   duration: string;
 }
 
-export const genderapiIoActionHandlers: Record<GenderapiIoActionName, GenderapiIoActionHandler> = {
+export const genderapiIoActionHandlers: ProviderActionHandlers<"genderapi_io", GenderapiIoActionHandler> = {
   async get_gender_by_first_name(input, context) {
     const payload = await requestGenderapiIo(
       "/api",
@@ -75,6 +80,16 @@ export const genderapiIoActionHandlers: Record<GenderapiIoActionName, GenderapiI
     return normalizeGenderapiIoPrediction(payload, "get_gender_by_username");
   },
 };
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: genderapiIoApiBaseUrl,
+  auth: { type: "api_key_query", name: "key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, genderapiIoActionHandlers);
 

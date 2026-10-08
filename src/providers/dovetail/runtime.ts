@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { DovetailActionName } from "./actions.ts";
 
 import { compactObject } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
@@ -12,7 +12,7 @@ type DovetailActionHandler = (input: Record<string, unknown>, context: ApiKeyPro
 
 type DovetailQueryValue = string | number | boolean | undefined;
 
-export const dovetailActionHandlers: Record<DovetailActionName, DovetailActionHandler> = {
+export const dovetailActionHandlers: ProviderActionHandlers<"dovetail", DovetailActionHandler> = {
   get_token_info(input, context) {
     return getTokenInfo(input, context);
   },
@@ -280,7 +280,7 @@ function buildDovetailError(status: number, payload: unknown, phase: DovetailReq
   }
 
   if (status === 401) {
-    return new ProviderRequestError(phase === "validate" ? 400 : 409, message);
+    return new ProviderRequestError(phase === "validate" ? 400 : 401, message);
   }
 
   if (status === 403) {

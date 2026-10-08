@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { KommoActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -11,17 +11,16 @@ import {
   optionalString,
 } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
   ProviderRequestError,
   providerUserAgent,
+  requiredResponseRecord,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 const kommoCredentialHelpUrl = "https://developers.kommo.com/docs/long-lived-token";
 const kommoPrivateIntegrationHelpUrl = "https://developers.kommo.com/docs/private-integration";
 const kommoHostSuffix = ".kommo.com";
 const kommoValidationEndpoint = "/api/v4/account";
-const kommoDefaultRequestTimeoutMs = 30_000;
 
 type KommoPhase = "validate" | "execute";
 type KommoCollection = "leads" | "contacts" | "companies" | "tasks" | "users" | "pipelines";
@@ -46,7 +45,7 @@ export interface KommoActionContext {
   signal?: AbortSignal;
 }
 
-export const kommoActionHandlers: Record<KommoActionName, KommoActionHandler> = {
+export const kommoActionHandlers: ProviderActionHandlers<"kommo", KommoActionHandler> = {
   async get_account(input, context) {
     const raw = await requestKommoJson({
       apiBaseUrl: context.apiBaseUrl,
@@ -60,7 +59,7 @@ export const kommoActionHandlers: Record<KommoActionName, KommoActionHandler> = 
 
     return {
       account: normalizeAccount(raw),
-      raw: requireRecord(raw, "Kommo account response"),
+      raw: requiredResponseRecord(raw, "Kommo account response"),
     };
   },
   list_leads(input, context) {
@@ -197,7 +196,7 @@ export async function validateKommoCredential(
     signal,
     phase: "validate",
   });
-  const account = requireRecord(payload, "Kommo account response");
+  const account = requiredResponseRecord(payload, "Kommo account response");
   const accountId = optionalInteger(account.id);
   const currentUserId = optionalInteger(account.current_user_id);
   const accountName = optionalString(account.name);
@@ -253,7 +252,7 @@ async function listRecords<TRecord extends Record<string, unknown>>(input: {
     signal: input.context.signal,
     phase: "execute",
   });
-  const response = requireRecord(raw, `Kommo ${input.collection} response`);
+  const response = requiredResponseRecord(raw, `Kommo ${input.collection} response`);
   const records = readHalCollection(response, input.collection).map(input.normalizer);
 
   return {
@@ -283,7 +282,7 @@ async function getRecord<TRecord extends Record<string, unknown>>(input: {
     signal: input.context.signal,
     phase: "execute",
   });
-  const record = requireRecord(raw, `Kommo ${input.entity} response`);
+  const record = requiredResponseRecord(raw, `Kommo ${input.entity} response`);
   return {
     [input.entity]: input.normalizer(record),
     raw: record,
@@ -291,34 +290,18 @@ async function getRecord<TRecord extends Record<string, unknown>>(input: {
 }
 
 async function requestKommoJson(input: KommoRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, kommoDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.signal, label: "Kommo" }, async (signal) => {
     const response = await input.fetcher(buildKommoUrl(input.apiBaseUrl, input.path, input.query), {
       method: "GET",
       headers: buildKommoHeaders(input.apiKey),
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readKommoPayload(response);
     if (!response.ok) {
       throw createKommoError(response.status, payload, input.phase);
     }
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Kommo request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Kommo request failed: ${error.message}` : "Kommo request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildKommoUrl(apiBaseUrl: string, path: string, query: Record<string, QueryValue | undefined> = {}): URL {
@@ -533,11 +516,11 @@ function readHalCollection(payload: Record<string, unknown>, collection: KommoCo
   if (!Array.isArray(items)) {
     throw new ProviderRequestError(502, `Kommo ${collection} response must be an array`);
   }
-  return items.map((item, index) => requireRecord(item, `Kommo ${collection} item ${index + 1}`));
+  return items.map((item, index) => requiredResponseRecord(item, `Kommo ${collection} item ${index + 1}`));
 }
 
 function normalizeAccount(value: unknown): Record<string, unknown> {
-  const record = requireRecord(value, "Kommo account response");
+  const record = requiredResponseRecord(value, "Kommo account response");
   return compactObject({
     id: asNullableInteger(record.id),
     name: nullableString(record.name),
@@ -654,14 +637,6 @@ function readPipelineStatuses(record: Record<string, unknown>): Record<string, u
     return undefined;
   }
   return Array.isArray(statuses) ? statuses.filter(isRecord) : undefined;
-}
-
-function requireRecord(value: unknown, label: string): Record<string, unknown> {
-  const record = optionalRecord(value);
-  if (!record) {
-    throw new ProviderRequestError(502, `${label} must be an object`);
-  }
-  return record;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -5,15 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "bugsnag";
 
-export type BugsnagActionName =
-  | "list_organizations"
-  | "get_organization"
-  | "list_organization_projects"
-  | "list_project_errors"
-  | "list_error_events"
-  | "get_latest_error_event"
-  | "list_project_releases";
-
 const paginationSchema = s.object(
   "Pagination metadata normalized from Bugsnag response headers.",
   {
@@ -100,6 +91,7 @@ const perPageSchema = (description: string, maximum?: number) =>
 export const bugsnagActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_organizations",
+    operationType: "read",
     description: "List the organizations accessible to the current Bugsnag user.",
     inputSchema: s.object(
       "The input payload for listing organizations accessible to the current user.",
@@ -124,6 +116,7 @@ export const bugsnagActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_organization",
+    operationType: "read",
     description: "Get a Bugsnag organization by organization ID.",
     inputSchema: s.object(
       "The input payload for retrieving a Bugsnag organization.",
@@ -146,6 +139,7 @@ export const bugsnagActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_organization_projects",
+    operationType: "read",
     description: "List the projects that belong to a Bugsnag organization.",
     inputSchema: s.object(
       "The input payload for listing Bugsnag organization projects.",
@@ -177,6 +171,7 @@ export const bugsnagActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_project_errors",
+    operationType: "read",
     description: "List the errors reported on a Bugsnag project.",
     inputSchema: s.object(
       "The input payload for listing Bugsnag project errors.",
@@ -208,6 +203,7 @@ export const bugsnagActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_error_events",
+    operationType: "read",
     description: "List the events recorded on a Bugsnag error.",
     inputSchema: s.object(
       "The input payload for listing events on a Bugsnag error.",
@@ -237,6 +233,7 @@ export const bugsnagActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_latest_error_event",
+    operationType: "read",
     description: "Get the latest event recorded on a Bugsnag error.",
     inputSchema: s.object(
       "The input payload for retrieving the latest event on a Bugsnag error.",
@@ -259,6 +256,7 @@ export const bugsnagActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_project_releases",
+    operationType: "read",
     description: "List the releases associated with a Bugsnag project.",
     inputSchema: s.object(
       "The input payload for listing Bugsnag project releases.",

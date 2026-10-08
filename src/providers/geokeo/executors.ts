@@ -1,9 +1,9 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { GeokeoActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError } from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors, defineProviderProxy, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "geokeo";
 const geokeoApiBaseUrl = "https://geokeo.com";
@@ -12,7 +12,7 @@ const geokeoValidationQuery = "ZZQXV NO MATCH PLACE 19700101";
 type GeokeoActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type GeokeoActionHandler = (input: Record<string, unknown>, context: GeokeoActionContext) => Promise<unknown>;
 
-export const geokeoActionHandlers: Record<GeokeoActionName, GeokeoActionHandler> = {
+export const geokeoActionHandlers: ProviderActionHandlers<"geokeo", GeokeoActionHandler> = {
   geocode_forward(input, context) {
     return geokeoRequest(
       "/geocode/v1/search.php",
@@ -37,6 +37,13 @@ export const geokeoActionHandlers: Record<GeokeoActionName, GeokeoActionHandler>
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, geokeoActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: geokeoApiBaseUrl,
+  auth: { type: "api_key_query", name: "api" },
+  skipDnsValidation: true,
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

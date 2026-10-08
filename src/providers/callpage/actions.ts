@@ -193,18 +193,10 @@ const createWidgetCallInputSchema: JsonSchema = {
   },
 };
 
-export type CallpageActionName =
-  | "list_calls"
-  | "get_call"
-  | "list_users"
-  | "get_user"
-  | "list_widgets"
-  | "get_widget"
-  | "create_widget_call";
-
 export const callpageActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_calls",
+    operationType: "read",
     description:
       "List CallPage calls with optional filters such as widget, user, status, phone number, and time range.",
     requiredScopes: callsViewScopes,
@@ -220,6 +212,7 @@ export const callpageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_call",
+    operationType: "read",
     description: "Get one CallPage call by identifier.",
     requiredScopes: callsViewScopes,
     inputSchema: s.object("Input parameters for reading a single CallPage call.", {
@@ -231,6 +224,7 @@ export const callpageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List CallPage users with pagination.",
     requiredScopes: noScopes,
     inputSchema: s.object(
@@ -252,6 +246,7 @@ export const callpageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Get one CallPage user by identifier or email address.",
     requiredScopes: noScopes,
     inputSchema: getUserInputSchema,
@@ -261,6 +256,7 @@ export const callpageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_widgets",
+    operationType: "read",
     description: "List CallPage widgets with pagination.",
     requiredScopes: widgetsViewScopes,
     inputSchema: s.object(
@@ -282,6 +278,7 @@ export const callpageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_widget",
+    operationType: "read",
     description: "Get one CallPage widget by identifier.",
     requiredScopes: widgetsViewScopes,
     inputSchema: s.object("Input parameters for reading a single CallPage widget.", {
@@ -293,6 +290,7 @@ export const callpageActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_widget_call",
+    operationType: "write",
     description: "Create a CallPage callback request for one widget and phone number.",
     requiredScopes: widgetsCallScopes,
     inputSchema: createWidgetCallInputSchema,

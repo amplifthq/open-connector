@@ -5,19 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "clerk";
 
-export type ClerkActionName =
-  | "list_users"
-  | "count_users"
-  | "get_user"
-  | "create_user"
-  | "update_user"
-  | "update_user_metadata"
-  | "delete_user"
-  | "ban_user"
-  | "unban_user"
-  | "lock_user"
-  | "unlock_user";
-
 const clerkUserIdSchema = s.nonEmptyString("The Clerk user ID.");
 const clerkEmailSchema = s.email("An email address attached to the Clerk user.");
 const clerkPhoneNumberSchema = s.nonEmptyString("A phone number attached to the Clerk user.");
@@ -278,6 +265,7 @@ const userOutputSchema = s.actionOutput({ user: clerkUserSchema }, "Output retur
 export const clerkActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List Clerk users with optional filtering and pagination.",
     inputSchema: s.object(
       "Input for listing Clerk users.",
@@ -311,6 +299,7 @@ export const clerkActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "count_users",
+    operationType: "read",
     description: "Count Clerk users with optional filters.",
     inputSchema: s.object("Input for counting Clerk users.", userFilterFields, {
       optional: ["email_address", "phone_number", "username", "user_id", "external_id", "query"],
@@ -322,24 +311,28 @@ export const clerkActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Retrieve a Clerk user by ID.",
     inputSchema: userIdInputSchema,
     outputSchema: userOutputSchema,
   }),
   defineProviderAction(service, {
     name: "create_user",
+    operationType: "write",
     description: "Create a Clerk user.",
     inputSchema: createUserInputSchema,
     outputSchema: userOutputSchema,
   }),
   defineProviderAction(service, {
     name: "update_user",
+    operationType: "write",
     description: "Update a Clerk user.",
     inputSchema: updateUserInputSchema,
     outputSchema: userOutputSchema,
   }),
   defineProviderAction(service, {
     name: "update_user_metadata",
+    operationType: "write",
     description: "Deep merge metadata for a Clerk user.",
     inputSchema: s.object(
       "Input for updating Clerk user metadata.",
@@ -355,6 +348,7 @@ export const clerkActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_user",
+    operationType: "destructive",
     description: "Delete a Clerk user.",
     inputSchema: userIdInputSchema,
     outputSchema: s.actionOutput(
@@ -364,24 +358,28 @@ export const clerkActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "ban_user",
+    operationType: "destructive",
     description: "Ban a Clerk user.",
     inputSchema: userIdInputSchema,
     outputSchema: userOutputSchema,
   }),
   defineProviderAction(service, {
     name: "unban_user",
+    operationType: "write",
     description: "Unban a Clerk user.",
     inputSchema: userIdInputSchema,
     outputSchema: userOutputSchema,
   }),
   defineProviderAction(service, {
     name: "lock_user",
+    operationType: "write",
     description: "Lock a Clerk user.",
     inputSchema: userIdInputSchema,
     outputSchema: userOutputSchema,
   }),
   defineProviderAction(service, {
     name: "unlock_user",
+    operationType: "write",
     description: "Unlock a Clerk user.",
     inputSchema: userIdInputSchema,
     outputSchema: userOutputSchema,

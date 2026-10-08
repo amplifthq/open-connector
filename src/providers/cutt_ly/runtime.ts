@@ -1,11 +1,11 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { CuttLyActionName } from "./actions.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const cuttlyApiBaseUrl = "https://cutt.ly";
+export const cuttlyApiBaseUrl = "https://cutt.ly";
 const cuttlyApiPath = "/api/api.php";
 const cuttlyValidationProbeUrl = "not-a-valid-url";
 
@@ -13,7 +13,7 @@ type CuttlyMode = "validate" | "execute";
 type CuttlyQueryValue = string | number | undefined;
 type CuttlyActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const cuttLyActionHandlers: Record<CuttLyActionName, CuttlyActionHandler> = {
+export const cuttLyActionHandlers: ProviderActionHandlers<"cutt_ly", CuttlyActionHandler> = {
   shorten_url(input, context) {
     return shortenUrl(input, context);
   },

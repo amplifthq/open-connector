@@ -1,10 +1,21 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ClerkActionName } from "./actions.ts";
 
-import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { compactJson } from "../../core/request.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  ProviderRequestError,
+  providerUserAgent,
+  requiredInputString,
+} from "../provider-runtime.ts";
 
 const service = "clerk";
 const clerkApiBaseUrl = "https://api.clerk.com/v1";
@@ -12,7 +23,7 @@ const clerkApiBaseUrl = "https://api.clerk.com/v1";
 type ClerkRequestPhase = "validate" | "execute";
 type ClerkActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const clerkActionHandlers: Record<ClerkActionName, ClerkActionHandler> = {
+export const clerkActionHandlers: ProviderActionHandlers<"clerk", ClerkActionHandler> = {
   async list_users(input, context) {
     const payload = await requestClerk({
       path: "/users",
@@ -102,6 +113,16 @@ export const clerkActionHandlers: Record<ClerkActionName, ClerkActionHandler> = 
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, clerkActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: clerkApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   apiKey(input, { fetcher, signal }) {
@@ -287,8 +308,4 @@ function extractClerkErrorMessage(payload: unknown): string | undefined {
     );
   }
   return optionalString(record.message) ?? optionalString(record.error);
-}
-
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }

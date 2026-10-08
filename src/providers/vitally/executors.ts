@@ -1,11 +1,17 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { VitallyActionName } from "./actions.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -14,7 +20,6 @@ import {
 
 const service = "vitally";
 const vitallyEuBaseUrl = "https://rest.vitally-eu.io";
-const vitallyRequestTimeoutMs = 30_000;
 
 type VitallyRegion = "us" | "eu";
 type VitallyRequestPhase = "validate" | "execute";
@@ -36,7 +41,7 @@ interface VitallyRequestOptions extends VitallyActionContext {
   searchParams?: URLSearchParams;
 }
 
-export const vitallyActionHandlers: Record<VitallyActionName, VitallyActionHandler> = {
+export const vitallyActionHandlers: ProviderActionHandlers<"vitally", VitallyActionHandler> = {
   list_accounts(input, context) {
     return listAccounts(input, context);
   },
@@ -67,6 +72,24 @@ export const executors: ProviderExecutors = defineProviderExecutors<VitallyActio
       fetcher,
       signal: context.signal,
     };
+  },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  async baseUrl(context) {
+    const credential = await requireApiKeyCredential(context, service);
+    const baseUrl = optionalString(credential.metadata.baseUrl);
+    if (!baseUrl) {
+      throw new ProviderRequestError(500, "vitally connection is missing baseUrl metadata");
+    }
+    return baseUrl;
+  },
+  auth: { type: "api_key_basic", suffix: ":" },
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) {
+      headers.set("accept", "application/json");
+    }
   },
 });
 
@@ -189,7 +212,7 @@ async function deleteAccount(input: Record<string, unknown>, context: VitallyAct
 }
 
 async function requestVitally(input: VitallyRequestOptions): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, vitallyRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const url = new URL(input.path, input.baseUrl);
     if (input.searchParams) {

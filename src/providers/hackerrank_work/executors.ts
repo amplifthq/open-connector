@@ -1,9 +1,16 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { HackerrankWorkActionName } from "./actions.ts";
 
-import { optionalIntegerLike, optionalRecord, requiredString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { optionalIntegerLike, optionalRawString, optionalRecord, requiredString } from "../../core/cast.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  isAbortLikeError,
+  providerInputError,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "hackerrank_work";
 const hackerrankWorkApiBaseUrl = "https://www.hackerrank.com/x/api/v3";
@@ -16,7 +23,7 @@ type HackerrankWorkActionHandler = (
   context: HackerrankWorkActionContext,
 ) => Promise<unknown>;
 
-export const hackerrankWorkActionHandlers: Record<HackerrankWorkActionName, HackerrankWorkActionHandler> = {
+export const hackerrankWorkActionHandlers: ProviderActionHandlers<"hackerrank_work", HackerrankWorkActionHandler> = {
   async list_tests(input, context) {
     const payload = await requestHackerrankWorkJson(
       "/tests",
@@ -101,6 +108,16 @@ export const hackerrankWorkActionHandlers: Record<HackerrankWorkActionName, Hack
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, hackerrankWorkActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: hackerrankWorkApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -231,7 +248,7 @@ function readHackerrankWorkErrorMessage(payload: unknown): string | undefined {
   if (!record) {
     return undefined;
   }
-  const directMessage = readString(record.message) ?? readString(record.error);
+  const directMessage = optionalRawString(record.message) ?? optionalRawString(record.error);
   if (directMessage) {
     return directMessage;
   }
@@ -244,7 +261,7 @@ function readHackerrankWorkErrorMessage(payload: unknown): string | undefined {
     }
     const errorRecord = optionalRecord(firstError);
     if (errorRecord) {
-      return readString(errorRecord.message) ?? readString(errorRecord.error);
+      return optionalRawString(errorRecord.message) ?? optionalRawString(errorRecord.error);
     }
   }
 
@@ -263,11 +280,13 @@ function readPagination(payload: Record<string, unknown>): Record<string, unknow
   return {
     page_total: readIntegerLike(payload.page_total),
     offset: readIntegerLike(payload.offset),
-    previous: readString(payload.previous) ?? "",
-    next: readString(payload.next) ?? "",
-    first: readString(payload.first) ?? "",
-    last: readString(payload.last) ?? "",
-    total: readString(payload.total) ?? String(numericTotal ?? (Array.isArray(payload.data) ? payload.data.length : 0)),
+    previous: optionalRawString(payload.previous) ?? "",
+    next: optionalRawString(payload.next) ?? "",
+    first: optionalRawString(payload.first) ?? "",
+    last: optionalRawString(payload.last) ?? "",
+    total:
+      optionalRawString(payload.total) ??
+      String(numericTotal ?? (Array.isArray(payload.data) ? payload.data.length : 0)),
   };
 }
 
@@ -290,21 +309,4 @@ function readIntegerLike(value: unknown): number {
     throw new ProviderRequestError(502, "hackerrank_work returned an invalid integer");
   }
   return parsed;
-}
-
-function readString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === "object" &&
-    "name" in error &&
-    String((error as { name?: unknown }).name) === "AbortError"
-  );
 }

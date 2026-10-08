@@ -4,13 +4,22 @@ import type {
   ExecutionContext,
   ProviderExecutors,
   ProviderProxyExecutor,
+  TransitFileWriter,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { createHash, createHmac } from "node:crypto";
-import { isIP } from "node:net";
-import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
+import {
+  canonicalizeSearchParams,
+  createAwsSigV4PresignedUrl,
+  encodeS3ObjectKey,
+  sha256Hex,
+  signAwsSigV4Request,
+} from "../../core/aws-sigv4.ts";
+import { compactObject, optionalRecord, optionalString, requiredRawString } from "../../core/cast.ts";
+import { assertPublicHttpUrl, readBoundedResponseBytes } from "../../core/request.ts";
 import {
   createProviderProxyUrl,
+  createProviderTimeout,
   defineProviderExecutors,
   normalizeProviderProxyHeaders,
   providerFetch,
@@ -24,6 +33,7 @@ type AwsActionContext = {
   values: Record<string, string>;
   metadata: Record<string, unknown>;
   fetcher: typeof fetch;
+  transitFiles?: TransitFileWriter;
   signal?: AbortSignal;
 };
 
@@ -44,6 +54,7 @@ type AwsS3RequestInput = {
   query?: Record<string, string | number | boolean | undefined>;
   headers?: Record<string, string | undefined>;
   body?: string | Buffer;
+  signal?: AbortSignal;
 };
 
 type AwsOwner = {
@@ -82,10 +93,9 @@ class AwsS3HttpError extends Error {
 
 const sourceFetchTimeoutMs = 15_000;
 const maxSourceBytes = 20 * 1024 * 1024;
-const awsServiceName = "s3";
 const service = "aws_s3";
 
-export const awsActionHandlers: Record<string, AwsActionHandler> = {
+export const awsActionHandlers: ProviderActionHandlers<"aws_s3", AwsActionHandler> = {
   list_buckets(input, context) {
     return awsListBuckets(input, context);
   },
@@ -94,6 +104,9 @@ export const awsActionHandlers: Record<string, AwsActionHandler> = {
   },
   head_object(input, context) {
     return awsHeadObject(input, context);
+  },
+  download_object(input, context) {
+    return awsDownloadObject(input, context);
   },
   put_object(input, context) {
     return awsPutObject(input, context);
@@ -118,6 +131,7 @@ export const executors: ProviderExecutors = defineProviderExecutors<AwsActionCon
       values: credential.values,
       metadata: credential.metadata,
       fetcher,
+      transitFiles: context.transitFiles,
       signal: context.signal,
     };
   },
@@ -153,29 +167,25 @@ export const proxy: ProviderProxyExecutor = async (input, context) => {
     if (input.body !== undefined && !headers.has("content-type") && typeof input.body !== "string") {
       headers.set("content-type", "application/json");
     }
-    headers.set("host", url.host);
     headers.set("x-amz-content-sha256", payloadHash);
 
-    const signedRequest = signAwsRequest(
-      createAwsS3Client({
+    const signedHeaders = signAwsSigV4Request({
+      credential: {
         accessKeyId: requireAwsField(credential.values.accessKeyId, "accessKeyId"),
         secretAccessKey: requireAwsField(credential.values.secretAccessKey, "secretAccessKey"),
         sessionToken: optionalString(credential.values.sessionToken)?.trim(),
-        region,
-        fetcher: providerFetch,
-      }),
-      {
-        method,
-        url,
-        headers: Object.fromEntries(headers.entries()),
-        payloadHash,
       },
-    );
-    signedRequest.headers.set("user-agent", providerUserAgent);
+      method,
+      url,
+      region,
+      headers,
+      payloadHash,
+    });
+    signedHeaders.set("user-agent", providerUserAgent);
 
     const response = await providerFetch(url.toString(), {
       method,
-      headers: signedRequest.headers,
+      headers: signedHeaders,
       ...(body === undefined ? {} : { body }),
       signal: context.signal,
     });
@@ -267,6 +277,7 @@ async function awsListBuckets(input: Record<string, unknown>, context: AwsAction
       "continuation-token": optionalString(input.marker),
       "max-buckets": asOptionalPositiveInteger(input.maxKeys),
     }),
+    signal: context.signal,
   });
   const xml = await response.text();
   const parsed = parseListBucketsXml(xml);
@@ -294,6 +305,7 @@ async function awsListObjects(input: Record<string, unknown>, context: AwsAction
       "fetch-owner": input.fetchOwner === true ? "true" : undefined,
       "max-keys": asOptionalPositiveInteger(input.maxKeys),
     }),
+    signal: context.signal,
   });
   const xml = await response.text();
   const parsed = parseListObjectsXml(xml, { bucket, region });
@@ -311,6 +323,7 @@ async function awsHeadObject(input: Record<string, unknown>, context: AwsActionC
     query: compactObject({
       versionId: optionalString(input.versionId),
     }),
+    signal: context.signal,
   });
   const headers = normalizeHeaderRecord(response.headers);
 
@@ -333,12 +346,51 @@ async function awsHeadObject(input: Record<string, unknown>, context: AwsActionC
   };
 }
 
+async function awsDownloadObject(input: Record<string, unknown>, context: AwsActionContext) {
+  try {
+    if (!context.transitFiles) {
+      throw new ProviderRequestError(400, "aws_s3 download_object requires local transit file storage");
+    }
+
+    const bucket = resolveBucket(input, context);
+    const objectKey = readObjectKey(input);
+    const response = await awsS3Request(createClientForAction(input, context), {
+      method: "GET",
+      bucket,
+      objectKey,
+      query: compactObject({
+        versionId: optionalString(input.versionId),
+      }),
+      signal: context.signal,
+    });
+
+    const name = optionalString(input.fileName) ?? defaultObjectFileName(objectKey);
+    const mimeType = optionalString(response.headers.get("content-type")) ?? "application/octet-stream";
+    const bytes = await readBoundedResponseBytes(response, {
+      maxBytes: context.transitFiles.maxBytes,
+      fieldName: "AWS S3 download",
+      createError: (message) => new ProviderRequestError(413, message),
+    });
+    const file = await context.transitFiles.create(new File([Uint8Array.from(bytes)], name, { type: mimeType }));
+
+    return {
+      objectKey,
+      name,
+      mimeType,
+      sizeBytes: file.sizeBytes,
+      file,
+    };
+  } catch (error) {
+    throw normalizeAwsError(error, "execute");
+  }
+}
+
 async function awsPutObject(input: Record<string, unknown>, context: AwsActionContext) {
   const bucket = resolveBucket(input, context);
   const region = resolveRegion(input, context);
   const objectKey = requireAwsField(input.objectKey, "objectKey");
   const sourceUrl = optionalString(input.sourceUrl);
-  const sourceFile = sourceUrl ? await downloadSourceFile(sourceUrl, context.fetcher) : null;
+  const sourceFile = sourceUrl ? await downloadSourceFile(sourceUrl, context.signal) : null;
   const resolvedContentType = optionalString(input.contentType) ?? sourceFile?.contentType;
   const body = sourceUrl
     ? sourceFile!.bytes
@@ -356,6 +408,7 @@ async function awsPutObject(input: Record<string, unknown>, context: AwsActionCo
       "content-disposition": optionalString(input.contentDisposition),
       ...buildAwsMetadataHeaders(optionalRecord(input.metadata)),
     },
+    signal: context.signal,
   });
   const headers = normalizeHeaderRecord(response.headers);
 
@@ -377,6 +430,7 @@ async function awsDeleteObject(input: Record<string, unknown>, context: AwsActio
     query: compactObject({
       versionId: optionalString(input.versionId),
     }),
+    signal: context.signal,
   });
 
   return {
@@ -398,10 +452,11 @@ async function awsGeneratePresignedUrl(input: Record<string, unknown>, context: 
     objectKey,
     method,
     expiresSeconds,
-    url: awsPresignUrl(client, {
-      bucket,
-      objectKey,
+    url: createAwsSigV4PresignedUrl({
+      credential: client,
       method,
+      url: buildRequestTarget({ region: client.region, bucket, objectKey }).url,
+      region: client.region,
       expiresSeconds,
       headers: compactObject({
         "content-type": optionalString(input.contentType),
@@ -422,7 +477,7 @@ function normalizeAwsS3ProxyMethod(method: string): "GET" | "PUT" | "HEAD" | "DE
 }
 
 function buildAwsS3ProxyBaseUrl(region: string, bucket: string | undefined): string {
-  return bucket ? `https://${bucket}.s3.${region}.amazonaws.com` : `https://s3.${region}.amazonaws.com`;
+  return createAwsS3BaseUrl(region, bucket).origin;
 }
 
 function normalizeAwsS3ProxyBody(body: unknown): string | undefined {
@@ -472,20 +527,22 @@ async function awsS3Request(client: AwsS3ClientConfig, input: AwsS3RequestInput)
   const body = normalizeRequestBody(input.body);
   const payloadHash =
     method === "PUT" ? sha256Hex(body ?? Buffer.alloc(0)) : body == null ? "UNSIGNED-PAYLOAD" : sha256Hex(body);
-  const signedRequest = signAwsRequest(client, {
+  const signedHeaders = signAwsSigV4Request({
+    credential: client,
     method,
     url: target.url,
+    region: client.region,
     headers: compactObject({
       ...input.headers,
-      host: target.url.host,
       "x-amz-content-sha256": payloadHash,
     }),
     payloadHash,
   });
   const response = await client.fetcher(target.url.toString(), {
     method,
-    headers: signedRequest.headers,
+    headers: signedHeaders,
     ...(body == null ? {} : { body }),
+    signal: input.signal,
   });
 
   if (!response.ok) {
@@ -495,111 +552,14 @@ async function awsS3Request(client: AwsS3ClientConfig, input: AwsS3RequestInput)
   return response;
 }
 
-function awsPresignUrl(
-  client: AwsS3ClientConfig,
-  input: {
-    bucket: string;
-    objectKey: string;
-    method: "GET" | "PUT" | "DELETE";
-    expiresSeconds: number;
-    headers?: Record<string, string | undefined>;
-  },
-) {
-  const now = new Date();
-  const amzDate = formatAmzDate(now);
-  const dateStamp = amzDate.slice(0, 8);
-  const credentialScope = `${dateStamp}/${client.region}/${awsServiceName}/aws4_request`;
-  const target = buildRequestTarget({
-    region: client.region,
-    bucket: input.bucket,
-    objectKey: input.objectKey,
-  });
-  const headers = new Headers();
-  for (const [key, value] of Object.entries(input.headers ?? {})) {
-    if (!value) {
-      continue;
-    }
-    headers.set(key, value);
-  }
-  headers.set("host", target.url.host);
-  const canonicalHeaders = buildCanonicalHeaders(headers);
-  const signedHeaders = Object.keys(canonicalHeaders).join(";");
-  const query = new URLSearchParams();
-  query.set("X-Amz-Algorithm", "AWS4-HMAC-SHA256");
-  query.set("X-Amz-Credential", `${client.accessKeyId}/${credentialScope}`);
-  query.set("X-Amz-Date", amzDate);
-  query.set("X-Amz-Expires", String(input.expiresSeconds));
-  query.set("X-Amz-SignedHeaders", signedHeaders);
-  if (client.sessionToken) {
-    query.set("X-Amz-Security-Token", client.sessionToken);
-  }
-  target.url.search = canonicalizeSearchParams(query);
-  const canonicalRequest = [
-    input.method,
-    target.url.pathname,
-    target.url.search.slice(1),
-    formatCanonicalHeaders(canonicalHeaders),
-    signedHeaders,
-    "UNSIGNED-PAYLOAD",
-  ].join("\n");
-  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, credentialScope, sha256Hex(canonicalRequest)].join("\n");
-  const signature = hmacHex(
-    getSigningKey(client.secretAccessKey, dateStamp, client.region, awsServiceName),
-    stringToSign,
-  );
-  target.url.searchParams.set("X-Amz-Signature", signature);
-  return target.url.toString();
-}
-
-function signAwsRequest(
-  client: AwsS3ClientConfig,
-  input: {
-    method: "GET" | "PUT" | "HEAD" | "DELETE";
-    url: URL;
-    headers: Record<string, string>;
-    payloadHash: string;
-  },
-) {
-  const now = new Date();
-  const amzDate = formatAmzDate(now);
-  const dateStamp = amzDate.slice(0, 8);
-  const credentialScope = `${dateStamp}/${client.region}/${awsServiceName}/aws4_request`;
-  const headers = new Headers(input.headers);
-  headers.set("x-amz-date", amzDate);
-  if (client.sessionToken) {
-    headers.set("x-amz-security-token", client.sessionToken);
-  }
-  const canonicalHeaders = buildCanonicalHeaders(headers);
-  const signedHeaders = Object.keys(canonicalHeaders).join(";");
-  const canonicalRequest = [
-    input.method,
-    input.url.pathname,
-    input.url.search.slice(1),
-    formatCanonicalHeaders(canonicalHeaders),
-    signedHeaders,
-    input.payloadHash,
-  ].join("\n");
-  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, credentialScope, sha256Hex(canonicalRequest)].join("\n");
-  const authorization = [
-    `AWS4-HMAC-SHA256 Credential=${client.accessKeyId}/${credentialScope}`,
-    `SignedHeaders=${signedHeaders}`,
-    `Signature=${hmacHex(getSigningKey(client.secretAccessKey, dateStamp, client.region, awsServiceName), stringToSign)}`,
-  ].join(", ");
-  headers.set("authorization", authorization);
-  return {
-    headers,
-  };
-}
-
 function buildRequestTarget(input: {
   region: string;
   bucket?: string;
   objectKey?: string;
   query?: Record<string, string | number | boolean | undefined>;
 }) {
-  const host = input.bucket ? `${input.bucket}.s3.${input.region}.amazonaws.com` : `s3.${input.region}.amazonaws.com`;
-  const url = new URL(`https://${host}`);
-  url.pathname = input.objectKey ? `/${encodeS3Key(input.objectKey)}` : "/";
+  const url = createAwsS3BaseUrl(input.region, input.bucket);
+  url.pathname = input.objectKey ? `/${encodeS3ObjectKey(input.objectKey)}` : "/";
   for (const [key, value] of Object.entries(input.query ?? {})) {
     if (value == null) {
       continue;
@@ -612,6 +572,27 @@ function buildRequestTarget(input: {
   };
 }
 
+function createAwsS3BaseUrl(region: string, bucket: string | undefined): URL {
+  const expectedHost = bucket ? `${bucket}.s3.${region}.amazonaws.com` : `s3.${region}.amazonaws.com`;
+  let url: URL;
+  try {
+    url = new URL(`https://${expectedHost}`);
+  } catch {
+    throw new ProviderRequestError(400, "bucket and region must form a valid AWS S3 endpoint");
+  }
+  if (
+    url.host !== expectedHost.toLowerCase() ||
+    url.username ||
+    url.password ||
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash
+  ) {
+    throw new ProviderRequestError(400, "bucket and region must form a valid AWS S3 endpoint");
+  }
+  return url;
+}
+
 function buildObjectUrl(region: string, bucket: string, objectKey: string) {
   return buildRequestTarget({
     region,
@@ -620,49 +601,23 @@ function buildObjectUrl(region: string, bucket: string, objectKey: string) {
   }).url.toString();
 }
 
-function buildCanonicalHeaders(headers: Headers) {
-  const entries = Array.from(headers.entries()).map(([key, value]) => ({
-    key: key.toLowerCase(),
-    value: collapseHeaderWhitespace(value),
-  }));
-  entries.sort((left, right) => left.key.localeCompare(right.key));
-  return Object.fromEntries(entries.map((entry) => [entry.key, entry.value]));
+function readObjectKey(input: Record<string, unknown>): string {
+  const objectKey = requiredRawString(
+    input.objectKey,
+    "objectKey",
+    (message) => new ProviderRequestError(400, message),
+  );
+  if (objectKey.length === 0) {
+    throw new ProviderRequestError(400, "objectKey must not be empty");
+  }
+  if (objectKey.split("/").some((segment) => segment === "." || segment === "..")) {
+    throw new ProviderRequestError(400, "objectKey must not contain . or .. path segments");
+  }
+  return objectKey;
 }
 
-function formatCanonicalHeaders(headers: Record<string, string>) {
-  return `${Object.entries(headers)
-    .map(([key, value]) => `${key}:${value}`)
-    .join("\n")}\n`;
-}
-
-function canonicalizeSearchParams(searchParams: URLSearchParams) {
-  const entries = Array.from(searchParams.entries()).map(([key, value]) => ({
-    key: encodeRfc3986(key),
-    value: encodeRfc3986(value),
-  }));
-  entries.sort((left, right) => {
-    if (left.key === right.key) {
-      return left.value.localeCompare(right.value);
-    }
-    return left.key.localeCompare(right.key);
-  });
-  return entries.map((entry) => `${entry.key}=${entry.value}`).join("&");
-}
-
-function encodeS3Key(value: string) {
-  return value
-    .split("/")
-    .map((segment) => encodeRfc3986(segment))
-    .join("/");
-}
-
-function encodeRfc3986(value: string) {
-  return encodeURIComponent(value)
-    .replaceAll("!", "%21")
-    .replaceAll("'", "%27")
-    .replaceAll("(", "%28")
-    .replaceAll(")", "%29")
-    .replaceAll("*", "%2A");
+function defaultObjectFileName(objectKey: string): string {
+  return objectKey.split("/").findLast((segment) => segment.length > 0) ?? "s3-object";
 }
 
 function normalizeRequestBody(value: AwsS3RequestInput["body"]) {
@@ -912,15 +867,13 @@ function buildAwsMetadataHeaders(input: Record<string, unknown> | undefined) {
   );
 }
 
-async function downloadSourceFile(sourceUrl: string, fetcher: typeof fetch) {
+async function downloadSourceFile(sourceUrl: string, signal?: AbortSignal) {
   const validatedUrl = validateSourceUrl(sourceUrl);
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), sourceFetchTimeoutMs);
+  const timeout = createProviderTimeout(signal, sourceFetchTimeoutMs);
 
   try {
-    const response = await fetcher(validatedUrl, {
-      signal: controller.signal,
+    const response = await providerFetch(validatedUrl, {
+      signal: timeout.signal,
     });
     const contentLength = parseHeaderInteger(response.headers.get("content-length"));
     if (contentLength != null && contentLength > maxSourceBytes) {
@@ -943,65 +896,27 @@ async function downloadSourceFile(sourceUrl: string, fetcher: typeof fetch) {
     if (error instanceof ProviderRequestError) {
       throw error;
     }
-    if (error instanceof DOMException && error.name === "AbortError") {
+    if (timeout.didTimeout()) {
       throw new ProviderRequestError(504, "sourceUrl download timed out");
     }
     throw error;
   } finally {
-    clearTimeout(timeout);
+    timeout.cleanup();
   }
 }
 
 function validateSourceUrl(value: string): URL {
-  let url: URL;
   try {
-    url = new URL(value);
-  } catch {
+    return assertPublicHttpUrl(value, {
+      fieldName: "sourceUrl",
+      createError: (message) => new ProviderRequestError(400, message),
+    });
+  } catch (error) {
+    if (error instanceof ProviderRequestError) {
+      throw error;
+    }
     throw new ProviderRequestError(400, "sourceUrl must be a valid URL");
   }
-
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new ProviderRequestError(400, "sourceUrl must use http or https");
-  }
-  if (isBlockedSourceHost(url.hostname)) {
-    throw new ProviderRequestError(400, "sourceUrl host is not allowed");
-  }
-
-  return url;
-}
-
-function isBlockedSourceHost(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  if (normalized === "localhost" || normalized.endsWith(".localhost")) {
-    return true;
-  }
-
-  const ipVersion = isIP(normalized);
-  if (ipVersion === 4) {
-    return isPrivateIpv4(normalized);
-  }
-  if (ipVersion === 6) {
-    return (
-      normalized === "::1" ||
-      normalized.startsWith("fc") ||
-      normalized.startsWith("fd") ||
-      normalized.startsWith("fe80:")
-    );
-  }
-
-  return false;
-}
-
-function isPrivateIpv4(value: string): boolean {
-  const parts = value.split(".").map((part) => Number(part));
-  const [a, b] = parts;
-  if (a === 10 || a === 127 || a === 0 || (a === 169 && b === 254)) {
-    return true;
-  }
-  if (a === 172 && b !== undefined && b >= 16 && b <= 31) {
-    return true;
-  }
-  return a === 192 && b === 168;
 }
 
 async function readResponseBytesWithLimit(response: Response, limit: number) {
@@ -1135,37 +1050,4 @@ function parseHeaderInteger(value: string | null | undefined) {
   }
   const parsed = Number(value);
   return Number.isInteger(parsed) ? parsed : null;
-}
-
-function collapseHeaderWhitespace(value: string) {
-  return value.trim().split(" ").filter(Boolean).join(" ");
-}
-
-function formatAmzDate(value: Date) {
-  const year = String(value.getUTCFullYear()).padStart(4, "0");
-  const month = String(value.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(value.getUTCDate()).padStart(2, "0");
-  const hours = String(value.getUTCHours()).padStart(2, "0");
-  const minutes = String(value.getUTCMinutes()).padStart(2, "0");
-  const seconds = String(value.getUTCSeconds()).padStart(2, "0");
-  return `${year}${month}${day}T${hours}${minutes}${seconds}Z`;
-}
-
-function sha256Hex(value: string | Uint8Array | Buffer) {
-  return createHash("sha256").update(value).digest("hex");
-}
-
-function hmac(key: string | Buffer, value: string) {
-  return createHmac("sha256", key).update(value).digest();
-}
-
-function hmacHex(key: Buffer, value: string) {
-  return createHmac("sha256", key).update(value).digest("hex");
-}
-
-function getSigningKey(secretAccessKey: string, dateStamp: string, region: string, service: string) {
-  const kDate = hmac(`AWS4${secretAccessKey}`, dateStamp);
-  const kRegion = hmac(kDate, region);
-  const kService = hmac(kRegion, service);
-  return hmac(kService, "aws4_request");
 }

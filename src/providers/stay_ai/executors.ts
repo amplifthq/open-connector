@@ -1,9 +1,16 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { StayAiActionName } from "./actions.ts";
 
 import { compactObject, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerInputError,
+  providerResponseError,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "stay_ai";
 const stayAiApiBaseUrl = "https://api.retextion.com/api/v2";
@@ -11,7 +18,7 @@ const stayAiApiBaseUrl = "https://api.retextion.com/api/v2";
 type StayAiRequestPhase = "validate" | "execute";
 type StayAiActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-const stayAiActionHandlers: Record<StayAiActionName, StayAiActionHandler> = {
+const stayAiActionHandlers: ProviderActionHandlers<"stay_ai", StayAiActionHandler> = {
   async get_account_settings(input, context) {
     const payload = await requestStayAiJson({
       path: "/settings",
@@ -81,6 +88,16 @@ const stayAiActionHandlers: Record<StayAiActionName, StayAiActionHandler> = {
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, stayAiActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: stayAiApiBaseUrl,
+  auth: { type: "api_key_header", name: "X-RETEXTION-ACCESS-TOKEN" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -235,12 +252,4 @@ function normalizeStayAiList(payload: unknown, key: "subscriptions" | "orders"):
 function stayAiUrl(path: string): URL {
   const relativePath = path.startsWith("/") ? path.slice(1) : path;
   return new URL(relativePath, `${stayAiApiBaseUrl}/`);
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerResponseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

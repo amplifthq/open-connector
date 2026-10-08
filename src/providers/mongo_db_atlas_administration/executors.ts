@@ -6,11 +6,11 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
-import type { MongoDbAtlasAdministrationActionName } from "./actions.ts";
 
 import { createHash } from "node:crypto";
-import { optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { optionalInteger, optionalRecord, optionalString, rawStringOrNull, requiredString } from "../../core/cast.ts";
 import { jsonObject } from "../../core/request.ts";
 import {
   createProviderFetch,
@@ -19,6 +19,7 @@ import {
   defineProviderExecutors,
   isAbortLikeError,
   normalizeProviderProxyHeaders,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
   readProviderProxyErrorMessage,
@@ -30,7 +31,6 @@ const service = "mongo_db_atlas_administration";
 const mongoDbAtlasAdministrationApiBaseUrl = "https://cloud.mongodb.com/api/atlas/v2";
 const atlasFetch = createProviderFetch({ skipDnsValidation: true });
 const atlasAcceptHeader = "application/vnd.atlas.2024-08-05+json";
-const defaultRequestTimeoutMs = 30_000;
 
 type AtlasPhase = "validate" | "execute";
 
@@ -51,8 +51,8 @@ interface AtlasActionContext {
 
 type AtlasActionHandler = (input: Record<string, unknown>, context: AtlasActionContext) => Promise<unknown>;
 
-export const mongoDbAtlasAdministrationActionHandlers: Record<
-  MongoDbAtlasAdministrationActionName,
+export const mongoDbAtlasAdministrationActionHandlers: ProviderActionHandlers<
+  "mongo_db_atlas_administration",
   AtlasActionHandler
 > = {
   async list_projects(input, context): Promise<unknown> {
@@ -229,7 +229,7 @@ async function requestAtlasJson(input: {
   phase: AtlasPhase;
   query?: Record<string, string | undefined>;
 }): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(input.context.signal, defaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   const url = buildAtlasUrl(input.path, input.query);
 
   try {
@@ -286,11 +286,7 @@ async function requestAtlasJson(input: {
 }
 
 function readPrivateKey(values: Record<string, unknown> | undefined): string {
-  return requiredString(values?.privateKey, "privateKey", providerRequestInputError);
-}
-
-function providerRequestInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
+  return requiredString(values?.privateKey, "privateKey", providerInputError);
 }
 
 function buildAtlasUrl(path: string, query: Record<string, string | undefined> = {}): URL {
@@ -495,7 +491,7 @@ function optionalIntegerString(value: unknown, fieldName: string): string | unde
 }
 
 function requiredAtlasInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, providerRequestInputError as CastErrorFactory);
+  return requiredString(value, fieldName, providerInputError as CastErrorFactory);
 }
 
 function normalizeProjects(value: unknown): Array<Record<string, unknown>> {
@@ -509,10 +505,10 @@ function normalizeProject(value: unknown): Record<string, unknown> {
   const record = requireObjectPayload(value);
   return {
     id: requiredPayloadString(record.id, "project id"),
-    name: nullableString(record.name),
-    orgId: nullableString(record.orgId),
-    createdAt: nullableString(record.created),
-    regionUsageRestrictions: nullableString(record.regionUsageRestrictions),
+    name: rawStringOrNull(record.name),
+    orgId: rawStringOrNull(record.orgId),
+    createdAt: rawStringOrNull(record.created),
+    regionUsageRestrictions: rawStringOrNull(record.regionUsageRestrictions),
     raw: record,
   };
 }
@@ -533,17 +529,17 @@ function normalizeCluster(value: unknown): Record<string, unknown> {
   const electableSpecs = optionalRecord(firstRegionConfig?.electableSpecs);
 
   return {
-    id: nullableString(record.id),
+    id: rawStringOrNull(record.id),
     name: requiredPayloadString(record.name, "cluster name"),
-    groupId: nullableString(record.groupId),
-    clusterType: nullableString(record.clusterType),
-    mongoDBVersion: nullableString(record.mongoDBVersion),
-    stateName: nullableString(record.stateName),
+    groupId: rawStringOrNull(record.groupId),
+    clusterType: rawStringOrNull(record.clusterType),
+    mongoDBVersion: rawStringOrNull(record.mongoDBVersion),
+    stateName: rawStringOrNull(record.stateName),
     paused: typeof record.paused === "boolean" ? record.paused : null,
-    providerName: nullableString(firstRegionConfig?.providerName ?? record.providerName),
-    backingProviderName: nullableString(firstRegionConfig?.backingProviderName),
-    instanceSizeName: nullableString(electableSpecs?.instanceSize ?? record.instanceSizeName),
-    regionName: nullableString(firstRegionConfig?.regionName ?? record.regionName),
+    providerName: rawStringOrNull(firstRegionConfig?.providerName ?? record.providerName),
+    backingProviderName: rawStringOrNull(firstRegionConfig?.backingProviderName),
+    instanceSizeName: rawStringOrNull(electableSpecs?.instanceSize ?? record.instanceSizeName),
+    regionName: rawStringOrNull(firstRegionConfig?.regionName ?? record.regionName),
     raw: record,
   };
 }
@@ -560,10 +556,6 @@ function requiredPayloadString(value: unknown, label: string): string {
     throw new ProviderRequestError(502, `MongoDB Atlas returned an invalid ${label}`);
   }
   return value;
-}
-
-function nullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
 }
 
 function readNullableInteger(value: unknown): number | null {

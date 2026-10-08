@@ -193,17 +193,10 @@ const currentUserOutputSchema = s.object("The current Snipe-IT API user.", {
   user: looseRowSchema,
 });
 
-export type SnipeItActionName =
-  | "get_current_user"
-  | "list_hardware"
-  | "list_users"
-  | "list_companies"
-  | "list_categories"
-  | "list_status_labels";
-
 export const snipeItActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Get details for the Snipe-IT user associated with the API key.",
     requiredScopes: [],
     inputSchema: emptyInputSchema,
@@ -211,6 +204,7 @@ export const snipeItActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_hardware",
+    operationType: "read",
     description: "List Snipe-IT hardware assets with optional search and filters.",
     requiredScopes: [],
     inputSchema: listHardwareInputSchema,
@@ -218,6 +212,7 @@ export const snipeItActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List Snipe-IT users with optional search and filters.",
     requiredScopes: [],
     inputSchema: listUsersInputSchema,
@@ -225,6 +220,7 @@ export const snipeItActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_companies",
+    operationType: "read",
     description: "List Snipe-IT companies.",
     requiredScopes: [],
     inputSchema: listCompaniesInputSchema,
@@ -232,6 +228,7 @@ export const snipeItActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_categories",
+    operationType: "read",
     description: "List Snipe-IT categories with optional search and filters.",
     requiredScopes: [],
     inputSchema: listCategoriesInputSchema,
@@ -239,13 +236,10 @@ export const snipeItActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_status_labels",
+    operationType: "read",
     description: "List Snipe-IT status labels with optional search and filters.",
     requiredScopes: [],
     inputSchema: listStatusLabelsInputSchema,
     outputSchema: listResultSchema("A page of Snipe-IT status labels.", "statusLabels"),
   }),
 ];
-
-export const snipeItActionByName: ReadonlyMap<string, ActionDefinition> = new Map(
-  snipeItActions.map((action) => [action.name, action]),
-);

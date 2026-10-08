@@ -1,8 +1,8 @@
 import type { RuntimeConfigReader } from "../../core/types.ts";
 
-import { importPKCS8, SignJWT } from "jose";
+import { Buffer } from "node:buffer";
 import { requiredString } from "../../core/cast.ts";
-import { ProviderRequestError } from "../provider-runtime.ts";
+import { ProviderRequestError, providerResponseError } from "../provider-runtime.ts";
 import { githubApiBaseUrl, githubHeaders, normalizeGitHubError, readJsonResponse } from "./runtime-shared.ts";
 
 export const githubAppIdConfigName = "OOMOL_CONNECT_GITHUB_APP_ID";
@@ -75,6 +75,7 @@ export async function createGitHubAppJwt(input: {
   nowMs?: number;
   privateKeyPem: string;
 }): Promise<string> {
+  const { importPKCS8, SignJWT } = await import("jose");
   const appId = requirePositiveIntegerText(input.appId, "GitHub App id");
   const privateKeyPem = normalizePrivateKey(input.privateKeyPem);
   let privateKey: CryptoKey;
@@ -99,6 +100,7 @@ export async function resolveGitHubAppInstallation(input: {
   fetcher: typeof fetch;
   installationId: string;
   runtimeConfig?: RuntimeConfigReader;
+  signal?: AbortSignal;
 }): Promise<ResolvedGitHubAppInstallation> {
   const configuration = readGitHubAppRuntimeConfiguration(input.runtimeConfig);
   const installationId = requirePositiveIntegerText(input.installationId, "GitHub App installation id");
@@ -108,6 +110,7 @@ export async function resolveGitHubAppInstallation(input: {
     appJwt,
     fetcher: input.fetcher,
     installationId,
+    signal: input.signal,
   });
   const tokenPayload = await requestGitHubJson<GitHubAppInstallationTokenPayload>({
     accessToken: appJwt,
@@ -115,6 +118,7 @@ export async function resolveGitHubAppInstallation(input: {
     fetcher: input.fetcher,
     method: "POST",
     path: `/app/installations/${encodeURIComponent(installationId)}/access_tokens`,
+    signal: input.signal,
   });
   const accessToken = requiredString(tokenPayload.token, "GitHub App installation token", providerResponseError);
   const expiresAt = requiredString(
@@ -195,11 +199,13 @@ async function getGitHubAppInstallation(input: {
   appJwt: string;
   fetcher: typeof fetch;
   installationId: string;
+  signal?: AbortSignal;
 }): Promise<GitHubAppInstallation> {
   const payload = await requestGitHubJson<GitHubAppInstallationPayload>({
     accessToken: input.appJwt,
     fetcher: input.fetcher,
     path: `/app/installations/${encodeURIComponent(input.installationId)}`,
+    signal: input.signal,
   });
   return normalizeInstallation({
     appId: input.appId,
@@ -261,11 +267,13 @@ async function requestGitHubJson<T>(input: {
   fetcher: typeof fetch;
   method?: string;
   path: string;
+  signal?: AbortSignal;
 }): Promise<T> {
   const response = await input.fetcher(`${githubApiBaseUrl}${input.path}`, {
     method: input.method ?? "GET",
     headers: githubHeaders(input.accessToken, input.body !== undefined),
     body: input.body === undefined ? undefined : JSON.stringify(input.body),
+    signal: input.signal,
   });
   const payload = await readJsonResponse(response);
   if (!response.ok) {
@@ -348,11 +356,7 @@ function concatenateBytes(...parts: Uint8Array[]): Uint8Array {
 }
 
 function encodeBase64(value: Uint8Array): string {
-  let binary = "";
-  for (let offset = 0; offset < value.length; offset += 0x8000) {
-    binary += String.fromCharCode(...value.subarray(offset, offset + 0x8000));
-  }
-  return btoa(binary);
+  return Buffer.from(value).toString("base64");
 }
 
 function requirePositiveIntegerText(
@@ -384,8 +388,4 @@ function normalizeRepositorySelection(value: unknown): "all" | "selected" {
     return value;
   }
   throw providerResponseError("GitHub App installation repository selection is missing.");
-}
-
-function providerResponseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

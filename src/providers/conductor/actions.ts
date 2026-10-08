@@ -48,18 +48,10 @@ const segmentSchema = s.looseRequiredObject("One Conductor Monitoring segment.",
   shortcode: s.nullableString("The segment shortcode when available."),
 });
 
-export type ConductorActionName =
-  | "list_websites"
-  | "list_segments"
-  | "get_statistics"
-  | "list_pages"
-  | "get_page"
-  | "list_issues"
-  | "list_affected_pages";
-
 export const conductorActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_websites",
+    operationType: "read",
     description: "List websites available in the connected Conductor Monitoring account.",
     inputSchema: s.object("Input for listing Conductor Monitoring websites.", {}),
     outputSchema: s.object("The Conductor Monitoring website list response.", {
@@ -69,6 +61,7 @@ export const conductorActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_segments",
+    operationType: "read",
     description: "List Conductor Monitoring segments for one website.",
     inputSchema: s.object("Input for listing Conductor Monitoring segments.", { website_id: websiteIdSchema }),
     outputSchema: s.object("The Conductor Monitoring segment list response.", {
@@ -78,6 +71,7 @@ export const conductorActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_statistics",
+    operationType: "read",
     description: "Retrieve Conductor Monitoring statistics for a whole website or a segment scope.",
     inputSchema: s.object(
       "Input for retrieving Conductor Monitoring statistics.",
@@ -96,6 +90,7 @@ export const conductorActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_pages",
+    operationType: "read",
     description: "List pages for a Conductor Monitoring website with pagination.",
     inputSchema: s.object(
       "Input for listing Conductor Monitoring pages.",
@@ -117,6 +112,7 @@ export const conductorActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_page",
+    operationType: "read",
     description: "Retrieve data for one URL in a Conductor Monitoring website.",
     inputSchema: s.object("Input for retrieving one Conductor Monitoring page.", {
       website_id: websiteIdSchema,
@@ -130,6 +126,7 @@ export const conductorActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_issues",
+    operationType: "read",
     description: "List Conductor Monitoring issues for a whole website or a segment scope.",
     inputSchema: s.object(
       "Input for listing Conductor Monitoring issues.",
@@ -148,6 +145,7 @@ export const conductorActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_affected_pages",
+    operationType: "read",
     description: "List pages affected by one Conductor Monitoring issue.",
     inputSchema: s.object(
       "Input for listing pages affected by a Conductor Monitoring issue.",

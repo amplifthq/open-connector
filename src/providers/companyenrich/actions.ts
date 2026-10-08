@@ -169,17 +169,10 @@ const similarMetadataSchema = s.nullable(
   }),
 );
 
-export type CompanyenrichActionName =
-  | "get_current_user"
-  | "enrich_company_by_domain"
-  | "enrich_company_by_properties"
-  | "search_companies"
-  | "count_companies"
-  | "find_similar_companies";
-
 export const companyenrichActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Get the authenticated CompanyEnrich user summary and remaining capabilities.",
     inputSchema: s.object("The input payload for loading the current CompanyEnrich user.", {}),
     outputSchema: s.object("The normalized output payload for the current CompanyEnrich user.", {
@@ -188,6 +181,7 @@ export const companyenrichActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "enrich_company_by_domain",
+    operationType: "read",
     description: "Enrich a company profile from its primary domain.",
     inputSchema: s.object(
       "The input payload for enriching a company by domain.",
@@ -203,6 +197,7 @@ export const companyenrichActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "enrich_company_by_properties",
+    operationType: "read",
     description: "Enrich a company profile from identifying company properties.",
     inputSchema: s.object(
       "The input payload for enriching a company by identifying properties. Provide at least one identifying property.",
@@ -235,6 +230,7 @@ export const companyenrichActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_companies",
+    operationType: "read",
     description: "Search CompanyEnrich companies with page-based filters and pagination.",
     inputSchema: searchCompaniesInputSchema,
     outputSchema: s.object("The normalized output payload for a CompanyEnrich company search.", {
@@ -244,6 +240,7 @@ export const companyenrichActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "count_companies",
+    operationType: "read",
     description: "Count how many companies match the provided CompanyEnrich search filters.",
     inputSchema: countCompaniesInputSchema,
     outputSchema: s.object("The normalized output payload for a CompanyEnrich company count.", {
@@ -252,6 +249,7 @@ export const companyenrichActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "find_similar_companies",
+    operationType: "read",
     description: "Find companies similar to one or more seed company domains.",
     inputSchema: s.object(
       "The input payload for finding similar companies in CompanyEnrich.",

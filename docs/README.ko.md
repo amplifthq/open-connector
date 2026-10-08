@@ -2,9 +2,10 @@
 
 <img src="../assets/openconnector-readme-banner.png" alt="OpenConnector - Connect Once. Use Everywhere." width="100%" />
 
-[English](../README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Français](README.fr.md)
+[English](../README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Français](README.fr.md) | [Español](README.es.md)
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](../LICENSE.txt)
+[![npm](https://img.shields.io/npm/v/@oomol-lab/open-connector.svg)](https://www.npmjs.com/package/@oomol-lab/open-connector)
 ![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933)
 ![Cloudflare compatible](https://img.shields.io/badge/Cloudflare-compatible-F38020)
 ![MCP](https://img.shields.io/badge/MCP-ready-111827)
@@ -22,18 +23,18 @@ Agent와 애플리케이션에 공통 catalog로 제공할 수 있습니다.
 <table>
   <tr>
     <td width="33.33%" align="center"><img src="../assets/deployment-options/oomol.svg" alt="OOMOL" width="140"></td>
-    <td width="33.33%" align="center"><img src="../assets/deployment-options/cloudflare.svg" alt="Cloudflare" width="140"></td>
     <td width="33.33%" align="center"><img src="../assets/deployment-options/self-hosted.svg" alt="Self-hosted" width="140"></td>
+    <td width="33.33%" align="center"><img src="../assets/deployment-options/more-platforms.svg" alt="다른 플랫폼" width="140"></td>
   </tr>
   <tr>
     <td width="33.33%" valign="top">Managed OAuth와 hosted runtime을 바로 사용할 수 있습니다. 배포하거나 OAuth app을 설정할 필요가 없습니다.</td>
-    <td width="33.33%" valign="top">Cloudflare 계정에서 Workers, D1, R2, Static Assets를 사용합니다. 배포와 OAuth app은 직접 관리합니다.</td>
     <td width="33.33%" valign="top">Docker 또는 Node.js로 로컬이나 자체 인프라에서 실행합니다. Storage와 OAuth app은 직접 관리합니다.</td>
+    <td width="33.33%" valign="top"><strong>Cloudflare</strong>, <strong>Fly.io</strong>, <strong>RepoCloud</strong>, <strong>nibrun</strong>, <strong>NEXUS AI</strong> 등.</td>
   </tr>
   <tr>
     <td width="33.33%" align="center">🚀 <a href="https://oomol.com/docs/connector-saas/"><strong>OOMOL Hosted</strong></a></td>
-    <td width="33.33%" align="center"><a href="cloudflare.md"><strong>Cloudflare에 배포</strong></a></td>
     <td width="33.33%" align="center"><a href="https://oomol.com/docs/openconnector-self-hosting/"><strong>Self-host</strong></a></td>
+    <td width="33.33%" align="center"><a href="deployment-options/README.ko.md"><strong>다른 플랫폼</strong></a></td>
   </tr>
 </table>
 
@@ -42,7 +43,7 @@ relay에는 [oo CLI](https://github.com/oomol-lab/oo-cli), Agent host에는 MCP,
 HTTP/OpenAPI를 사용합니다. 관리와 디버깅에는 Web Console을 사용할 수 있습니다.
 
 - Credential, scope, schema, policy, 실행 로그를 검사 가능한 runtime 내부에 보관합니다.
-- 로컬, Fly.io, Cloudflare 호환 인프라 또는 OOMOL hosted runtime에서 실행할 수 있습니다.
+- 로컬, 자체 인프라 또는 OOMOL hosted runtime에서 실행할 수 있습니다.
 - 오픈 소스와 상용 SaaS 배포에서 동일한 provider id, Action id, schema, contract를 사용합니다.
 
 ## 주요 기능
@@ -54,8 +55,8 @@ HTTP/OpenAPI를 사용합니다. 관리와 디버깅에는 Web Console을 사용
   Action contract.
 - Connection identity, scope, runtime token, Action 허용/차단 policy, 임시 파일 전송, 민감 정보가
   제거된 실행 로그를 위한 runtime 제어.
-- 로컬 Docker 또는 Node.js, 영구 SQLite storage를 사용하는 Fly.io, D1/R2/Static Assets를 사용하는
-  Cloudflare Workers, OOMOL hosted runtime을 포함한 다양한 배포 방식.
+- 로컬 Docker 또는 Node.js, 그리고 OOMOL hosted runtime을 포함한 배포 방식. 추가 관리형
+  platform은 [배포 옵션](deployment-options/README.ko.md)을 참조하세요.
 
 ## 적합한 사용 사례
 
@@ -125,19 +126,7 @@ flowchart LR
 | 경로                            | 적합한 대상                             | 포함 항목                                                                                                                                                                           |
 | ------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 오픈 소스 self-host             | 인프라를 완전히 제어하려는 개발자와 팀  | 로컬 Docker 또는 Node runtime, SQLite storage, MCP, HTTP, OpenAPI, Web Console                                                                                                      |
-| Fly.io self-host                | Hosted Docker runtime이 필요한 팀       | Node Docker runtime, Fly volume의 SQLite storage, TLS, health check, MCP, HTTP, OpenAPI, Web Console                                                                                |
-| Cloudflare 호환 배포            | 가벼운 hosted runtime이 필요한 팀       | Workers runtime, D1 state, R2 transit file, Console용 Static Assets                                                                                                                 |
 | [OOMOL](https://oomol.com/apps) | 사용자가 계정을 즉시 승인하게 하려는 팀 | 지원되는 provider용 OAuth app, 매월 제공되는 Connect credits, hosted runtime 인프라. 동일한 provider 및 Action contract를 사용하므로 향후 private 또는 self-hosted 배포로 전환 가능 |
-
-## Cloudflare 빠른 시작 동영상
-
-[![Cloudflare Workers에 OpenConnector 배포](../assets/cloudflare-quickstart-video.png)](https://www.youtube.com/watch?v=R0V1ZdCuTgc)
-
-[Cloudflare Workers 배포 안내 동영상](https://www.youtube.com/watch?v=R0V1ZdCuTgc)에서는 Workers,
-D1, R2, Web Console을 사용해 Cloudflare에서 OpenConnector를 실행하는 방법을 보여 줍니다. 동영상은
-[cloudflare.md](cloudflare.md)의 흐름과 동일합니다. Cloudflare resource를 생성하고
-`wrangler.example.jsonc`를 `wrangler.local.jsonc`로 복사한 뒤 D1 migration을 적용하고 필요한
-secret을 설정한 다음 `npm run deploy:cloudflare`를 실행합니다.
 
 ## 빠른 시작
 
@@ -203,42 +192,19 @@ Console이 `http://localhost:3000`에서 제공됩니다.
 Console은 provider 탐색, API key 및 OAuth client 구성, runtime token 생성, Action schema 검사,
 Action 디버깅, 최근 실행 검토, 생성된 OpenAPI 및 MCP metadata 접근을 지원합니다.
 
-## Cloudflare 배포
-
-OpenConnector는 runtime에 Workers, 상태 저장에 D1, transit file에 R2, Web Console에 Static Assets를
-사용하여 Cloudflare에서 실행할 수 있습니다.
-
-Resource 생성, migration, secret, 로컬 Worker preview, 원격 배포는
-[cloudflare.md](cloudflare.md)를 참조하세요.
-
-## Fly.io 배포
-
-OpenConnector는 Node Docker runtime과 Fly volume의 영구 SQLite storage를 사용하여 Fly.io에서도
-실행할 수 있습니다.
-
-앱 생성, volume 설정, secret, 배포, custom domain, scaling은 [fly-io.md](fly-io.md)를 참조하세요.
-
 ## Docker 이미지(GHCR)
 
 GitHub Packages(GHCR)의 사전 빌드된 이미지 `ghcr.io/oomol-lab/open-connector`로 OpenConnector를
-실행할 수 있습니다. 최신 release에는 `latest`, 재현 가능한 production 배포에는 `v1.0.0` 같은 고정
+실행할 수 있습니다. 최신 release에는 `latest`, 재현 가능한 production 배포에는 고정된 release
 version, 최신 `main` build에는 `tip`을 사용하세요.
 
 Image tag, 가져오기, 실행 방법은 [docker-ghcr.md](docker-ghcr.md)를 참조하세요.
 
-## Wanta로 데스크톱 Agent 만들기
+## 바로 사용할 수 있는 AI 봇: Leina
 
-OpenConnector와 [Wanta](https://github.com/oomol-lab/wanta)는 OOMOL 오픈 소스 생태계에서 AI Agent를
-지원하는 두 프로젝트입니다. OpenConnector는 Gmail, Slack, Notion 같은 외부 서비스를 Agent에 연결합니다.
-Wanta는 OpenCode로 실행되는 완전한 데스크톱 Agent 애플리케이션이며, OpenConnector를 통해 연결된 SaaS
-서비스를 사용합니다.
+바로 사용할 수 있는 AI 봇을 찾고 있다면 [Leina](https://leina.ai/)를 사용해 보세요. Leina는 1,500개 이상의 SaaS 앱에 연결할 수 있으며, 앱 연결, 스킬, 지식 베이스를 자유롭게 조합해 팀의 업무 흐름에 맞는 나만의 AI 에이전트를 구성할 수 있습니다.
 
-- **로컬 실행:** Wanta 계정 없이 자신의 OpenAI 호환 모델을 사용할 수 있습니다.
-- **직접 개발:** Wanta를 fork하여 prompt, 도구, 인터페이스, 모델, branding을 맞춤 설정할 수 있습니다.
-- **호스팅 서비스:** 선택 사항인 [호스팅 환경](https://wanta.ai/)은 managed model, OAuth 연결, 팀
-  workspace를 제공합니다.
-
-Issue와 pull request를 통한 기여를 환영합니다.
+Slack, Microsoft Teams, Discord, Telegram의 채팅에서 사용자가 접근을 허용한 앱을 통해 정보 검색, 주간 보고서 작성, 고객 피드백 정리, 영업 후속 연락 준비 등을 요청할 수 있습니다.
 
 ## 문서
 
@@ -246,6 +212,7 @@ Issue와 pull request를 통한 기여를 환영합니다.
 - [개발자 도구](sdk-cli.md)
 - [Gmail OAuth 및 SDK 튜토리얼(영문)](gmail-oauth-sdk.md)
 - [Runtime API 및 MCP](runtime-api.md)
+- [배포 옵션](deployment-options/README.ko.md)
 - [Fly.io 배포](fly-io.md)
 - [Cloudflare 배포](cloudflare.md)
 - [Docker 이미지(GHCR)](docker-ghcr.md)

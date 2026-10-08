@@ -5,16 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "mother_duck";
 
-export type MotherDuckActionName =
-  | "list_active_accounts"
-  | "create_user"
-  | "delete_user"
-  | "list_tokens"
-  | "create_token"
-  | "delete_token"
-  | "get_user_duckling_config"
-  | "set_user_duckling_config";
-
 const usernameSchema = s.string("The MotherDuck username within the organization.", { minLength: 1, maxLength: 255 });
 const tokenIdSchema = s.nonEmptyString("The MotherDuck access token identifier.");
 const tokenTypeSchema = s.stringEnum("The MotherDuck token type.", ["read_write", "read_scaling"]);
@@ -81,6 +71,7 @@ const ducklingConfigSchema = s.object("MotherDuck Duckling configuration for a u
 export const motherDuckActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_active_accounts",
+    operationType: "read",
     description: "List active MotherDuck accounts and their active Ducklings in the organization.",
     inputSchema: s.actionInput({}, [], "No input is required to list active MotherDuck accounts."),
     outputSchema: s.actionOutput(
@@ -92,6 +83,7 @@ export const motherDuckActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_user",
+    operationType: "write",
     description: "Create a MotherDuck member user in the organization.",
     inputSchema: s.actionInput(
       {
@@ -109,6 +101,7 @@ export const motherDuckActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_user",
+    operationType: "destructive",
     description: "Permanently delete a MotherDuck user and all of their data.",
     inputSchema: s.actionInput(
       {
@@ -126,6 +119,7 @@ export const motherDuckActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tokens",
+    operationType: "read",
     description: "List MotherDuck access tokens for a user.",
     inputSchema: s.actionInput(
       {
@@ -143,6 +137,7 @@ export const motherDuckActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_token",
+    operationType: "write",
     description: "Create a MotherDuck access token for a user.",
     inputSchema: s.actionInput(
       {
@@ -163,6 +158,7 @@ export const motherDuckActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_token",
+    operationType: "destructive",
     description: "Invalidate a MotherDuck access token for a user.",
     inputSchema: s.actionInput(
       {
@@ -181,6 +177,7 @@ export const motherDuckActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user_duckling_config",
+    operationType: "read",
     description: "Retrieve MotherDuck Duckling configuration for a user.",
     inputSchema: s.actionInput(
       {
@@ -198,6 +195,7 @@ export const motherDuckActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "set_user_duckling_config",
+    operationType: "write",
     description: "Set MotherDuck Duckling configuration for a user.",
     inputSchema: s.actionInput(
       {

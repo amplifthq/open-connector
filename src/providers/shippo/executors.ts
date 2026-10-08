@@ -4,29 +4,28 @@ import type {
   ProviderProxyExecutor,
   ProxyExecutionResult,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { ShippoActionName } from "./actions.ts";
 
-import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   createProviderFetch,
   createProviderProxyUrl,
-  createProviderTimeout,
   defineApiKeyProviderExecutors,
-  isAbortLikeError,
   normalizeProviderProxyHeaders,
   ProviderRequestError,
   providerUserAgent,
   readProviderProxyErrorMessage,
   readProviderProxyResponse,
   requireApiKeyCredential,
+  requiredInputString,
+  runProviderRequest,
   toProviderProxyError,
 } from "../provider-runtime.ts";
 
 const service = "shippo";
 const shippoApiBaseUrl = "https://api.goshippo.com";
 const shippoApiVersion = "2018-02-08";
-const shippoDefaultRequestTimeoutMs = 30_000;
 const shippoValidationEndpoint = "/addresses/";
 const shippoFetch = createProviderFetch({ skipDnsValidation: true });
 
@@ -42,7 +41,7 @@ interface ShippoRequestInput {
 
 type ShippoActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const shippoActionHandlers: Record<ShippoActionName, ShippoActionHandler> = {
+export const shippoActionHandlers: ProviderActionHandlers<"shippo", ShippoActionHandler> = {
   list_addresses(input, context) {
     return requestAndWrapShippoPaginatedJson({
       path: "/addresses/",
@@ -65,7 +64,7 @@ export const shippoActionHandlers: Record<ShippoActionName, ShippoActionHandler>
   },
   get_address(input, context) {
     return requestAndWrapShippoJson({
-      path: `/addresses/${encodeURIComponent(requireInputString(input.addressId, "addressId"))}/`,
+      path: `/addresses/${encodeURIComponent(requiredInputString(input.addressId, "addressId"))}/`,
       apiKey: context.apiKey,
       fetcher: context.fetcher,
       signal: context.signal,
@@ -74,7 +73,7 @@ export const shippoActionHandlers: Record<ShippoActionName, ShippoActionHandler>
   },
   validate_address(input, context) {
     return requestAndWrapShippoJson({
-      path: `/addresses/${encodeURIComponent(requireInputString(input.addressId, "addressId"))}/validate/`,
+      path: `/addresses/${encodeURIComponent(requiredInputString(input.addressId, "addressId"))}/validate/`,
       apiKey: context.apiKey,
       fetcher: context.fetcher,
       signal: context.signal,
@@ -103,7 +102,7 @@ export const shippoActionHandlers: Record<ShippoActionName, ShippoActionHandler>
   },
   get_parcel(input, context) {
     return requestAndWrapShippoJson({
-      path: `/parcels/${encodeURIComponent(requireInputString(input.parcelId, "parcelId"))}/`,
+      path: `/parcels/${encodeURIComponent(requiredInputString(input.parcelId, "parcelId"))}/`,
       apiKey: context.apiKey,
       fetcher: context.fetcher,
       signal: context.signal,
@@ -111,8 +110,8 @@ export const shippoActionHandlers: Record<ShippoActionName, ShippoActionHandler>
     });
   },
   get_tracking_status(input, context) {
-    const carrier = encodeURIComponent(requireInputString(input.carrier, "carrier"));
-    const trackingNumber = encodeURIComponent(requireInputString(input.trackingNumber, "trackingNumber"));
+    const carrier = encodeURIComponent(requiredInputString(input.carrier, "carrier"));
+    const trackingNumber = encodeURIComponent(requiredInputString(input.trackingNumber, "trackingNumber"));
     return requestAndWrapShippoJson({
       path: `/tracks/${carrier}/${trackingNumber}`,
       apiKey: context.apiKey,
@@ -207,8 +206,7 @@ async function requestShippoJson(input: ShippoRequestInput): Promise<unknown> {
     }
   }
 
-  const timeout = createProviderTimeout(input.signal, shippoDefaultRequestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: input.signal, label: "Shippo" }, async (signal) => {
     const response = await input.fetcher(url, {
       method: input.method ?? "GET",
       headers: {
@@ -219,7 +217,7 @@ async function requestShippoJson(input: ShippoRequestInput): Promise<unknown> {
         "user-agent": providerUserAgent,
       },
       body: input.body ? JSON.stringify(input.body) : undefined,
-      signal: timeout.signal,
+      signal,
     });
 
     const payload = await readJsonResponse(response);
@@ -227,20 +225,7 @@ async function requestShippoJson(input: ShippoRequestInput): Promise<unknown> {
       throw mapShippoError(response.status, payload);
     }
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Shippo request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Shippo request failed: ${error.message}` : "Shippo request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function paginationQuery(input: Record<string, unknown>): Record<string, string | undefined> {
@@ -263,7 +248,7 @@ function buildAddressBody(input: Record<string, unknown>): Record<string, unknow
     city: optionalString(input.city),
     state: optionalString(input.state),
     zip: optionalString(input.zip),
-    country: requireInputString(input.country, "country"),
+    country: requiredInputString(input.country, "country"),
     phone: optionalString(input.phone),
     email: optionalString(input.email),
     is_residential: input.isResidential,
@@ -278,16 +263,12 @@ function buildParcelBody(input: Record<string, unknown>): Record<string, unknown
     width: optionalString(input.width),
     height: optionalString(input.height),
     distance_unit: optionalString(input.distanceUnit),
-    weight: requireInputString(input.weight, "weight"),
-    mass_unit: requireInputString(input.massUnit, "massUnit"),
+    weight: requiredInputString(input.weight, "weight"),
+    mass_unit: requiredInputString(input.massUnit, "massUnit"),
     template: optionalString(input.template),
     metadata: optionalString(input.metadata),
     extra: input.extra,
   });
-}
-
-function requireInputString(value: unknown, key: string): string {
-  return requiredString(value, key, (message) => new ProviderRequestError(400, message));
 }
 
 async function readJsonResponse(response: Response): Promise<Record<string, unknown>> {

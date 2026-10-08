@@ -1,8 +1,15 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
+import { booleanString, compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   defineProviderExecutors,
+  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
@@ -22,7 +29,7 @@ interface ApiBibleActionContext {
 
 type ApiBibleActionHandler = (input: Record<string, unknown>, context: ApiBibleActionContext) => Promise<unknown>;
 
-export const apiBibleActionHandlers: Record<string, ApiBibleActionHandler> = {
+export const apiBibleActionHandlers: ProviderActionHandlers<"api_bible", ApiBibleActionHandler> = {
   list_bibles(input, context) {
     return listBibles(input, context);
   },
@@ -59,6 +66,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<ApiBibleActi
       fetcher,
       signal: context.signal,
     };
+  },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apiBibleApiBaseUrl,
+  auth: { type: "api_key_header", name: "api-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
   },
 });
 
@@ -222,12 +239,12 @@ function buildDisplayQuery(input: Record<string, unknown>): Record<string, strin
   return compactObject({
     parallels: optionalString(input.parallels),
     "content-type": optionalString(input.contentType),
-    "include-notes": stringifyOptionalBoolean(input.includeNotes),
-    "include-titles": stringifyOptionalBoolean(input.includeTitles),
-    "include-verse-spans": stringifyOptionalBoolean(input.includeVerseSpans),
-    "include-verse-numbers": stringifyOptionalBoolean(input.includeVerseNumbers),
-    "include-chapter-numbers": stringifyOptionalBoolean(input.includeChapterNumbers),
-    "use-org-id": stringifyOptionalBoolean(input.useOrgId),
+    "include-notes": booleanString(input.includeNotes),
+    "include-titles": booleanString(input.includeTitles),
+    "include-verse-spans": booleanString(input.includeVerseSpans),
+    "include-verse-numbers": booleanString(input.includeVerseNumbers),
+    "include-chapter-numbers": booleanString(input.includeChapterNumbers),
+    "use-org-id": booleanString(input.useOrgId),
   });
 }
 
@@ -370,10 +387,6 @@ function requireResponseInteger(value: unknown, fieldName: string): number {
     throw new ProviderRequestError(502, `api_bible response field ${fieldName} must be an integer`);
   }
   return value;
-}
-
-function stringifyOptionalBoolean(value: unknown): string | undefined {
-  return typeof value === "boolean" ? String(value) : undefined;
 }
 
 function stringifyOptionalNumber(value: unknown): string | undefined {

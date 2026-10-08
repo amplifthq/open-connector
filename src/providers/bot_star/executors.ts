@@ -1,11 +1,21 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
-import { compactObject, optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
+import {
+  compactObject,
+  optionalRecord,
+  optionalString,
+  recordOrEmpty,
+  requiredRecord,
+  requiredString,
+} from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
 } from "../provider-runtime.ts";
@@ -14,7 +24,6 @@ const service = "bot_star";
 const botStarApiBaseUrl = "https://apis.botstar.com/v1";
 const botStarRequestBaseUrl = "https://apis.botstar.com/v1/";
 const botStarValidationPath = "/bots/";
-const botStarDefaultTimeoutMs = 30_000;
 
 type BotStarPhase = "validate" | "execute";
 type BotStarQueryValue = boolean | number | string | undefined;
@@ -31,7 +40,7 @@ interface BotStarRequestInput {
   phase?: BotStarPhase;
 }
 
-export const botStarActionHandlers: Record<string, BotStarActionHandler> = {
+export const botStarActionHandlers: ProviderActionHandlers<"bot_star", BotStarActionHandler> = {
   async list_bots(_input, context) {
     return { bots: await botStarRequest({ ...context, path: "/bots/" }) };
   },
@@ -234,6 +243,17 @@ export const botStarActionHandlers: Record<string, BotStarActionHandler> = {
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, botStarActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: botStarApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+    if (!headers.has("content-type")) headers.set("content-type", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const apiKey = input.apiKey.trim();
@@ -278,7 +298,7 @@ async function botStarRequest(input: BotStarRequestInput): Promise<unknown> {
     }
   }
 
-  const timeout = createProviderTimeout(input.signal, botStarDefaultTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   let response: Response;
   let payload: unknown;
   try {
@@ -375,13 +395,13 @@ function pickBody(input: Record<string, unknown>, keys: string[]): Record<string
 
 function buildBotAttributeBody(input: Record<string, unknown>, keys: string[]): Record<string, unknown> {
   return {
-    ...readOptionalObject(input.localizedValues),
+    ...recordOrEmpty(input.localizedValues),
     ...pickBody(input, keys),
   };
 }
 
 function buildEntityItemBody(input: Record<string, unknown>, keys: string[]): Record<string, unknown> {
-  const data = readOptionalObject(input.data);
+  const data = recordOrEmpty(input.data);
   for (const key of ["name", "status"]) {
     if (Object.hasOwn(data, key)) {
       throw new ProviderRequestError(400, `data.${key} conflicts with an explicit CMS item field.`);
@@ -403,22 +423,14 @@ function normalizeSuccess(payload: unknown): Record<string, unknown> {
 }
 
 function readRequiredString(input: Record<string, unknown>, key: string): string {
-  return requiredString(input[key], key, invalidInputError);
+  return requiredString(input[key], key, providerInputError);
 }
 
 function readRequiredObject(input: Record<string, unknown>, key: string): Record<string, unknown> {
-  return requiredRecord(input[key], `${key} object`, invalidInputError);
-}
-
-function readOptionalObject(value: unknown): Record<string, unknown> {
-  return optionalRecord(value) ?? {};
+  return requiredRecord(input[key], `${key} object`, providerInputError);
 }
 
 function readOptionalString(value: unknown): string | undefined {
   const string = optionalString(value);
   return string && string.trim() ? string : undefined;
-}
-
-function invalidInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

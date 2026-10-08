@@ -1,22 +1,22 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { SitespeakaiActionName } from "./actions.ts";
 
-import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import { providerUserAgent, ProviderRequestError, requiredResponseRecord } from "../provider-runtime.ts";
 
-const sitespeakaiApiBaseUrl = "https://api.sitespeak.ai";
-const sitespeakaiApiVersion = "v1";
+export const sitespeakaiApiBaseUrl = "https://api.sitespeak.ai";
+export const sitespeakaiApiVersion = "v1";
 
 type SitespeakaiRequestPhase = "validate" | "execute";
 type SitespeakaiActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const sitespeakaiActionHandlers: Record<SitespeakaiActionName, SitespeakaiActionHandler> = {
+export const sitespeakaiActionHandlers: ProviderActionHandlers<"sitespeakai", SitespeakaiActionHandler> = {
   async get_current_user(_input, context) {
     const payload = await requestSitespeakai("/me", { method: "GET" }, context, "execute");
-    const response = requireObjectRecord(payload, "SiteSpeakAI /me response");
+    const response = requiredResponseRecord(payload, "SiteSpeakAI /me response");
     return {
-      user: requireObjectRecord(response.user, "SiteSpeakAI user"),
+      user: requiredResponseRecord(response.user, "SiteSpeakAI user"),
     };
   },
   async list_chatbots(_input, context) {
@@ -34,7 +34,7 @@ export const sitespeakaiActionHandlers: Record<SitespeakaiActionName, Sitespeaka
       "execute",
     );
     return {
-      chatbot: requireObjectRecord(payload, "SiteSpeakAI chatbot"),
+      chatbot: requiredResponseRecord(payload, "SiteSpeakAI chatbot"),
     };
   },
   async list_sources(input, context) {
@@ -125,8 +125,8 @@ export async function validateSitespeakaiCredential(
     },
     "validate",
   );
-  const response = requireObjectRecord(payload, "SiteSpeakAI /me response");
-  const user = requireObjectRecord(response.user, "SiteSpeakAI user");
+  const response = requiredResponseRecord(payload, "SiteSpeakAI /me response");
+  const user = requiredResponseRecord(response.user, "SiteSpeakAI user");
   const userId = optionalString(user.id);
   const email = optionalString(user.email);
   const name = optionalString(user.name);
@@ -286,14 +286,6 @@ function extractSitespeakaiErrorMessage(payload: unknown): string | undefined {
   return undefined;
 }
 
-function requireObjectRecord(value: unknown, label: string): Record<string, unknown> {
-  const record = optionalRecord(value);
-  if (!record) {
-    throw new ProviderRequestError(502, `${label} must be an object`);
-  }
-  return record;
-}
-
 function requireArray(value: unknown, label: string): unknown[] {
   if (!Array.isArray(value)) {
     throw new ProviderRequestError(502, `${label} must be an array`);
@@ -307,8 +299,4 @@ function requireTrimmedString(value: unknown, fieldName: string): string {
     throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return text;
-}
-
-function optionalBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
 }

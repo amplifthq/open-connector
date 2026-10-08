@@ -56,16 +56,10 @@ const autocompleteInputSchema = s.object(
 const verificationSchema = s.looseObject("A Lob address verification object.");
 const suggestionSchema = s.looseObject("A Lob US address autocomplete suggestion.");
 
-export type LobActionName =
-  | "verify_us_address"
-  | "bulk_verify_us_addresses"
-  | "autocomplete_us_addresses"
-  | "verify_international_address"
-  | "bulk_verify_international_addresses";
-
 export const lobActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "verify_us_address",
+    operationType: "read",
     description: "Verify and standardize one US address with Lob Address Verification.",
     inputSchema: usVerificationInputSchema,
     outputSchema: s.object("The normalized Lob US address verification result.", {
@@ -74,6 +68,7 @@ export const lobActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "bulk_verify_us_addresses",
+    operationType: "read",
     description: "Verify and standardize multiple US addresses with Lob Address Verification.",
     inputSchema: s.object("Input for verifying multiple US addresses with Lob.", {
       addresses: s.array("The US addresses to verify.", usVerificationInputSchema, { minItems: 1, maxItems: 100 }),
@@ -85,6 +80,7 @@ export const lobActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "autocomplete_us_addresses",
+    operationType: "read",
     description: "Return Lob US address autocomplete suggestions for a partial address.",
     inputSchema: autocompleteInputSchema,
     outputSchema: s.object("The normalized Lob US address autocomplete result.", {
@@ -94,6 +90,7 @@ export const lobActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "verify_international_address",
+    operationType: "read",
     description: "Verify and standardize one international address with Lob Address Verification.",
     inputSchema: internationalVerificationInputSchema,
     outputSchema: s.object("The normalized Lob international address verification result.", {
@@ -102,6 +99,7 @@ export const lobActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "bulk_verify_international_addresses",
+    operationType: "read",
     description: "Verify and standardize multiple international addresses with Lob Address Verification.",
     inputSchema: s.object("Input for verifying multiple international addresses with Lob.", {
       addresses: s.array("The international addresses to verify.", internationalVerificationInputSchema, {

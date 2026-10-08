@@ -18,18 +18,6 @@ export const provider: ProviderDefinition = {
       scopeSeparator: ",",
       tokenEndpointAuthMethod: "client_secret_post",
       tokenRequestFields: { clientId: "client_id", clientSecret: "client_secret" },
-      clientConfigFields: [
-        {
-          key: "appDirectoryPath",
-          location: "extra",
-          inputType: "text",
-          required: true,
-          secret: false,
-          label: "App Directory Path",
-          placeholder: "/apps/OOMOL",
-          description: "Absolute Baidu Netdisk app directory in the form /apps/{appname}.",
-        },
-      ],
     },
   ],
   homepageUrl: "https://pan.baidu.com",

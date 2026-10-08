@@ -64,18 +64,10 @@ const successOutputSchema = s.object(
   { required: ["ok"], description: "The Customer.io Track API acknowledgement." },
 );
 
-export type CustomerioActionName =
-  | "identify_customer"
-  | "track_customer_event"
-  | "track_anonymous_event"
-  | "delete_customer"
-  | "suppress_customer"
-  | "unsuppress_customer"
-  | "merge_customers";
-
 export const customerioActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "identify_customer",
+    operationType: "write",
     description: "Add or update a Customer.io person through the Track API.",
     inputSchema: s.object(
       {
@@ -91,6 +83,7 @@ export const customerioActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "track_customer_event",
+    operationType: "write",
     description: "Track an event associated with an identified Customer.io person.",
     inputSchema: s.object(
       {
@@ -112,6 +105,7 @@ export const customerioActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "track_anonymous_event",
+    operationType: "write",
     description: "Track an event for an anonymous person in Customer.io.",
     inputSchema: s.object(
       {
@@ -132,6 +126,7 @@ export const customerioActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_customer",
+    operationType: "destructive",
     description: "Delete a Customer.io person and their information through the Track API.",
     inputSchema: s.object(
       { identifier: identifierSchema },
@@ -141,6 +136,7 @@ export const customerioActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "suppress_customer",
+    operationType: "destructive",
     description: "Delete and suppress a Customer.io person identifier so it cannot be re-added until unsuppressed.",
     inputSchema: s.object(
       { identifier: identifierSchema },
@@ -150,6 +146,7 @@ export const customerioActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "unsuppress_customer",
+    operationType: "write",
     description: "Unsuppress a Customer.io person identifier so a new profile can be created later.",
     inputSchema: s.object(
       { identifier: identifierSchema },
@@ -159,6 +156,7 @@ export const customerioActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "merge_customers",
+    operationType: "write",
     description: "Merge two Customer.io people, keeping the primary profile and deleting the secondary profile.",
     inputSchema: s.object(
       {

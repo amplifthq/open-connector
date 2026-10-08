@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, objectArray, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -6,6 +7,7 @@ import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
   ProviderRequestError,
+  providerResponseError,
   providerUserAgent,
 } from "../provider-runtime.ts";
 
@@ -15,7 +17,7 @@ const stormboardApiBaseUrl = "https://api.stormboard.com";
 type StormboardRequestMode = "validate" | "execute";
 type StormboardActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const stormboardActionHandlers: Record<string, StormboardActionHandler> = {
+export const stormboardActionHandlers: ProviderActionHandlers<"stormboard", StormboardActionHandler> = {
   async get_profile(_input, context) {
     return { profile: await requestStormboardObject("/users/profile", context, "execute") };
   },
@@ -38,7 +40,7 @@ export const stormboardActionHandlers: Record<string, StormboardActionHandler> =
     );
     return {
       hasMore: Boolean(payload.hasmore),
-      storms: objectArray(payload.storms, "Stormboard storms", providerError),
+      storms: objectArray(payload.storms, "Stormboard storms", providerResponseError),
     };
   },
   async get_storm(input, context) {
@@ -71,7 +73,7 @@ export const stormboardActionHandlers: Record<string, StormboardActionHandler> =
       context,
       "execute",
     );
-    return { ideas: objectArray(payload.ideas, "Stormboard ideas", providerError) };
+    return { ideas: objectArray(payload.ideas, "Stormboard ideas", providerResponseError) };
   },
   async list_storm_users(input, context) {
     const payload = await requestStormboardObject(
@@ -79,7 +81,7 @@ export const stormboardActionHandlers: Record<string, StormboardActionHandler> =
       context,
       "execute",
     );
-    return { users: objectArray(payload.users, "Stormboard users", providerError) };
+    return { users: objectArray(payload.users, "Stormboard users", providerResponseError) };
   },
   async list_storm_connectors(input, context) {
     const payload = await requestStormboardObject(
@@ -87,7 +89,7 @@ export const stormboardActionHandlers: Record<string, StormboardActionHandler> =
       context,
       "execute",
     );
-    return { connectors: objectArray(payload.connectors, "Stormboard connectors", providerError) };
+    return { connectors: objectArray(payload.connectors, "Stormboard connectors", providerResponseError) };
   },
   async list_storm_tags(input, context) {
     const payload = await requestStormboardObject(
@@ -95,11 +97,11 @@ export const stormboardActionHandlers: Record<string, StormboardActionHandler> =
       context,
       "execute",
     );
-    return { tags: objectArray(payload.tags, "Stormboard tags", providerError) };
+    return { tags: objectArray(payload.tags, "Stormboard tags", providerResponseError) };
   },
   async list_template_categories(_input, context) {
     const payload = await requestStormboardObject("/templates/categories", context, "execute");
-    return { categories: objectArray(payload.categories, "Stormboard template categories", providerError) };
+    return { categories: objectArray(payload.categories, "Stormboard template categories", providerResponseError) };
   },
   async list_templates(input, context) {
     const category = optionalString(input.category);
@@ -242,10 +244,6 @@ function readRequiredString(value: unknown, label: string): string {
     throw new ProviderRequestError(502, `Stormboard response is missing ${label}`);
   }
   return text;
-}
-
-function providerError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }
 
 export const proxy: ProviderProxyExecutor = defineProviderProxy({

@@ -88,25 +88,10 @@ const userWriteFields = {
 };
 const userWriteOptionalFields = ["userType", "timezone", "language", "status", "rawFields"] as const;
 
-export type TalentlmsActionName =
-  | "health_check"
-  | "list_users"
-  | "get_user"
-  | "create_user"
-  | "update_user"
-  | "delete_user"
-  | "list_courses"
-  | "get_course"
-  | "list_groups"
-  | "get_group"
-  | "list_branches"
-  | "get_branch"
-  | "list_categories"
-  | "get_category";
-
 export const talentlmsActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "health_check",
+    operationType: "read",
     description: "Check whether the configured TalentLMS API domain and API key can reach API v2.",
     requiredScopes: [],
     inputSchema: s.object("No input parameters are required for the TalentLMS health check.", {}),
@@ -117,6 +102,7 @@ export const talentlmsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List TalentLMS users with optional API v2 pagination.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for listing TalentLMS users.", paginationInputFields, {
@@ -126,6 +112,7 @@ export const talentlmsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Get a TalentLMS user by ID.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for getting a TalentLMS user.", {
@@ -135,6 +122,7 @@ export const talentlmsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_user",
+    operationType: "write",
     description: "Create a TalentLMS user with common user fields and optional raw API fields.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for creating a TalentLMS user.", userWriteFields, {
@@ -144,6 +132,7 @@ export const talentlmsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_user",
+    operationType: "write",
     description: "Update a TalentLMS user with common user fields and optional raw API fields.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -160,6 +149,7 @@ export const talentlmsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_user",
+    operationType: "destructive",
     description: "Delete a TalentLMS user by ID.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for deleting a TalentLMS user.", {
@@ -169,6 +159,7 @@ export const talentlmsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_courses",
+    operationType: "read",
     description: "List TalentLMS courses with optional API v2 pagination.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for listing TalentLMS courses.", paginationInputFields, {
@@ -178,6 +169,7 @@ export const talentlmsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_course",
+    operationType: "read",
     description: "Get a TalentLMS course by ID.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for getting a TalentLMS course.", {
@@ -187,6 +179,7 @@ export const talentlmsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_groups",
+    operationType: "read",
     description: "List TalentLMS groups with optional API v2 pagination.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for listing TalentLMS groups.", paginationInputFields, {
@@ -196,6 +189,7 @@ export const talentlmsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_group",
+    operationType: "read",
     description: "Get a TalentLMS group by ID.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for getting a TalentLMS group.", {
@@ -205,6 +199,7 @@ export const talentlmsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_branches",
+    operationType: "read",
     description: "List TalentLMS branches with optional API v2 pagination.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for listing TalentLMS branches.", paginationInputFields, {
@@ -214,6 +209,7 @@ export const talentlmsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_branch",
+    operationType: "read",
     description: "Get a TalentLMS branch by ID.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for getting a TalentLMS branch.", {
@@ -223,6 +219,7 @@ export const talentlmsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_categories",
+    operationType: "read",
     description: "List TalentLMS categories with optional API v2 pagination.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for listing TalentLMS categories.", paginationInputFields, {
@@ -232,6 +229,7 @@ export const talentlmsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_category",
+    operationType: "read",
     description: "Get a TalentLMS category by ID.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for getting a TalentLMS category.", {

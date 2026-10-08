@@ -1,15 +1,18 @@
 import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
 import type { ProviderProxyExecutor } from "../../core/types.ts";
-import type { HabiticaActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   compactObject,
+  looseArray,
   optionalBoolean,
+  optionalBooleanOrNull,
   optionalInteger,
   optionalNumber,
   optionalRecord,
   optionalRawString,
   optionalString,
+  rawStringOrNull,
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
@@ -17,10 +20,14 @@ import {
   createProviderFetch,
   createProviderProxyUrl,
   defineProviderExecutors,
+  isAbortLikeError,
   normalizeProviderProxyHeaders,
+  providerInputError,
   ProviderRequestError,
+  providerResponseError,
   providerUserAgent,
   requireApiKeyCredential,
+  requiredInputString,
   toProviderProxyError,
 } from "../provider-runtime.ts";
 
@@ -63,7 +70,7 @@ interface HabiticaEnvelope {
   error?: unknown;
 }
 
-export const habiticaActionHandlers: Record<HabiticaActionName, HabiticaActionHandler> = {
+export const habiticaActionHandlers: ProviderActionHandlers<"habitica", HabiticaActionHandler> = {
   get_user_profile(input, context) {
     return getUserProfile(input, context);
   },
@@ -107,8 +114,8 @@ export const executors: ProviderExecutors = defineProviderExecutors<HabiticaActi
     const credential = await requireApiKeyCredential(context, service);
     return {
       apiKey: credential.apiKey,
-      userId: readCredentialString(credential.values.userId ?? credential.metadata.userId, "userId"),
-      xClient: readCredentialString(credential.values.xClient ?? credential.metadata.xClient, "xClient"),
+      userId: requiredInputString(credential.values.userId ?? credential.metadata.userId, "userId"),
+      xClient: requiredInputString(credential.values.xClient ?? credential.metadata.xClient, "xClient"),
       fetcher,
       signal: context.signal,
     };
@@ -120,8 +127,8 @@ export const proxy: ProviderProxyExecutor = async (input, context) => {
     const credential = await requireApiKeyCredential(context, service);
     const habiticaCredential: HabiticaCredential = {
       apiKey: credential.apiKey,
-      userId: readCredentialString(credential.values.userId ?? credential.metadata.userId, "userId"),
-      xClient: readCredentialString(credential.values.xClient ?? credential.metadata.xClient, "xClient"),
+      userId: requiredInputString(credential.values.userId ?? credential.metadata.userId, "userId"),
+      xClient: requiredInputString(credential.values.xClient ?? credential.metadata.xClient, "xClient"),
     };
     const url = createProviderProxyUrl(habiticaApiBaseUrl, input.endpoint, input.query);
     const headers = normalizeProviderProxyHeaders(input.headers);
@@ -170,12 +177,12 @@ export const credentialValidators: CredentialValidators = {
       signal,
       phase: "validate",
     });
-    const user = requiredRecord(payload.data, "Habitica user response", providerOutputError);
+    const user = requiredRecord(payload.data, "Habitica user response", providerResponseError);
     const profile = optionalRecord(user.profile);
     const stats = optionalRecord(user.stats);
     const party = optionalRecord(user.party);
-    const providerAccountId = nullableString(user.id) ?? nullableString(user._id) ?? credential.userId;
-    const profileName = nullableString(profile?.name);
+    const providerAccountId = rawStringOrNull(user.id) ?? rawStringOrNull(user._id) ?? credential.userId;
+    const profileName = rawStringOrNull(profile?.name);
 
     return {
       profile: {
@@ -190,8 +197,8 @@ export const credentialValidators: CredentialValidators = {
         validationEndpoint: "/user",
         profileName,
         level: nullableInteger(stats?.lvl),
-        class: nullableString(stats?.class),
-        partyId: nullableString(party?._id),
+        class: rawStringOrNull(stats?.class),
+        partyId: rawStringOrNull(party?._id),
       }),
     };
   },
@@ -478,7 +485,7 @@ function createHabiticaError(
 }
 
 function extractHabiticaErrorMessage(payload: HabiticaEnvelope): string | undefined {
-  return nullableString(payload.message) ?? nullableString(payload.error) ?? undefined;
+  return rawStringOrNull(payload.message) ?? rawStringOrNull(payload.error) ?? undefined;
 }
 
 function buildTaskMutationBody(
@@ -511,17 +518,17 @@ function buildTaskMutationBody(
 }
 
 function normalizeUser(value: unknown): Record<string, unknown> {
-  const record = requiredRecord(value, "Habitica user", providerOutputError);
+  const record = requiredRecord(value, "Habitica user", providerResponseError);
   const profile = optionalRecord(record.profile);
   const stats = optionalRecord(record.stats);
   const party = optionalRecord(record.party);
 
   return {
-    id: nullableString(record.id) ?? nullableString(record._id),
-    profileName: nullableString(profile?.name),
+    id: rawStringOrNull(record.id) ?? rawStringOrNull(record._id),
+    profileName: rawStringOrNull(profile?.name),
     level: nullableInteger(stats?.lvl),
-    class: nullableString(stats?.class),
-    partyId: nullableString(party?._id),
+    class: rawStringOrNull(stats?.class),
+    partyId: rawStringOrNull(party?._id),
     raw: record,
   };
 }
@@ -531,18 +538,18 @@ function normalizeTaskList(value: unknown): Array<Record<string, unknown>> {
 }
 
 function normalizeTask(value: unknown): Record<string, unknown> {
-  const record = requiredRecord(value, "Habitica task", providerOutputError);
+  const record = requiredRecord(value, "Habitica task", providerResponseError);
   return {
-    id: nullableString(record.id) ?? nullableString(record._id),
-    text: nullableString(record.text),
-    alias: nullableString(record.alias),
-    type: nullableString(record.type),
-    notes: nullableString(record.notes),
-    completed: nullableBoolean(record.completed),
+    id: rawStringOrNull(record.id) ?? rawStringOrNull(record._id),
+    text: rawStringOrNull(record.text),
+    alias: rawStringOrNull(record.alias),
+    type: rawStringOrNull(record.type),
+    notes: rawStringOrNull(record.notes),
+    completed: optionalBooleanOrNull(record.completed),
     priority: nullableNumber(record.priority),
     value: nullableNumber(record.value),
-    attribute: nullableString(record.attribute),
-    date: nullableString(record.date),
+    attribute: rawStringOrNull(record.attribute),
+    date: rawStringOrNull(record.date),
     tags: optionalStringArray(record.tags) ?? [],
     checklist: normalizeChecklistList(record.checklist),
     raw: record,
@@ -550,19 +557,19 @@ function normalizeTask(value: unknown): Record<string, unknown> {
 }
 
 function normalizeChecklistList(value: unknown): Array<Record<string, unknown>> {
-  return optionalArray(value).map((item) => {
-    const record = requiredRecord(item, "Habitica checklist item", providerOutputError);
+  return looseArray(value).map((item) => {
+    const record = requiredRecord(item, "Habitica checklist item", providerResponseError);
     return {
-      id: nullableString(record.id) ?? nullableString(record._id),
-      text: nullableString(record.text),
-      completed: nullableBoolean(record.completed),
+      id: rawStringOrNull(record.id) ?? rawStringOrNull(record._id),
+      text: rawStringOrNull(record.text),
+      completed: optionalBooleanOrNull(record.completed),
       raw: record,
     };
   });
 }
 
 function normalizeScoreResult(value: unknown): Record<string, unknown> {
-  const record = requiredRecord(value, "Habitica score result", providerOutputError);
+  const record = requiredRecord(value, "Habitica score result", providerResponseError);
   return {
     delta: nullableNumber(record.delta),
     hp: nullableNumber(record.hp),
@@ -570,7 +577,7 @@ function normalizeScoreResult(value: unknown): Record<string, unknown> {
     exp: nullableNumber(record.exp),
     gp: nullableNumber(record.gp),
     lvl: nullableInteger(record.lvl),
-    class: nullableString(record.class),
+    class: rawStringOrNull(record.class),
     points: nullableInteger(record.points),
     str: nullableNumber(record.str),
     con: nullableNumber(record.con),
@@ -586,25 +593,21 @@ function normalizeTagList(value: unknown): Array<Record<string, unknown>> {
 }
 
 function normalizeTag(value: unknown): Record<string, unknown> {
-  const record = requiredRecord(value, "Habitica tag", providerOutputError);
+  const record = requiredRecord(value, "Habitica tag", providerResponseError);
   return {
-    id: nullableString(record.id) ?? nullableString(record._id),
-    name: nullableString(record.name),
-    challenge: nullableString(record.challenge),
+    id: rawStringOrNull(record.id) ?? rawStringOrNull(record._id),
+    name: rawStringOrNull(record.name),
+    challenge: rawStringOrNull(record.challenge),
     raw: record,
   };
 }
 
 function resolveHabiticaCredential(input: Record<string, unknown>): HabiticaCredential {
   return {
-    apiKey: readCredentialString(input.apiKey, "apiKey"),
-    userId: readCredentialString(input.userId, "userId"),
-    xClient: readCredentialString(input.xClient, "xClient"),
+    apiKey: requiredInputString(input.apiKey, "apiKey"),
+    userId: requiredInputString(input.userId, "userId"),
+    xClient: requiredInputString(input.xClient, "xClient"),
   };
-}
-
-function readCredentialString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function requiredArray(value: unknown, label: string): unknown[] {
@@ -612,10 +615,6 @@ function requiredArray(value: unknown, label: string): unknown[] {
     throw new ProviderRequestError(502, `${label} is missing or invalid`);
   }
   return value;
-}
-
-function optionalArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
 }
 
 function optionalStringArray(value: unknown): string[] | undefined {
@@ -646,30 +645,10 @@ function optionalChecklistItems(value: unknown): Array<Record<string, unknown>> 
   });
 }
 
-function nullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
-
 function nullableNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function nullableInteger(value: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) ? value : null;
-}
-
-function nullableBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerOutputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return error instanceof Error && (error.name === "AbortError" || error.message.toLowerCase().includes("abort"));
 }

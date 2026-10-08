@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -15,14 +16,13 @@ import {
 } from "../../core/cast.ts";
 import {
   createProviderTimeout,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
   readProviderTextBody,
 } from "../provider-runtime.ts";
 
 export const chatApiForWhatsappApiOrigin = "https://api.chat-api.com";
-
-const chatApiForWhatsappRequestTimeoutMs = 30_000;
 
 type ChatApiForWhatsappPhase = "validate" | "execute";
 
@@ -39,7 +39,10 @@ interface ChatApiForWhatsappResponse {
   rawText: string;
 }
 
-export const chatApiForWhatsappActionHandlers: Record<string, ProviderRuntimeHandler<ChatApiForWhatsappContext>> = {
+export const chatApiForWhatsappActionHandlers: ProviderActionHandlers<
+  "chat_api_for_whatsapp",
+  ProviderRuntimeHandler<ChatApiForWhatsappContext>
+> = {
   test_api_key(_input, context) {
     return getStatus(context, "execute");
   },
@@ -104,7 +107,7 @@ export const chatApiForWhatsappActionHandlers: Record<string, ProviderRuntimeHan
       body: compactObject({
         chatId: optionalString(input.chatId),
         phone: optionalString(input.phone),
-        body: requiredString(input.text, "text", inputError),
+        body: requiredString(input.text, "text", providerInputError),
       }),
     });
     return normalizeSendStatus(payload);
@@ -119,8 +122,8 @@ export const chatApiForWhatsappActionHandlers: Record<string, ProviderRuntimeHan
       body: compactObject({
         chatId: optionalString(input.chatId),
         phone: optionalString(input.phone),
-        body: requiredString(input.fileUrl, "fileUrl", inputError),
-        filename: requiredString(input.filename, "filename", inputError),
+        body: requiredString(input.fileUrl, "fileUrl", providerInputError),
+        filename: requiredString(input.filename, "filename", providerInputError),
         caption: optionalString(input.caption),
       }),
     });
@@ -143,7 +146,7 @@ export const chatApiForWhatsappActionHandlers: Record<string, ProviderRuntimeHan
 };
 
 export function requireChatApiForWhatsappInstanceId(value: unknown): string {
-  const instanceId = requiredString(value, "instanceId", inputError);
+  const instanceId = requiredString(value, "instanceId", providerInputError);
   const numericInstanceId = Number(instanceId);
   if (!Number.isInteger(numericInstanceId) || numericInstanceId <= 0) {
     throw new ProviderRequestError(400, "instanceId must be a positive integer string");
@@ -228,7 +231,7 @@ async function requestChatApiForWhatsapp(input: {
   query?: Record<string, unknown>;
   body?: Record<string, unknown>;
 }): Promise<ChatApiForWhatsappResponse> {
-  const timeout = createProviderTimeout(input.context.signal, chatApiForWhatsappRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   const url = new URL(
     input.path.startsWith("/") ? input.path.slice(1) : input.path,
     resolveChatApiForWhatsappBaseUrl(input.context.instanceId),
@@ -375,10 +378,6 @@ function parseJsonSafely(value: string): unknown {
   } catch {
     return undefined;
   }
-}
-
-function inputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }
 
 function responseError(message: string): ProviderRequestError {

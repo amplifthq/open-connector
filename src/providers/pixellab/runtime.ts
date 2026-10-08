@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlerSubset } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderTransitFile } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
@@ -16,10 +17,13 @@ import {
 } from "../../core/cast.ts";
 import { readBoundedResponseBytes } from "../../core/request.ts";
 import {
+  providerInputError,
   ProviderRequestError,
+  providerResponseError,
   providerUserAgent,
   readProviderJsonBody,
   readTransitFileInput,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 export const pixellabApiBaseUrl = "https://api.pixellab.ai/v2";
@@ -47,7 +51,7 @@ export interface NormalizedPixellabUsage {
 const pixellabValidationPath = "/characters?limit=1&offset=0";
 const maxAnimationFrames = 64;
 
-export const pixellabActionHandlers: Record<string, PixellabActionHandler> = {
+export const pixellabActionHandlers: ProviderActionHandlerSubset<"pixellab", PixellabActionHandler> = {
   async start_text_animation(input, context) {
     const frameCount = optionalInteger(input.frameCount);
     if (frameCount !== undefined && frameCount % 2 !== 0) {
@@ -63,7 +67,7 @@ export const pixellabActionHandlers: Record<string, PixellabActionHandler> = {
       compactObject({
         first_frame: firstFrame,
         last_frame: lastFrame,
-        action: readRequiredString(input.action, "action"),
+        action: requiredInputString(input.action, "action"),
         frame_count: frameCount,
         seed: optionalInteger(input.seed),
         no_background: optionalBoolean(input.noBackground),
@@ -75,7 +79,7 @@ export const pixellabActionHandlers: Record<string, PixellabActionHandler> = {
   },
 
   async get_background_job(input, context) {
-    const jobId = readRequiredString(input.jobId, "jobId");
+    const jobId = requiredInputString(input.jobId, "jobId");
     const payload = await pixellabRequestJson(
       "GET",
       `/background-jobs/${encodeURIComponent(jobId)}`,
@@ -97,7 +101,7 @@ export const pixellabActionHandlers: Record<string, PixellabActionHandler> = {
       "POST",
       "/animate-with-skeleton",
       compactObject({
-        image_size: requiredRecord(input.imageSize, "imageSize", invalidInputError),
+        image_size: requiredRecord(input.imageSize, "imageSize", providerInputError),
         reference_image: referenceImage,
         skeleton_keypoints: normalizeSkeletonFrames(input.skeletonKeypoints),
         guidance_scale: optionalNumber(input.guidanceScale),
@@ -243,7 +247,7 @@ export async function encodeTransitImage(
     throw new ProviderRequestError(413, `${fieldName} exceeds the local transit file size limit.`);
   }
   const bytes = new Uint8Array(await source.file.arrayBuffer());
-  const imageType = detectImageType(bytes, fieldName, invalidInputError);
+  const imageType = detectImageType(bytes, fieldName, providerInputError);
   return {
     type: "base64",
     base64: `data:${imageType.mimeType};base64,${Buffer.from(bytes).toString("base64")}`,
@@ -278,7 +282,7 @@ function detectImageType(
 export function normalizeStartedJob(payload: unknown): Record<string, unknown> {
   const record = requireResponseRecord(payload, "background job start");
   return compactObject({
-    jobId: requiredString(record.background_job_id, "PixelLab background_job_id", invalidResponseError),
+    jobId: requiredString(record.background_job_id, "PixelLab background_job_id", providerResponseError),
     status: normalizeJobStatus(record.status ?? "processing"),
     enhancedPrompt: optionalString(record.enhanced_prompt),
     usage: normalizeUsage(record.usage),
@@ -295,9 +299,9 @@ async function normalizeBackgroundJob(
   const lastResponse = optionalRecord(record.last_response);
   const images = await storePixellabImages(readBackgroundJobImages(lastResponse), "pixellab-image", context);
   return compactObject({
-    jobId: requiredString(record.id, "PixelLab job id", invalidResponseError),
+    jobId: requiredString(record.id, "PixelLab job id", providerResponseError),
     status,
-    createdAt: requiredString(record.created_at, "PixelLab created_at", invalidResponseError),
+    createdAt: requiredString(record.created_at, "PixelLab created_at", providerResponseError),
     images,
     imageCount: images.length > 0 ? images.length : undefined,
     result: sanitizeBackgroundJobResult(lastResponse),
@@ -330,16 +334,16 @@ function readBackgroundJobImages(lastResponse: Record<string, unknown> | undefin
 
 function normalizeEstimatedSkeleton(payload: unknown): Record<string, unknown> {
   const record = requireResponseRecord(payload, "estimate-skeleton");
-  const keypoints = optionalObjectArray(record.keypoints, "PixelLab keypoint", invalidResponseError).map(
+  const keypoints = optionalObjectArray(record.keypoints, "PixelLab keypoint", providerResponseError).map(
     (keypoint) => ({
       x: requireFiniteNumber(keypoint.x, "PixelLab keypoint x"),
       y: requireFiniteNumber(keypoint.y, "PixelLab keypoint y"),
-      label: requiredString(keypoint.label, "PixelLab keypoint label", invalidResponseError),
+      label: requiredString(keypoint.label, "PixelLab keypoint label", providerResponseError),
       zIndex: requireFiniteNumber(keypoint.z_index, "PixelLab keypoint z_index"),
     }),
   );
   if (!Array.isArray(record.keypoints)) {
-    throw invalidResponseError("PixelLab estimate-skeleton response is missing keypoints.");
+    throw providerResponseError("PixelLab estimate-skeleton response is missing keypoints.");
   }
   return compactObject({ keypoints, usage: normalizeUsage(record.usage) });
 }
@@ -356,11 +360,11 @@ function normalizeSkeletonFrames(value: unknown): Array<Array<Record<string, unk
       throw new ProviderRequestError(400, `skeletonKeypoints[${frameIndex}] must contain at least one point.`);
     }
     return frame.map((point, pointIndex) => {
-      const record = requiredRecord(point, `skeletonKeypoints[${frameIndex}][${pointIndex}]`, invalidInputError);
+      const record = requiredRecord(point, `skeletonKeypoints[${frameIndex}][${pointIndex}]`, providerInputError);
       return compactObject({
         x: requireInputNumber(record.x, `skeletonKeypoints[${frameIndex}][${pointIndex}].x`),
         y: requireInputNumber(record.y, `skeletonKeypoints[${frameIndex}][${pointIndex}].y`),
-        label: readRequiredString(record.label, `skeletonKeypoints[${frameIndex}][${pointIndex}].label`),
+        label: requiredInputString(record.label, `skeletonKeypoints[${frameIndex}][${pointIndex}].label`),
         z_index: optionalNumber(record.zIndex),
       });
     });
@@ -373,13 +377,13 @@ export async function storePixellabImages(
   context: ApiKeyProviderContext,
 ): Promise<ProviderTransitFile[]> {
   if (!Array.isArray(value)) {
-    throw invalidResponseError("PixelLab response images must be an array.");
+    throw providerResponseError("PixelLab response images must be an array.");
   }
   if (value.length === 0) {
     return [];
   }
   if (value.length > maxAnimationFrames) {
-    throw invalidResponseError(`PixelLab returned more than ${maxAnimationFrames} animation frames.`);
+    throw providerResponseError(`PixelLab returned more than ${maxAnimationFrames} animation frames.`);
   }
   if (!context.transitFiles) {
     throw new ProviderRequestError(400, "PixelLab image output requires local transit file storage.");
@@ -411,17 +415,17 @@ export async function storePixellabImages(
 }
 
 function decodePixellabImage(value: unknown, fieldName: string): DecodedPixellabImage {
-  const record = requiredRecord(value, fieldName, invalidResponseError);
-  const encoded = requiredString(record.base64, `${fieldName}.base64`, invalidResponseError);
+  const record = requiredRecord(value, fieldName, providerResponseError);
+  const encoded = requiredString(record.base64, `${fieldName}.base64`, providerResponseError);
   const dataUri = /^data:([^;,]+);base64,(.+)$/isu.exec(encoded);
   const content = dataUri?.[2] ?? encoded;
   const declaredMimeType = dataUri?.[1]?.toLowerCase();
   const format = optionalString(record.format)?.toLowerCase();
   const mimeType = resolveOutputMimeType(declaredMimeType, format, fieldName);
-  const bytes = base64Bytes(content, `${fieldName}.base64`, invalidResponseError);
-  const detected = detectImageType(bytes, fieldName, invalidResponseError);
+  const bytes = base64Bytes(content, `${fieldName}.base64`, providerResponseError);
+  const detected = detectImageType(bytes, fieldName, providerResponseError);
   if (detected.mimeType !== mimeType) {
-    throw invalidResponseError(`${fieldName} content does not match its declared image format.`);
+    throw providerResponseError(`${fieldName} content does not match its declared image format.`);
   }
   return {
     bytes,
@@ -442,7 +446,7 @@ function resolveOutputMimeType(
   if (normalized === "image/jpeg" || normalized === "image/jpg") {
     return "image/jpeg";
   }
-  throw invalidResponseError(`${fieldName} has an unsupported image format.`);
+  throw providerResponseError(`${fieldName} has an unsupported image format.`);
 }
 
 export function normalizeUsage(value: unknown): NormalizedPixellabUsage | undefined {
@@ -454,7 +458,7 @@ export function normalizeUsage(value: unknown): NormalizedPixellabUsage | undefi
   const generations = optionalNumber(record.generations);
   const declaredType = optionalString(record.type);
   if (declaredType !== undefined && declaredType !== "usd" && declaredType !== "generations") {
-    throw invalidResponseError(`PixelLab returned unsupported usage type: ${declaredType}`);
+    throw providerResponseError(`PixelLab returned unsupported usage type: ${declaredType}`);
   }
   const type = declaredType === "generations" || (!declaredType && generations !== undefined) ? "generations" : "usd";
   const usage: NormalizedPixellabUsage = { type };
@@ -468,21 +472,21 @@ export function normalizeUsage(value: unknown): NormalizedPixellabUsage | undefi
 }
 
 function normalizeJobStatus(value: unknown): "queued" | "processing" | "completed" | "failed" {
-  const status = requiredString(value, "PixelLab job status", invalidResponseError);
+  const status = requiredString(value, "PixelLab job status", providerResponseError);
   if (status === "queued" || status === "processing" || status === "completed" || status === "failed") {
     return status;
   }
-  throw invalidResponseError(`PixelLab returned unsupported job status: ${status}`);
+  throw providerResponseError(`PixelLab returned unsupported job status: ${status}`);
 }
 
 export function requireResponseRecord(value: unknown, operation: string): Record<string, unknown> {
-  return requiredRecord(value, `PixelLab ${operation} response`, invalidResponseError);
+  return requiredRecord(value, `PixelLab ${operation} response`, providerResponseError);
 }
 
 function requireFiniteNumber(value: unknown, fieldName: string): number {
   const number = optionalNumber(value);
   if (number === undefined) {
-    throw invalidResponseError(`${fieldName} must be a finite number.`);
+    throw providerResponseError(`${fieldName} must be a finite number.`);
   }
   return number;
 }
@@ -493,10 +497,6 @@ function requireInputNumber(value: unknown, fieldName: string): number {
     throw new ProviderRequestError(400, `${fieldName} must be a finite number.`);
   }
   return number;
-}
-
-function readRequiredString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, invalidInputError);
 }
 
 function createPixellabError(response: Response, payload: unknown): ProviderRequestError {
@@ -542,12 +542,4 @@ function extractPixellabErrorMessage(value: unknown): string | undefined {
     }
   }
   return optionalString(record.error) ?? optionalString(record.message);
-}
-
-function invalidInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function invalidResponseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

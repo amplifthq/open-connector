@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
-import type { TheColonyActionName } from "./actions.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
@@ -9,7 +9,6 @@ export const theColonyApiBaseUrl = "https://thecolony.cc/api/v1";
 
 const theColonyTokenPath = "/auth/token";
 const theColonyValidationPath = "/users/me";
-const theColonyDefaultTimeoutMs = 30_000;
 
 type TheColonyRequestPhase = "validate" | "execute";
 type QueryValue = string | number | boolean | readonly (string | number | boolean)[] | undefined;
@@ -25,7 +24,7 @@ interface TheColonyRequestInput {
   idempotencyKey?: string;
 }
 
-export const theColonyActionHandlers: Record<TheColonyActionName, TheColonyActionHandler> = {
+export const theColonyActionHandlers: ProviderActionHandlers<"the_colony", TheColonyActionHandler> = {
   async get_me(_input, context) {
     const user = await requestTheColonyJson({
       method: "GET",
@@ -267,7 +266,7 @@ async function fetchTheColony(input: {
   phase: TheColonyRequestPhase;
   signal?: AbortSignal;
 }): Promise<Response> {
-  const timeout = createProviderTimeout(input.signal, theColonyDefaultTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     return await input.fetcher(input.url.toString(), {
       ...input.init,

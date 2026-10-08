@@ -1,4 +1,6 @@
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ApiKeyProviderContext, ProviderActionHandlers, ProviderFetch } from "../provider-runtime.ts";
+import type { TikHubEndpointMethod } from "./endpoint-policy.ts";
 
 import {
   compactObject,
@@ -6,33 +8,30 @@ import {
   optionalString as asOptionalString,
   requiredString,
 } from "../../core/cast.ts";
+import { createProviderTimeout, isAbortLikeError, providerUserAgent } from "../provider-runtime.ts";
+import { BoundedResponseTooLargeError, readBoundedResponseText } from "./bounded-response.ts";
+import { discoverTikHubEndpoints } from "./endpoint-catalog.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
-  ProviderRequestError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+  assertResolvedTikHubEndpointEligible,
+  assertTikHubEndpointEligible,
+  hasTikHubControlCharacter,
+} from "./endpoint-policy.ts";
+import { TikHubRequestError } from "./errors.ts";
 
-const tikhubApiBaseUrl = "https://api.tikhub.io";
-const tikhubDefaultRequestTimeoutMs = 45_000;
+export const tikhubApiBaseUrl = "https://api.tikhub.io";
 const tikhubUserScope = "/api/v1/tikhub/user/";
-const tikhubTiktokWebScope = "/api/v1/tiktok/web/";
-const tikhubDouyinWebScope = "/api/v1/douyin/web/";
-const tikhubXiaohongshuAppV2Scope = "/api/v1/xiaohongshu/app_v2/";
-const tikhubXiaohongshuWebV2Scope = "/api/v1/xiaohongshu/web_v2/";
-const tikhubDouyinSearchScope = "/api/v1/douyin/search/";
-const tikhubDouyinBillboardScope = "/api/v1/douyin/billboard/";
-const tikhubXiaohongshuDefaultSearchPage = 1;
-const tikhubXiaohongshuDefaultSearchSort = "general";
-const tikhubXiaohongshuDefaultSearchNoteType = "不限";
-const tikhubXiaohongshuDefaultSearchTimeFilter = "不限";
-const tikhubXiaohongshuDefaultSearchSource = "explore_feed";
-const tikhubXiaohongshuDefaultAiMode = 0;
+const tikhubUserRequestTimeoutMs = 45_000;
+const tikhubDynamicRequestTimeoutMs = 60_000;
+const tikhubDynamicRequestMaxBytes = 256 * 1024;
+const tikhubDynamicResponseMaxBytes = 4 * 1024 * 1024;
+const tikhubDynamicStringMaxBytes = 64 * 1024;
+const tikhubDynamicMaxJsonDepth = 64;
+const tikhubDynamicMaxQueryKeys = 128;
+const tikhubDynamicMaxQueryValues = 256;
 
 type TikHubPhase = "validate" | "execute";
-type TikHubActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
-type TikHubMethod = "GET" | "POST";
-type TikHubRequestValue = string | number | boolean | undefined;
+type TikHubActionHandler = (input: Record<string, unknown>, fetcher: typeof fetch, apiKey: string) => Promise<unknown>;
+type TikHubProviderActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 type TikHubEnvelope = {
   code?: number | null;
@@ -42,45 +41,41 @@ type TikHubEnvelope = {
   params?: Record<string, unknown> | null;
 };
 
-export const tikhubActionHandlers: Record<string, TikHubActionHandler> = {
-  async get_user_daily_usage(_input, context) {
-    const payload = await requestTikHubJson({
+const executeTikHubHandlers: Record<string, TikHubActionHandler> = {
+  async get_user_daily_usage(_input, fetcher, apiKey) {
+    const payload = await requestTikHubUserJson({
       path: "/api/v1/tikhub/user/get_user_daily_usage",
-      apiKey: context.apiKey,
-      params: {},
-      fetcher: context.fetcher,
+      apiKey,
+      fetcher,
       phase: "execute",
     });
-    const data = payload.data;
-
     return {
       envelope: normalizeEnvelope(payload),
-      usage: Array.isArray(data) ? data.filter(isRecord) : [],
-      rawData: data,
+      usage: Array.isArray(payload.data) ? payload.data.filter(isRecord) : [],
+      rawData: payload.data,
       raw: payload,
     };
   },
-  async get_user_info(_input, context) {
-    const payload = await requestTikHubJson({
+
+  async get_user_info(_input, fetcher, apiKey) {
+    const payload = await requestTikHubUserJson({
       path: "/api/v1/tikhub/user/get_user_info",
-      apiKey: context.apiKey,
-      params: {},
-      fetcher: context.fetcher,
+      apiKey,
+      fetcher,
       phase: "execute",
     });
-
     return normalizeUserInfo(payload);
   },
-  async get_endpoint_info(input, context) {
+
+  async get_endpoint_info(input, fetcher, apiKey) {
     const endpoint = readEndpoint(input.endpoint);
-    const payload = await requestTikHubJson({
+    const payload = await requestTikHubUserJson({
       path: "/api/v1/tikhub/user/get_endpoint_info",
-      apiKey: context.apiKey,
-      params: { endpoint },
-      fetcher: context.fetcher,
+      apiKey,
+      query: { endpoint },
+      fetcher,
       phase: "execute",
     });
-
     return {
       envelope: normalizeEnvelope(payload),
       endpoint,
@@ -88,36 +83,32 @@ export const tikhubActionHandlers: Record<string, TikHubActionHandler> = {
       raw: payload,
     };
   },
-  async get_all_endpoints_info(_input, context) {
-    const payload = await requestTikHubJson({
+
+  async get_all_endpoints_info(_input, fetcher, apiKey) {
+    const payload = await requestTikHubUserJson({
       path: "/api/v1/tikhub/user/get_all_endpoints_info",
-      apiKey: context.apiKey,
-      params: {},
-      fetcher: context.fetcher,
+      apiKey,
+      fetcher,
       phase: "execute",
     });
-
     return {
       envelope: normalizeEnvelope(payload),
       endpoints: payload.data,
       raw: payload,
     };
   },
-  async calculate_price(input, context) {
+
+  async calculate_price(input, fetcher, apiKey) {
     const endpoint = readEndpoint(input.endpoint);
     const requestPerDay =
       typeof input.requestPerDay === "number" && Number.isInteger(input.requestPerDay) ? input.requestPerDay : 1;
-    const payload = await requestTikHubJson({
+    const payload = await requestTikHubUserJson({
       path: "/api/v1/tikhub/user/calculate_price",
-      apiKey: context.apiKey,
-      params: {
-        endpoint,
-        request_per_day: String(requestPerDay),
-      },
-      fetcher: context.fetcher,
+      apiKey,
+      query: { endpoint, request_per_day: String(requestPerDay) },
+      fetcher,
       phase: "execute",
     });
-
     return {
       envelope: normalizeEnvelope(payload),
       endpoint,
@@ -126,328 +117,45 @@ export const tikhubActionHandlers: Record<string, TikHubActionHandler> = {
       raw: payload,
     };
   },
-  async fetch_tiktok_user_profile(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/tiktok/web/fetch_user_profile",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: compactObject({
-        uniqueId: readOptionalNonEmptyString(input.uniqueId),
-        secUid: readOptionalNonEmptyString(input.secUid),
-      }),
-      outputKey: "profile",
-    });
-  },
-  async fetch_tiktok_post_detail(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/tiktok/web/fetch_post_detail",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: {
-        itemId: readRequiredString(input.itemId, "itemId"),
+
+  async discover_endpoints(input, fetcher) {
+    return discoverTikHubEndpoints(
+      {
+        query: asOptionalString(input.query),
+        category: asOptionalString(input.category),
+        cursor: input.cursor === null ? null : asOptionalString(input.cursor),
+        limit: typeof input.limit === "number" ? input.limit : undefined,
       },
-      outputKey: "post",
-    });
+      fetcher,
+    );
   },
-  async fetch_tiktok_user_posts(input, context) {
-    return executeTikHubListAction({
-      path: "/api/v1/tiktok/web/fetch_user_post",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: compactObject({
-        secUid: readRequiredString(input.secUid, "secUid"),
-        cursor: readOptionalInteger(input.cursor),
-        count: readOptionalInteger(input.count),
-        coverFormat: readOptionalInteger(input.coverFormat),
-        post_item_list_request_type: readOptionalInteger(input.postItemListRequestType),
-      }),
-      outputKey: "posts",
-    });
+
+  async invoke_endpoint(input, fetcher, apiKey) {
+    return invokeTikHubEndpoint(input, fetcher, apiKey);
   },
-  async fetch_tiktok_post_comments(input, context) {
-    return executeTikHubListAction({
-      path: "/api/v1/tiktok/web/fetch_post_comment",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: compactObject({
-        aweme_id: readRequiredString(input.awemeId, "awemeId"),
-        cursor: readOptionalInteger(input.cursor),
-        count: readOptionalInteger(input.count),
-        current_region: readOptionalNonEmptyString(input.currentRegion),
-      }),
-      outputKey: "comments",
-    });
-  },
-  async search_tiktok_users(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/tiktok/web/fetch_search_user",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: compactObject({
-        keyword: readRequiredString(input.keyword, "keyword"),
-        cursor: readOptionalInteger(input.cursor),
-        search_id: readOptionalNonEmptyString(input.searchId),
-      }),
-      outputKey: "results",
-    });
-  },
-  async fetch_tiktok_tag_detail(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/tiktok/web/fetch_tag_detail",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: {
-        tag_name: readRequiredString(input.tagName, "tagName"),
-      },
-      outputKey: "results",
-    });
-  },
-  async fetch_tiktok_tag_posts(input, context) {
-    return executeTikHubListAction({
-      path: "/api/v1/tiktok/web/fetch_tag_post",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: compactObject({
-        challengeID: readRequiredString(input.challengeId, "challengeId"),
-        count: readOptionalInteger(input.count),
-        cursor: readOptionalInteger(input.cursor),
-      }),
-      outputKey: "posts",
-    });
-  },
-  async fetch_douyin_video_detail(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/douyin/web/fetch_one_video",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: compactObject({
-        aweme_id: readRequiredString(input.awemeId, "awemeId"),
-        need_anchor_info: readOptionalBoolean(input.needAnchorInfo),
-      }),
-      outputKey: "post",
-    });
-  },
-  async fetch_douyin_video_by_share_url(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/douyin/web/fetch_one_video_by_share_url",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: {
-        share_url: readRequiredString(input.shareUrl, "shareUrl"),
-      },
-      outputKey: "post",
-    });
-  },
-  async fetch_douyin_user_profile_by_uid(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/douyin/web/fetch_user_profile_by_uid",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: {
-        uid: readRequiredString(input.uid, "uid"),
-      },
-      outputKey: "profile",
-    });
-  },
-  async fetch_douyin_user_profile_by_short_id(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/douyin/web/fetch_user_profile_by_short_id",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: {
-        short_id: readRequiredString(input.shortId, "shortId"),
-      },
-      outputKey: "profile",
-    });
-  },
-  async fetch_douyin_user_posts(input, context) {
-    return executeTikHubListAction({
-      path: "/api/v1/douyin/web/fetch_user_post_videos",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: compactObject({
-        sec_user_id: readRequiredString(input.secUserId, "secUserId"),
-        max_cursor: readOptionalNonEmptyString(input.maxCursor),
-        count: readOptionalInteger(input.count),
-        filter_type: readOptionalNonEmptyString(input.filterType),
-      }),
-      outputKey: "posts",
-    });
-  },
-  async fetch_douyin_video_comments(input, context) {
-    return executeTikHubListAction({
-      path: "/api/v1/douyin/web/fetch_video_comments",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: compactObject({
-        aweme_id: readRequiredString(input.awemeId, "awemeId"),
-        cursor: readOptionalInteger(input.cursor),
-        count: readOptionalInteger(input.count),
-      }),
-      outputKey: "comments",
-    });
-  },
-  async fetch_douyin_video_comment_replies(input, context) {
-    return executeTikHubListAction({
-      path: "/api/v1/douyin/web/fetch_video_comment_replies",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: compactObject({
-        item_id: readRequiredString(input.itemId, "itemId"),
-        comment_id: readRequiredString(input.commentId, "commentId"),
-        cursor: readOptionalInteger(input.cursor),
-        count: readOptionalInteger(input.count),
-      }),
-      outputKey: "replies",
-    });
-  },
-  async search_xiaohongshu_notes(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/xiaohongshu/app_v2/search_notes",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: compactObject({
-        keyword: readRequiredString(input.keywords, "keywords"),
-        page: readOptionalInteger(input.page) ?? tikhubXiaohongshuDefaultSearchPage,
-        sort_type: readOptionalNonEmptyString(input.sortType) ?? tikhubXiaohongshuDefaultSearchSort,
-        note_type: normalizeXiaohongshuAppV2NoteType(input.noteType) ?? tikhubXiaohongshuDefaultSearchNoteType,
-        time_filter: tikhubXiaohongshuDefaultSearchTimeFilter,
-        source: tikhubXiaohongshuDefaultSearchSource,
-        ai_mode: tikhubXiaohongshuDefaultAiMode,
-      }),
-      outputKey: "results",
-    });
-  },
-  async search_xiaohongshu_users(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/xiaohongshu/app_v2/search_users",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: compactObject({
-        keyword: readRequiredString(input.keywords, "keywords"),
-        page: readOptionalInteger(input.page) ?? tikhubXiaohongshuDefaultSearchPage,
-        source: tikhubXiaohongshuDefaultSearchSource,
-      }),
-      outputKey: "results",
-    });
-  },
-  async fetch_xiaohongshu_note_comments(input, context) {
-    return executeTikHubListAction({
-      path: "/api/v1/xiaohongshu/app_v2/get_note_comments",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: buildXiaohongshuNoteCommentsQuery(input),
-      outputKey: "comments",
-    });
-  },
-  async fetch_xiaohongshu_sub_comments(input, context) {
-    return executeTikHubListAction({
-      path: "/api/v1/xiaohongshu/app_v2/get_note_sub_comments",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: buildXiaohongshuSubCommentsQuery(input),
-      outputKey: "replies",
-    });
-  },
-  async fetch_xiaohongshu_user_info(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/xiaohongshu/app_v2/get_user_info",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: buildXiaohongshuUserLookupQuery(input),
-      outputKey: "profile",
-    });
-  },
-  async fetch_xiaohongshu_hot_list(_input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/xiaohongshu/web_v2/fetch_hot_list",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: {},
-      outputKey: "hotList",
-    });
-  },
-  async fetch_xiaohongshu_user_notes(input, context) {
-    return executeTikHubListAction({
-      path: "/api/v1/xiaohongshu/app_v2/get_user_posted_notes",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: buildXiaohongshuUserNotesQuery(input),
-      outputKey: "posts",
-    });
-  },
-  async fetch_xiaohongshu_note_comment_replies(input, context) {
-    return executeTikHubListAction({
-      path: "/api/v1/xiaohongshu/app_v2/get_note_sub_comments",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: buildXiaohongshuSubCommentsQuery(input),
-      outputKey: "replies",
-    });
-  },
-  async search_douyin_videos(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/douyin/search/fetch_video_search_v1",
-      method: "POST",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      body: compactObject({
-        keyword: readRequiredString(input.keyword, "keyword"),
-        cursor: readOptionalInteger(input.cursor),
-        sort_type: readOptionalString(input.sortType),
-        publish_time: readOptionalString(input.publishTime),
-        filter_duration: readOptionalString(input.filterDuration),
-        content_type: readOptionalString(input.contentType),
-        search_id: readOptionalString(input.searchId),
-        backtrace: readOptionalString(input.backtrace),
-      }),
-      outputKey: "results",
-    });
-  },
-  async search_douyin_users(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/douyin/search/fetch_user_search",
-      method: "POST",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      body: compactObject({
-        keyword: readRequiredString(input.keyword, "keyword"),
-        cursor: readOptionalInteger(input.cursor),
-        douyin_user_fans: readOptionalString(input.douyinUserFans),
-        douyin_user_type: readOptionalString(input.douyinUserType),
-        search_id: readOptionalString(input.searchId),
-      }),
-      outputKey: "results",
-    });
-  },
-  async fetch_douyin_hot_total_list(input, context) {
-    return executeTikHubReadAction({
-      path: "/api/v1/douyin/billboard/fetch_hot_total_list",
-      apiKey: context.apiKey,
-      fetcher: context.fetcher,
-      query: compactObject({
-        page: readOptionalInteger(input.page),
-        page_size: readOptionalInteger(input.pageSize),
-        type: readRequiredString(input.type, "type"),
-        snapshot_time: readOptionalNonEmptyString(input.snapshotTime),
-        start_date: readOptionalNonEmptyString(input.startDate),
-        end_date: readOptionalNonEmptyString(input.endDate),
-        sentence_tag: readOptionalNonEmptyString(input.sentenceTag),
-        keyword: readOptionalNonEmptyString(input.keyword),
-      }),
-      outputKey: "hotList",
-    });
-  },
-} satisfies Record<string, TikHubActionHandler>;
+};
+
+export const tikhubActionHandlers: ProviderActionHandlers<"tikhub", TikHubProviderActionHandler> = {
+  get_user_daily_usage: adaptTikHubHandler(executeTikHubHandlers.get_user_daily_usage),
+  get_user_info: adaptTikHubHandler(executeTikHubHandlers.get_user_info),
+  get_endpoint_info: adaptTikHubHandler(executeTikHubHandlers.get_endpoint_info),
+  get_all_endpoints_info: adaptTikHubHandler(executeTikHubHandlers.get_all_endpoints_info),
+  calculate_price: adaptTikHubHandler(executeTikHubHandlers.calculate_price),
+  discover_endpoints: adaptTikHubHandler(executeTikHubHandlers.discover_endpoints),
+  invoke_endpoint: adaptTikHubHandler(executeTikHubHandlers.invoke_endpoint),
+};
+
+function adaptTikHubHandler(handler: TikHubActionHandler): TikHubProviderActionHandler {
+  return (input, context) => handler(input, context.fetcher, context.apiKey);
+}
 
 export async function validateTikHubCredential(
   input: Record<string, string>,
-  fetcher: typeof fetch,
-): Promise<import("../../core/types.ts").CredentialValidationResult> {
-  const payload = await requestTikHubJson({
+  fetcher: ProviderFetch,
+): Promise<CredentialValidationResult> {
+  const payload = await requestTikHubUserJson({
     path: "/api/v1/tikhub/user/get_user_info",
-    apiKey: requiredString(input.apiKey, "apiKey", (message) => new ProviderRequestError(401, message)),
-    params: {},
+    apiKey: requiredString(input.apiKey, "apiKey", (message) => new TikHubRequestError("invalid_input", message, 401)),
     fetcher,
     phase: "validate",
   });
@@ -475,202 +183,517 @@ export async function validateTikHubCredential(
   };
 }
 
-async function requestTikHubJson(input: {
-  path: string;
-  apiKey: string;
-  params?: Record<string, TikHubRequestValue>;
-  body?: Record<string, TikHubRequestValue>;
-  method?: TikHubMethod;
-  fetcher: typeof fetch;
-  phase: TikHubPhase;
-}) {
-  const timeoutHandle = createProviderTimeout(undefined, tikhubDefaultRequestTimeoutMs);
+async function invokeTikHubEndpoint(input: Record<string, unknown>, fetcher: typeof fetch, apiKey: string) {
+  const method = readMethod(input.method);
+  const pathTemplate = readRequiredString(input.path, "path");
+  const policy = assertTikHubEndpointEligible(method, pathTemplate);
+  const request = asRecordOrEmpty(input.request, "request");
+  assertDynamicInvocationWithinLimits({ method, path: pathTemplate, request });
+  const pathValues = asRecordOrEmpty(request.path, "request.path");
+  const finalPath = resolvePathTemplate(pathTemplate, policy.placeholders, pathValues);
+  const finalPolicy = assertResolvedTikHubEndpointEligible(method, finalPath);
+  const query = buildQuery(request.query);
+  const body = buildRequestBody(method, request.body);
+  const url = new URL(finalPath, tikhubApiBaseUrl);
+  const queryString = query.toString();
+  if (queryString !== "") {
+    url.search = queryString;
+  }
+  const serializedBody = method === "POST" && body !== undefined ? JSON.stringify(body) : undefined;
+  assertSerializedDynamicRequestWithinLimits(url, serializedBody);
 
+  const timeout = createProviderTimeout(undefined, tikhubDynamicRequestTimeoutMs);
   try {
-    const method = input.method ?? "GET";
-    const response = await input.fetcher(buildTikHubUrl(input.path, input.params ?? {}), {
+    const response = await fetcher(url, {
       method,
       headers: {
         accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
-        ...(method === "POST" ? { "content-type": "application/json" } : {}),
+        authorization: `Bearer ${apiKey}`,
+        ...(serializedBody === undefined ? {} : { "content-type": "application/json" }),
         "user-agent": providerUserAgent,
       },
-      ...(method === "POST" ? { body: JSON.stringify(input.body ?? {}) } : {}),
-      signal: timeoutHandle.signal,
+      ...(serializedBody === undefined ? {} : { body: serializedBody }),
+      redirect: "manual",
+      signal: timeout.signal,
     });
-    const payload = await readTikHubPayload(response);
-
-    if (!response.ok) {
-      throw createTikHubError(response.status, payload, input.phase, input.path);
-    }
-
-    const payloadRecord = asOptionalObject(payload);
-    if (!payloadRecord) {
-      throw new ProviderRequestError(502, "TikHub returned an invalid payload");
-    }
-
-    const code = typeof payloadRecord.code === "number" ? payloadRecord.code : undefined;
-    if (code !== undefined && code >= 400) {
-      throw createTikHubError(code, payloadRecord, input.phase, input.path);
-    }
-
-    return payloadRecord;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
+    let responseBody: unknown;
+    try {
+      responseBody = await readTikHubResponseBody(response, tikhubDynamicResponseMaxBytes);
+    } catch (error) {
+      if (error instanceof BoundedResponseTooLargeError && !response.ok) {
+        throw createDynamicTikHubError({
+          upstreamStatus: response.status,
+          body: { bodyTooLarge: true, bodyTruncated: true },
+          requiredScope: finalPolicy.requiredScope,
+        });
+      }
       throw error;
     }
+    const responseRecord = asOptionalObject(responseBody);
+    const hasBusinessCode = responseRecord ? Object.hasOwn(responseRecord, "code") : false;
+    const rawBusinessCode = hasBusinessCode ? responseRecord?.code : undefined;
+    const businessCode = typeof rawBusinessCode === "number" ? rawBusinessCode : undefined;
+    const requestId = responseRecord ? asOptionalString(responseRecord.request_id) : undefined;
 
-    if (timeoutHandle.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "TikHub request timed out");
+    if (response.ok && hasBusinessCode && businessCode === undefined) {
+      throw new TikHubRequestError(
+        "provider_error",
+        "TikHub returned an invalid business code",
+        502,
+        compactObject({
+          upstreamStatus: response.status,
+          businessCode: rawBusinessCode,
+          requestId,
+          body: responseBody,
+        }),
+      );
     }
 
-    throw new ProviderRequestError(
-      502,
+    if (!response.ok || !isSuccessfulBusinessCode(businessCode)) {
+      throw createDynamicTikHubError({
+        upstreamStatus: response.status,
+        businessCode: rawBusinessCode,
+        requestId,
+        body: responseBody,
+        requiredScope: finalPolicy.requiredScope,
+      });
+    }
+    if (!responseRecord) {
+      throw new TikHubRequestError("provider_error", "TikHub returned an invalid successful response payload", 502);
+    }
+
+    return {
+      method,
+      path: finalPath,
+      status: response.status,
+      requestId: requestId ?? null,
+      response: responseRecord,
+    };
+  } catch (error) {
+    if (error instanceof TikHubRequestError) {
+      throw error;
+    }
+    if (timeout.didTimeout() || isAbortLikeError(error)) {
+      throw new TikHubRequestError("provider_error", "TikHub request timed out", 504);
+    }
+    throw new TikHubRequestError("provider_error", "TikHub endpoint request failed", 502);
+  } finally {
+    timeout.cleanup();
+  }
+}
+
+function resolvePathTemplate(pathTemplate: string, placeholders: string[], pathValues: Record<string, unknown>) {
+  const providedNames = Object.keys(pathValues).sort();
+  const expectedNames = [...placeholders].sort();
+  if (JSON.stringify(providedNames) !== JSON.stringify(expectedNames)) {
+    throw new TikHubRequestError(
+      "invalid_input",
+      "request.path must provide exactly one value for every path placeholder",
+      400,
+    );
+  }
+
+  const encodedValues = new Map<string, string>();
+  for (const placeholder of placeholders) {
+    encodedValues.set(placeholder, encodePathValue(pathValues[placeholder], placeholder));
+  }
+  return pathTemplate
+    .split("/")
+    .map((segment) => {
+      if (!segment.startsWith("{") || !segment.endsWith("}")) {
+        return segment;
+      }
+      return encodedValues.get(segment.slice(1, -1))!;
+    })
+    .join("/");
+}
+
+function encodePathValue(value: unknown, fieldName: string) {
+  if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+    throw new TikHubRequestError(
+      "invalid_input",
+      `request.path.${fieldName} must be a string, number, or boolean`,
+      400,
+    );
+  }
+  if (typeof value === "number" && !Number.isFinite(value)) {
+    throw new TikHubRequestError("invalid_input", `request.path.${fieldName} must be finite`, 400);
+  }
+  const text = String(value);
+  if (
+    text === "" ||
+    text === "." ||
+    text === ".." ||
+    text.includes("/") ||
+    text.includes("\\") ||
+    text.includes("?") ||
+    text.includes("#") ||
+    text.includes("%") ||
+    hasTikHubControlCharacter(text)
+  ) {
+    throw new TikHubRequestError(
+      "invalid_input",
+      `request.path.${fieldName} cannot contain a path separator or URL control character`,
+      400,
+    );
+  }
+  return encodeURIComponent(text);
+}
+
+function buildQuery(value: unknown) {
+  const query = asRecordOrEmpty(value, "request.query");
+  const entries = Object.entries(query);
+  if (entries.length > tikhubDynamicMaxQueryKeys) {
+    throw new TikHubRequestError(
+      "invalid_input",
+      `request.query cannot contain more than ${tikhubDynamicMaxQueryKeys} keys`,
+      400,
+    );
+  }
+  const result = new URLSearchParams();
+  let valueCount = 0;
+  for (const [key, rawValue] of entries) {
+    if (key === "" || hasTikHubControlCharacter(key)) {
+      throw new TikHubRequestError("invalid_input", "request.query contains an invalid key", 400);
+    }
+    const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+    valueCount += values.length;
+    if (valueCount > tikhubDynamicMaxQueryValues) {
+      throw new TikHubRequestError(
+        "invalid_input",
+        `request.query cannot contain more than ${tikhubDynamicMaxQueryValues} scalar values`,
+        400,
+      );
+    }
+    for (const item of values) {
+      result.append(key, serializeQueryScalar(item, key));
+    }
+  }
+  return result;
+}
+
+function serializeQueryScalar(value: unknown, fieldName: string) {
+  if (value === null) {
+    return "null";
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new TikHubRequestError("invalid_input", `request.query.${fieldName} must contain finite numbers`, 400);
+    }
+    return String(value);
+  }
+  if (typeof value === "string" || typeof value === "boolean") {
+    assertDynamicStringAllowed(value, `request.query.${fieldName}`);
+    return String(value);
+  }
+  throw new TikHubRequestError(
+    "invalid_input",
+    `request.query.${fieldName} must be a JSON scalar or scalar array`,
+    400,
+  );
+}
+
+function buildRequestBody(method: TikHubEndpointMethod, value: unknown) {
+  if (method === "GET") {
+    if (value !== undefined && value !== null) {
+      throw new TikHubRequestError("invalid_input", "GET endpoints cannot receive request.body", 400);
+    }
+    return undefined;
+  }
+  if (value === undefined) {
+    return undefined;
+  }
+  assertJsonValue(value, "request.body");
+  return value;
+}
+
+function assertDynamicInvocationWithinLimits(invocation: Record<string, unknown>) {
+  assertJsonValue(invocation, "invocation");
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(invocation);
+  } catch {
+    throw new TikHubRequestError("invalid_input", "invocation must be JSON serializable", 400);
+  }
+  if (new TextEncoder().encode(serialized).byteLength > tikhubDynamicRequestMaxBytes) {
+    throw new TikHubRequestError(
+      "invalid_input",
+      `invocation exceeds the ${tikhubDynamicRequestMaxBytes} byte limit`,
+      400,
+    );
+  }
+}
+
+function assertSerializedDynamicRequestWithinLimits(url: URL, body: string | undefined) {
+  const serializedRequest = body === undefined ? url.href : `${url.href}\n${body}`;
+  if (new TextEncoder().encode(serializedRequest).byteLength > tikhubDynamicRequestMaxBytes) {
+    throw new TikHubRequestError(
+      "invalid_input",
+      `serialized request exceeds the ${tikhubDynamicRequestMaxBytes} byte limit`,
+      400,
+    );
+  }
+}
+
+function assertJsonValue(value: unknown, path: string) {
+  type Frame = { kind: "visit"; value: unknown; path: string; depth: number } | { kind: "leave"; value: object };
+  const stack: Frame[] = [{ kind: "visit", value, path, depth: 0 }];
+  const ancestors = new Set<object>();
+
+  while (stack.length > 0) {
+    const frame = stack.pop()!;
+    if (frame.kind === "leave") {
+      ancestors.delete(frame.value);
+      continue;
+    }
+    if (frame.depth > tikhubDynamicMaxJsonDepth) {
+      throw new TikHubRequestError(
+        "invalid_input",
+        `${frame.path} exceeds the ${tikhubDynamicMaxJsonDepth} level JSON depth limit`,
+        400,
+      );
+    }
+    const current = frame.value;
+    if (current === null || typeof current === "boolean") {
+      continue;
+    }
+    if (typeof current === "string") {
+      assertDynamicStringAllowed(current, frame.path);
+      continue;
+    }
+    if (typeof current === "number") {
+      if (!Number.isFinite(current)) {
+        throw new TikHubRequestError("invalid_input", `${frame.path} contains a non-finite number`, 400);
+      }
+      continue;
+    }
+    if (typeof current !== "object") {
+      throw new TikHubRequestError("invalid_input", `${frame.path} contains a non-JSON value`, 400);
+    }
+    if (ancestors.has(current)) {
+      throw new TikHubRequestError("invalid_input", `${frame.path} contains a circular value`, 400);
+    }
+    ancestors.add(current);
+    stack.push({ kind: "leave", value: current });
+    if (Array.isArray(current)) {
+      for (let index = current.length - 1; index >= 0; index -= 1) {
+        stack.push({
+          kind: "visit",
+          value: current[index],
+          path: `${frame.path}[${index}]`,
+          depth: frame.depth + 1,
+        });
+      }
+      continue;
+    }
+    const entries = Object.entries(current);
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const [key, child] = entries[index]!;
+      assertDynamicStringAllowed(key, `${frame.path} key`);
+      stack.push({
+        kind: "visit",
+        value: child,
+        path: `${frame.path}.${key}`,
+        depth: frame.depth + 1,
+      });
+    }
+  }
+}
+
+function assertDynamicStringAllowed(value: string | boolean, path: string) {
+  if (typeof value !== "string") {
+    return;
+  }
+  if (new TextEncoder().encode(value).byteLength > tikhubDynamicStringMaxBytes) {
+    throw new TikHubRequestError(
+      "invalid_input",
+      `${path} exceeds the ${tikhubDynamicStringMaxBytes} byte string limit`,
+      400,
+    );
+  }
+  if (value.trimStart().toLowerCase().startsWith("data:")) {
+    throw new TikHubRequestError("invalid_input", `${path} cannot contain a data URI`, 400);
+  }
+}
+
+function createDynamicTikHubError(input: {
+  upstreamStatus: number;
+  businessCode?: unknown;
+  requestId?: string;
+  body: unknown;
+  requiredScope: string;
+}) {
+  const numericBusinessCode = typeof input.businessCode === "number" ? input.businessCode : undefined;
+  const status =
+    input.upstreamStatus >= 400
+      ? input.upstreamStatus
+      : numericBusinessCode && numericBusinessCode >= 400 && numericBusinessCode <= 599
+        ? numericBusinessCode
+        : 502;
+  const data = compactObject({
+    upstreamStatus: input.upstreamStatus,
+    businessCode: input.businessCode,
+    requestId: input.requestId,
+    body: input.body,
+  });
+
+  if (status === 401) {
+    return new TikHubRequestError("authorization_failed", "TikHub rejected the API credential", 401, data);
+  }
+  if (status === 402) {
+    return new TikHubRequestError("provider_error", "TikHub payment is required for this endpoint request", 402, data);
+  }
+  if (status === 403) {
+    return new TikHubRequestError(
+      "authorization_failed",
+      `TikHub rejected the endpoint scope. The API token likely needs the ${input.requiredScope} path scope.`,
+      403,
+      data,
+    );
+  }
+  if (status === 429) {
+    return new TikHubRequestError("rate_limited", "TikHub rate limit exceeded", 429, data);
+  }
+  if (status >= 400 && status < 500) {
+    return new TikHubRequestError("invalid_input", "TikHub rejected the endpoint request", status, data);
+  }
+  return new TikHubRequestError("provider_error", "TikHub endpoint request failed", status, data);
+}
+
+async function requestTikHubUserJson(input: {
+  path: string;
+  apiKey: string;
+  query?: Record<string, string>;
+  fetcher: typeof fetch;
+  phase: TikHubPhase;
+}) {
+  const timeout = createProviderTimeout(undefined, tikhubUserRequestTimeoutMs);
+  try {
+    const url = new URL(input.path, tikhubApiBaseUrl);
+    for (const [key, value] of Object.entries(input.query ?? {})) {
+      url.searchParams.set(key, value);
+    }
+    const response = await input.fetcher(url, {
+      method: "GET",
+      headers: {
+        accept: "application/json",
+        authorization: `Bearer ${input.apiKey}`,
+        "user-agent": providerUserAgent,
+      },
+      redirect: "manual",
+      signal: timeout.signal,
+    });
+    const payload = await readTikHubResponseBody(response, tikhubDynamicResponseMaxBytes);
+    if (!response.ok) {
+      throw createUserTikHubError(response.status, payload, input.phase, input.path);
+    }
+    const record = asOptionalObject(payload);
+    if (!record) {
+      throw new TikHubRequestError("provider_error", "TikHub returned an invalid payload", 502);
+    }
+    const code = typeof record.code === "number" ? record.code : undefined;
+    if (!isSuccessfulBusinessCode(code)) {
+      throw createUserTikHubError(code ?? 500, record, input.phase, input.path);
+    }
+    return record;
+  } catch (error) {
+    if (error instanceof TikHubRequestError) {
+      throw error;
+    }
+    if (timeout.didTimeout() || isAbortLikeError(error)) {
+      throw new TikHubRequestError("provider_error", "TikHub request timed out", 504);
+    }
+    throw new TikHubRequestError(
+      "provider_error",
       error instanceof Error ? `TikHub request failed: ${error.message}` : "TikHub request failed",
+      502,
     );
   } finally {
-    timeoutHandle.cleanup();
+    timeout.cleanup();
   }
 }
 
-function buildTikHubUrl(path: string, params: Record<string, TikHubRequestValue>) {
-  const normalizedPath = path.startsWith("/") ? path.slice(1) : path;
-  const url = new URL(normalizedPath, `${tikhubApiBaseUrl}/`);
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) {
-      url.searchParams.set(key, String(value));
-    }
-  }
-  return url;
-}
-
-async function readTikHubPayload(response: Response) {
-  const text = await response.text();
+async function readTikHubResponseBody(response: Response, maxBytes: number) {
+  const text = await readBoundedResponseText(response, {
+    maxBytes,
+    label: "TikHub response",
+  });
   if (text.trim() === "") {
     return undefined;
   }
-
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    throw new ProviderRequestError(502, "TikHub returned invalid JSON", text);
+    return text;
   }
 }
 
-function createTikHubError(status: number, payload: unknown, phase: TikHubPhase, path: string) {
+function createUserTikHubError(status: number, payload: unknown, phase: TikHubPhase, path: string) {
   const message = extractTikHubErrorMessage(payload) ?? `TikHub request failed with status ${status}`;
-  const errorData = payload;
-
   if (status === 401) {
     return phase === "validate"
-      ? new ProviderRequestError(400, message, errorData)
-      : new ProviderRequestError(401, message, errorData);
+      ? new TikHubRequestError("invalid_input", message, 400, payload)
+      : new TikHubRequestError("authorization_failed", message, 401, payload);
   }
-
   if (status === 402) {
-    return new ProviderRequestError(402, `TikHub payment required: ${message}`, errorData);
+    return new TikHubRequestError("provider_error", `TikHub payment required: ${message}`, 402, payload);
   }
-
   if (status === 403) {
-    return new ProviderRequestError(
-      403,
+    return new TikHubRequestError(
+      "authorization_failed",
       `${message}. The TikHub API token likely needs the ${requiredScopeForPath(path)} path scope.`,
-      errorData,
+      403,
+      payload,
     );
   }
-
   if (status === 429) {
-    return new ProviderRequestError(429, message, errorData);
+    return new TikHubRequestError("rate_limited", message, 429, payload);
   }
-
-  if (status === 422) {
-    return new ProviderRequestError(422, message, errorData);
+  if (status === 422 || (status >= 400 && status < 500)) {
+    return new TikHubRequestError(
+      phase === "validate" ? "invalid_input" : "invalid_input",
+      message,
+      phase === "validate" ? 400 : status,
+      payload,
+    );
   }
-
-  if (phase === "validate" && status >= 400 && status < 500) {
-    return new ProviderRequestError(400, message, errorData);
-  }
-
-  if (status >= 400 && status < 500) {
-    return new ProviderRequestError(status, message, errorData);
-  }
-
-  return new ProviderRequestError(status || 502, message, errorData);
+  return new TikHubRequestError("provider_error", message, status || 500, payload);
 }
 
 function extractTikHubErrorMessage(payload: unknown) {
   if (typeof payload === "string" && payload.trim() !== "") {
-    return payload;
+    return payload.slice(0, 500);
   }
-
   const record = asOptionalObject(payload);
   if (!record) {
     return undefined;
   }
-
-  const detail = record.detail;
-  if (typeof detail === "string" && detail.trim() !== "") {
-    return detail;
+  if (typeof record.detail === "string" && record.detail.trim() !== "") {
+    return record.detail.trim().slice(0, 500);
   }
-
-  const detailRecord = asOptionalObject(detail);
-  const detailRecordMessage = readTikHubErrorRecordMessage(detailRecord);
-  if (detailRecordMessage) {
-    return detailRecordMessage;
-  }
-
-  if (Array.isArray(detail) && detail.length > 0) {
-    const firstDetail = asOptionalObject(detail[0]);
-    const detailMessage = asOptionalString(firstDetail?.msg)?.trim();
-    if (detailMessage) {
-      return detailMessage;
-    }
-  }
-
+  const detail = asOptionalObject(record.detail);
   return (
-    asOptionalString(record.message)?.trim() ??
-    asOptionalString(record.error)?.trim() ??
-    asOptionalString(record.error_message)?.trim()
+    readRecordMessage(detail) ??
+    asOptionalString(record.message)?.trim().slice(0, 500) ??
+    asOptionalString(record.error)?.trim().slice(0, 500) ??
+    asOptionalString(record.error_message)?.trim().slice(0, 500)
   );
 }
 
-function readTikHubErrorRecordMessage(record: Record<string, unknown> | undefined) {
+function readRecordMessage(record: Record<string, unknown> | undefined) {
   if (!record) {
     return undefined;
   }
-
   return (
-    asOptionalString(record.message)?.trim() ??
-    asOptionalString(record.message_zh)?.trim() ??
-    asOptionalString(record.error)?.trim() ??
-    asOptionalString(record.error_message)?.trim()
+    asOptionalString(record.message)?.trim().slice(0, 500) ??
+    asOptionalString(record.message_zh)?.trim().slice(0, 500) ??
+    asOptionalString(record.error)?.trim().slice(0, 500) ??
+    asOptionalString(record.error_message)?.trim().slice(0, 500)
   );
 }
 
-function requiredScopeForPath(path: string) {
-  if (path.startsWith(tikhubUserScope)) {
-    return tikhubUserScope;
-  }
-  if (path.startsWith(tikhubTiktokWebScope)) {
-    return tikhubTiktokWebScope;
-  }
-  if (path.startsWith(tikhubDouyinWebScope)) {
-    return tikhubDouyinWebScope;
-  }
-  if (path.startsWith(tikhubXiaohongshuAppV2Scope)) {
-    return tikhubXiaohongshuAppV2Scope;
-  }
-  if (path.startsWith(tikhubXiaohongshuWebV2Scope)) {
-    return tikhubXiaohongshuWebV2Scope;
-  }
-  if (path.startsWith(tikhubDouyinSearchScope)) {
-    return tikhubDouyinSearchScope;
-  }
-  if (path.startsWith(tikhubDouyinBillboardScope)) {
-    return tikhubDouyinBillboardScope;
-  }
-  return "the matching TikHub path";
+function isSuccessfulBusinessCode(code: number | undefined) {
+  return code === undefined || code === 0 || (code >= 200 && code < 300);
 }
 
 function normalizeEnvelope(payload: Record<string, unknown>): TikHubEnvelope {
@@ -687,68 +710,12 @@ function normalizeUserInfo(payload: Record<string, unknown>) {
   const apiKey = readPayloadRecord(payload, "api_key_data");
   const user = readPayloadRecord(payload, "user_data");
   const scopes = readStringArray(apiKey?.api_key_scopes);
-
   return {
     envelope: normalizeEnvelope(payload),
     apiKey,
     user,
     scopes,
-    rawData: compactObject({
-      api_key_data: apiKey,
-      user_data: user,
-    }),
-    raw: payload,
-  };
-}
-
-async function executeTikHubReadAction(input: {
-  path: string;
-  apiKey: string;
-  fetcher: typeof fetch;
-  query?: Record<string, TikHubRequestValue>;
-  body?: Record<string, TikHubRequestValue>;
-  method?: TikHubMethod;
-  outputKey: "profile" | "post" | "results" | "hotList";
-}) {
-  const payload = await requestTikHubJson({
-    path: input.path,
-    apiKey: input.apiKey,
-    params: input.query ?? {},
-    body: input.body,
-    method: input.method,
-    fetcher: input.fetcher,
-    phase: "execute",
-  });
-  const data = payload.data;
-
-  return {
-    envelope: normalizeEnvelope(payload),
-    [input.outputKey]: data,
-    rawData: data,
-    raw: payload,
-  };
-}
-
-async function executeTikHubListAction(input: {
-  path: string;
-  apiKey: string;
-  fetcher: typeof fetch;
-  query: Record<string, TikHubRequestValue>;
-  outputKey: "posts" | "comments" | "replies";
-}) {
-  const payload = await requestTikHubJson({
-    path: input.path,
-    apiKey: input.apiKey,
-    params: input.query,
-    fetcher: input.fetcher,
-    phase: "execute",
-  });
-  const data = payload.data;
-
-  return {
-    envelope: normalizeEnvelope(payload),
-    [input.outputKey]: data,
-    rawData: data,
+    rawData: compactObject({ api_key_data: apiKey, user_data: user }),
     raw: payload,
   };
 }
@@ -758,131 +725,50 @@ function readPayloadRecord(payload: Record<string, unknown>, key: string) {
   if (direct) {
     return direct;
   }
-
   const data = asOptionalObject(payload.data);
   return asOptionalObject(data?.[key]) ?? null;
 }
 
 function readStringArray(value: unknown) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((item): item is string => typeof item === "string");
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function buildXiaohongshuUserLookupQuery(input: Record<string, unknown>) {
-  const userId = readOptionalNonEmptyString(input.userId);
-  const shareText = readOptionalNonEmptyString(input.shareText);
-  if (!userId && !shareText) {
-    throw new ProviderRequestError(400, "Either userId or shareText is required");
-  }
-
-  return compactObject({
-    user_id: userId,
-    share_text: shareText,
-  });
-}
-
-function buildXiaohongshuUserNotesQuery(input: Record<string, unknown>) {
-  return compactObject({
-    ...buildXiaohongshuUserLookupQuery(input),
-    cursor: readOptionalNonEmptyString(input.cursor) ?? readOptionalNonEmptyString(input.lastCursor),
-  });
-}
-
-function buildXiaohongshuNoteLookupQuery(input: Record<string, unknown>) {
-  const noteId = readOptionalNonEmptyString(input.noteId);
-  const shareText = readOptionalNonEmptyString(input.shareText);
-  if (!noteId && !shareText) {
-    throw new ProviderRequestError(400, "Either noteId or shareText is required");
-  }
-
-  return compactObject({
-    note_id: noteId,
-    share_text: shareText,
-  });
-}
-
-function buildXiaohongshuNoteCommentsQuery(input: Record<string, unknown>) {
-  return compactObject({
-    ...buildXiaohongshuNoteLookupQuery(input),
-    cursor: readOptionalNonEmptyString(input.cursor),
-    index: readOptionalInteger(input.index),
-    pageArea: readOptionalNonEmptyString(input.pageArea),
-    sort_strategy: readOptionalNonEmptyString(input.sortStrategy),
-  });
-}
-
-function buildXiaohongshuSubCommentsQuery(input: Record<string, unknown>) {
-  return compactObject({
-    ...buildXiaohongshuNoteLookupQuery(input),
-    comment_id: readRequiredString(input.commentId, "commentId"),
-    cursor: readOptionalNonEmptyString(input.cursor) ?? readOptionalNonEmptyString(input.lastCursor),
-    index: readOptionalInteger(input.index),
-  });
+function requiredScopeForPath(path: string) {
+  return path.startsWith(tikhubUserScope) ? tikhubUserScope : "the matching TikHub path";
 }
 
 function readEndpoint(value: unknown) {
-  if (typeof value !== "string" || !value.trim().startsWith("/")) {
-    throw new ProviderRequestError(400, "endpoint must be a TikHub path starting with /");
+  const endpoint = readRequiredString(value, "endpoint");
+  if (!endpoint.startsWith("/")) {
+    throw new TikHubRequestError("invalid_input", "endpoint must start with /", 400);
   }
-  return value.trim();
+  return endpoint;
+}
+
+function readMethod(value: unknown): TikHubEndpointMethod {
+  if (value === "GET" || value === "POST") {
+    return value;
+  }
+  throw new TikHubRequestError("invalid_input", "method must be GET or POST", 400);
 }
 
 function readRequiredString(value: unknown, fieldName: string) {
-  const text = readOptionalNonEmptyString(value);
-  if (!text) {
-    throw new ProviderRequestError(400, `${fieldName} is required`);
-  }
-  return text;
-}
-
-function readOptionalString(value: unknown) {
-  return typeof value === "string" ? value : undefined;
-}
-
-function readOptionalNonEmptyString(value: unknown) {
-  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
-}
-
-function readOptionalInteger(value: unknown) {
-  if (typeof value !== "number" || !Number.isInteger(value)) {
-    return undefined;
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new TikHubRequestError("invalid_input", `${fieldName} is required`, 400);
   }
   return value;
 }
 
-function readOptionalBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
-}
-
-function normalizeXiaohongshuAppV2NoteType(value: unknown) {
-  const text =
-    typeof value === "number" && Number.isInteger(value)
-      ? String(value)
-      : typeof value === "string"
-        ? value.trim()
-        : undefined;
-  if (!text) {
-    return undefined;
+function asRecordOrEmpty(value: unknown, fieldName: string) {
+  if (value === undefined) {
+    return {};
   }
-
-  const normalized = text.toLowerCase();
-  if (normalized === "0" || normalized === "_0" || normalized === "all" || text === "不限") {
-    return "不限";
+  if (!isRecord(value)) {
+    throw new TikHubRequestError("invalid_input", `${fieldName} must be an object`, 400);
   }
-  if (normalized === "1" || normalized === "_1" || normalized === "image" || text === "普通笔记") {
-    return "普通笔记";
-  }
-  if (normalized === "2" || normalized === "_2" || normalized === "video" || text === "视频笔记") {
-    return "视频笔记";
-  }
-  if (normalized === "live" || text === "直播笔记") {
-    return "直播笔记";
-  }
-  return text;
+  return value;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(asOptionalObject(value));
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

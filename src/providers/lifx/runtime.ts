@@ -1,19 +1,18 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { LifxActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   isAbortSignalError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
 } from "../provider-runtime.ts";
 
 export const lifxApiBaseUrl = "https://api.lifx.com/v1";
-
-const lifxRequestTimeoutMs = 30_000;
 
 type LifxRequestPhase = "validate" | "execute";
 
@@ -27,7 +26,7 @@ interface LifxRequestInput {
   body?: Record<string, unknown>;
 }
 
-export const lifxActionHandlers: Record<LifxActionName, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const lifxActionHandlers: ProviderActionHandlers<"lifx", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   async list_lights(input, context) {
     const selector = readSelector(input);
     const payload = await requestLifx({
@@ -91,7 +90,7 @@ export const lifxActionHandlers: Record<LifxActionName, ProviderRuntimeHandler<A
   },
 
   async activate_scene(input, context) {
-    const sceneUuid = requiredString(input.sceneUuid, "sceneUuid", invalidInput);
+    const sceneUuid = requiredString(input.sceneUuid, "sceneUuid", providerInputError);
     const payload = await requestLifx({
       path: `/scenes/scene_id:${encodeURIComponent(sceneUuid)}/activate`,
       method: "PUT",
@@ -110,7 +109,7 @@ export const lifxActionHandlers: Record<LifxActionName, ProviderRuntimeHandler<A
   },
 
   async validate_color(input, context) {
-    const color = requiredString(input.color, "color", invalidInput);
+    const color = requiredString(input.color, "color", providerInputError);
     const url = buildLifxUrl("/color");
     url.searchParams.set("string", color);
     return requestLifxUrl({
@@ -193,7 +192,7 @@ async function requestLifx(input: LifxRequestInput): Promise<unknown> {
 
 async function requestLifxUrl(input: Omit<LifxRequestInput, "path"> & { url: URL }): Promise<unknown> {
   input.signal?.throwIfAborted();
-  const timeout = createProviderTimeout(input.signal, lifxRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   let response: Response;
   let payload: unknown;
   try {
@@ -322,8 +321,4 @@ function readLifxErrorMessage(payload: unknown): string | undefined {
     return optionalString(optionalRecord(firstError)?.message);
   }
   return undefined;
-}
-
-function invalidInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

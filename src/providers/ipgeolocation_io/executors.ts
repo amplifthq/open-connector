@@ -1,11 +1,12 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { IpgeolocationIoActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -13,7 +14,6 @@ import {
 
 const service = "ipgeolocation_io";
 const ipgeolocationIoApiBaseUrl = "https://api.ipgeolocation.io";
-const ipgeolocationIoDefaultRequestTimeoutMs = 30_000;
 
 type IpgeolocationIoPhase = "validate" | "execute";
 type IpgeolocationIoActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
@@ -22,7 +22,7 @@ type IpgeolocationIoActionHandler = (
   context: IpgeolocationIoActionContext,
 ) => Promise<unknown>;
 
-export const ipgeolocationIoActionHandlers: Record<IpgeolocationIoActionName, IpgeolocationIoActionHandler> = {
+export const ipgeolocationIoActionHandlers: ProviderActionHandlers<"ipgeolocation_io", IpgeolocationIoActionHandler> = {
   async lookup_ip(input, context) {
     const payload = await requestIpgeolocationIoJson(
       {
@@ -86,6 +86,16 @@ export const ipgeolocationIoActionHandlers: Record<IpgeolocationIoActionName, Ip
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, ipgeolocationIoActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: ipgeolocationIoApiBaseUrl,
+  auth: { type: "api_key_query", name: "apiKey" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestIpgeolocationIoJson(
@@ -124,7 +134,7 @@ async function requestIpgeolocationIoJson(
   },
   context: IpgeolocationIoActionContext,
 ): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(context.signal, ipgeolocationIoDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(buildIpgeolocationIoUrl(input.path, context.apiKey, input.params), {
       method: "GET",

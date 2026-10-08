@@ -1,7 +1,8 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { requiredString } from "../../core/cast.ts";
-import { ProviderRequestError } from "../provider-runtime.ts";
+import { optionalBoolean } from "../../core/cast.ts";
+import { ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 export const amapApiBaseUrl = "https://restapi.amap.com";
 const amapAuthErrorInfos = new Set([
@@ -38,7 +39,7 @@ type AmapResponsePayload = Record<string, unknown> & {
   infocode?: unknown;
 };
 
-export const amapActionHandlers: Record<string, AmapActionHandler> = {
+export const amapActionHandlers: ProviderActionHandlers<"amap", AmapActionHandler> = {
   geocode(input, runtime) {
     return executeGeocode(input, runtime);
   },
@@ -116,7 +117,7 @@ export async function validateAmapCredential(
   fetcher: typeof fetch,
   signal?: AbortSignal,
 ): Promise<CredentialValidationResult> {
-  const apiKey = readRequiredString(input.apiKey, "apiKey");
+  const apiKey = requiredInputString(input.apiKey, "apiKey");
   await amapGet(
     "/v3/weather/weatherInfo",
     {
@@ -146,7 +147,7 @@ async function executeGeocode(input: Record<string, unknown>, runtime: AmapActio
   const payload = await amapGet(
     "/v3/geocode/geo",
     {
-      address: readRequiredString(input.address, "address"),
+      address: requiredInputString(input.address, "address"),
       city: readOptionalString(input.city),
       key: runtime.apiKey,
     },
@@ -172,7 +173,7 @@ async function executeReverseGeocode(input: Record<string, unknown>, runtime: Am
   const payload = await amapGet(
     "/v3/geocode/regeo",
     {
-      location: readRequiredString(input.location, "location"),
+      location: requiredInputString(input.location, "location"),
       radius: readOptionalNumber(input.radius),
       extensions: readOptionalString(input.extensions),
       roadlevel: readOptionalNumber(input.roadLevel),
@@ -198,9 +199,9 @@ async function executeSearchPlaces(input: Record<string, unknown>, runtime: Amap
   const payload = await amapGet(
     "/v5/place/text",
     {
-      keywords: readRequiredString(input.keywords, "keywords"),
+      keywords: requiredInputString(input.keywords, "keywords"),
       region: readOptionalString(input.region),
-      city_limit: readOptionalBoolean(input.cityLimit),
+      city_limit: optionalBoolean(input.cityLimit),
       types: readOptionalString(input.types),
       page_num: readOptionalNumber(input.pageNum),
       page_size: readOptionalNumber(input.pageSize),
@@ -219,7 +220,7 @@ async function executeSearchPlacesAround(input: Record<string, unknown>, runtime
   const payload = await amapGet(
     "/v5/place/around",
     {
-      location: readRequiredString(input.location, "location"),
+      location: requiredInputString(input.location, "location"),
       radius: readOptionalNumber(input.radius),
       keywords: readOptionalString(input.keywords),
       types: readOptionalString(input.types),
@@ -241,7 +242,7 @@ async function executeSearchPlacesPolygon(input: Record<string, unknown>, runtim
   const payload = await amapGet(
     "/v5/place/polygon",
     {
-      polygon: readRequiredString(input.polygon, "polygon"),
+      polygon: requiredInputString(input.polygon, "polygon"),
       keywords: readOptionalString(input.keywords),
       types: readOptionalString(input.types),
       page_num: readOptionalNumber(input.pageNum),
@@ -261,7 +262,7 @@ async function executeGetPlaceDetail(input: Record<string, unknown>, runtime: Am
   const payload = await amapGet(
     "/v5/place/detail",
     {
-      id: readRequiredString(input.id, "id"),
+      id: requiredInputString(input.id, "id"),
       show_fields: readOptionalString(input.showFields),
       key: runtime.apiKey,
     },
@@ -279,11 +280,11 @@ async function executeInputTips(input: Record<string, unknown>, runtime: AmapAct
   const payload = await amapGet(
     "/v3/assistant/inputtips",
     {
-      keywords: readRequiredString(input.keywords, "keywords"),
+      keywords: requiredInputString(input.keywords, "keywords"),
       type: readOptionalString(input.type),
       location: readOptionalString(input.location),
       city: readOptionalString(input.city),
-      citylimit: readOptionalBoolean(input.cityLimit),
+      citylimit: optionalBoolean(input.cityLimit),
       datatype: readOptionalString(input.dataType),
       key: runtime.apiKey,
     },
@@ -326,7 +327,7 @@ async function executeDistrictSearch(input: Record<string, unknown>, runtime: Am
   const payload = await amapGet(
     "/v3/config/district",
     {
-      keywords: readRequiredString(input.keywords, "keywords"),
+      keywords: requiredInputString(input.keywords, "keywords"),
       subdistrict: readOptionalNumber(input.subDistrict),
       extensions: readOptionalString(input.extensions),
       page: readOptionalNumber(input.page),
@@ -350,7 +351,7 @@ async function executeWeather(input: Record<string, unknown>, runtime: AmapActio
   const payload = await amapGet(
     "/v3/weather/weatherInfo",
     {
-      city: readRequiredString(input.city, "city"),
+      city: requiredInputString(input.city, "city"),
       extensions,
       key: runtime.apiKey,
     },
@@ -391,8 +392,8 @@ async function executeRouteElectrobike(input: Record<string, unknown>, runtime: 
 
 async function executeRouteDriving(input: Record<string, unknown>, runtime: AmapActionContext) {
   const query = {
-    origin: readRequiredString(input.origin, "origin"),
-    destination: readRequiredString(input.destination, "destination"),
+    origin: requiredInputString(input.origin, "origin"),
+    destination: requiredInputString(input.destination, "destination"),
     waypoints: readOptionalString(input.waypoints),
     strategy: readOptionalString(input.strategy),
     plate: readOptionalString(input.plate),
@@ -417,10 +418,10 @@ async function executeRouteDriving(input: Record<string, unknown>, runtime: Amap
 
 async function executeRouteTransit(input: Record<string, unknown>, runtime: AmapActionContext) {
   const query = {
-    origin: readRequiredString(input.origin, "origin"),
-    destination: readRequiredString(input.destination, "destination"),
-    city1: readRequiredString(input.originCity, "originCity"),
-    city2: readRequiredString(input.destinationCity, "destinationCity"),
+    origin: requiredInputString(input.origin, "origin"),
+    destination: requiredInputString(input.destination, "destination"),
+    city1: requiredInputString(input.originCity, "originCity"),
+    city2: requiredInputString(input.destinationCity, "destinationCity"),
     strategy: readOptionalString(input.strategy),
     nightflag: readOptionalString(input.nightFlag),
     show_fields: readOptionalString(input.showFields),
@@ -508,14 +509,6 @@ function readUnexpectedMessage(error: unknown) {
   return "amap request failed";
 }
 
-function readRequiredString(value: unknown, key: string) {
-  return requiredString(value, key, providerInputError);
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
 function readOptionalString(value: unknown) {
   if (typeof value !== "string") {
     return undefined;
@@ -527,10 +520,6 @@ function readOptionalString(value: unknown) {
 
 function readOptionalNumber(value: unknown) {
   return typeof value === "number" ? value : undefined;
-}
-
-function readOptionalBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
 }
 
 function readStringOrStringArray(value: unknown) {
@@ -586,8 +575,8 @@ async function executeSimpleRoute(
   runtime: AmapActionContext,
 ) {
   const fullQuery = {
-    origin: readRequiredString(input.origin, "origin"),
-    destination: readRequiredString(input.destination, "destination"),
+    origin: requiredInputString(input.origin, "origin"),
+    destination: requiredInputString(input.destination, "destination"),
     show_fields: readOptionalString(input.showFields),
     key: runtime.apiKey,
     ...query,

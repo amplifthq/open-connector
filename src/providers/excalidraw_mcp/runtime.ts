@@ -1,15 +1,16 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
+import type { Client } from "@modelcontextprotocol/client";
 
-import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport, StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
-import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
+import { UnauthorizedError } from "@modelcontextprotocol/client";
+import { SdkHttpError } from "@modelcontextprotocol/client";
+import { ProtocolError, SdkError, SdkErrorCode } from "@modelcontextprotocol/client";
 import { createHash } from "node:crypto";
-import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { withMcpClient } from "../mcp-client.ts";
+import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
 export interface ExcalidrawMcpContext {
   endpoint: URL;
@@ -31,15 +32,14 @@ type ExcalidrawMcpToolResult = {
 };
 const defaultEndpoint = "https://mcp.excalidraw.com";
 const requestTimeoutMs = 30_000;
-const excalidrawMcpJsonSchemaValidator = new CfWorkerJsonSchemaValidator();
 
-export const excalidrawMcpActionHandlers: Record<string, ExcalidrawMcpActionHandler> = {
+export const excalidrawMcpActionHandlers: ProviderActionHandlers<"excalidraw_mcp", ExcalidrawMcpActionHandler> = {
   read_me(_input, context) {
     return callExcalidrawMcpTool(context, "read_me", {});
   },
   create_view(input, context) {
     return callExcalidrawMcpTool(context, "create_view", {
-      elements: requireString(input.elements, "elements"),
+      elements: requiredInputString(input.elements, "elements"),
     });
   },
 };
@@ -119,7 +119,6 @@ export async function callExcalidrawMcpTool(
         name: toolName,
         arguments: args,
       },
-      undefined,
       {
         timeout: requestTimeoutMs,
         signal: context.signal,
@@ -147,27 +146,17 @@ async function withExcalidrawMcpClient<T>(
   context: ExcalidrawMcpContext,
   run: (client: Client) => Promise<T>,
 ): Promise<T> {
-  const transport = new StreamableHTTPClientTransport(context.endpoint, {
-    fetch: context.fetcher,
-    requestInit: {
-      headers: {
-        "user-agent": providerUserAgent,
-      },
+  return withMcpClient(
+    {
+      endpoint: context.endpoint,
+      transport: "streamable_http",
+      fetcher: context.fetcher,
+      headers: { "user-agent": providerUserAgent },
+      signal: context.signal,
+      mapError: mapExcalidrawMcpError,
     },
-  });
-  const client = new Client(
-    { name: "oomol-connect-excalidraw-mcp", version: "1.0.0" },
-    { jsonSchemaValidator: excalidrawMcpJsonSchemaValidator },
+    run,
   );
-
-  try {
-    await client.connect(transport, { timeout: requestTimeoutMs, signal: context.signal });
-    return await run(client);
-  } catch (error) {
-    throw mapExcalidrawMcpError(error);
-  } finally {
-    await client.close().catch(() => undefined);
-  }
 }
 
 function normalizeCreateViewResult(result: ExcalidrawMcpToolResult): Record<string, unknown> {
@@ -235,18 +224,19 @@ function mapExcalidrawMcpError(error: unknown): ProviderRequestError {
   if (error instanceof UnauthorizedError) {
     return new ProviderRequestError(401, "Excalidraw MCP endpoint requires authorization", error);
   }
-  if (error instanceof StreamableHTTPError) {
-    const status = error.code;
+  if (error instanceof SdkHttpError) {
+    const status = error.status;
     return new ProviderRequestError(
       status === 401 || status === 403 ? 401 : status && status >= 400 && status < 500 ? 400 : 502,
       `Excalidraw MCP request failed: ${error.message}`,
       error,
     );
   }
-  if (error instanceof McpError) {
-    return error.code === ErrorCode.RequestTimeout
-      ? new ProviderRequestError(504, "Excalidraw MCP request timed out", error)
-      : new ProviderRequestError(502, `Excalidraw MCP request failed: ${error.message}`, error);
+  if (error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout) {
+    return new ProviderRequestError(504, "Excalidraw MCP request timed out", error);
+  }
+  if (error instanceof ProtocolError) {
+    return new ProviderRequestError(502, `Excalidraw MCP request failed: ${error.message}`, error);
   }
   if (isAbortError(error)) {
     return new ProviderRequestError(504, "Excalidraw MCP request timed out", error);
@@ -256,10 +246,6 @@ function mapExcalidrawMcpError(error: unknown): ProviderRequestError {
     error instanceof Error ? `Excalidraw MCP request failed: ${error.message}` : "Excalidraw MCP request failed",
     error,
   );
-}
-
-function requireString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function isAbortError(error: unknown): boolean {

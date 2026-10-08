@@ -2,9 +2,10 @@
 
 <img src="../assets/openconnector-readme-banner.png" alt="OpenConnector - Connect Once. Use Everywhere." width="100%" />
 
-[English](../README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Français](README.fr.md)
+[English](../README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Français](README.fr.md) | [Español](README.es.md)
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](../LICENSE.txt)
+[![npm](https://img.shields.io/npm/v/@oomol-lab/open-connector.svg)](https://www.npmjs.com/package/@oomol-lab/open-connector)
 ![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933)
 ![Cloudflare compatible](https://img.shields.io/badge/Cloudflare-compatible-F38020)
 ![MCP](https://img.shields.io/badge/MCP-ready-111827)
@@ -21,18 +22,18 @@ OpenConnector 是一套供 AI Agent 使用的開放原始碼連接器閘道，�
 <table>
   <tr>
     <td width="33.33%" align="center"><img src="../assets/deployment-options/oomol.svg" alt="OOMOL" width="140"></td>
-    <td width="33.33%" align="center"><img src="../assets/deployment-options/cloudflare.svg" alt="Cloudflare" width="140"></td>
     <td width="33.33%" align="center"><img src="../assets/deployment-options/self-hosted.svg" alt="自行代管" width="140"></td>
+    <td width="33.33%" align="center"><img src="../assets/deployment-options/more-platforms.svg" alt="更多平台" width="140"></td>
   </tr>
   <tr>
     <td width="33.33%" valign="top">代管 OAuth 與執行階段，開箱即用。無須部署或設定 OAuth 應用程式。</td>
-    <td width="33.33%" valign="top">在你的 Cloudflare 帳號中使用 Workers、D1、R2 與 Static Assets。部署與 OAuth 應用程式由你負責管理。</td>
     <td width="33.33%" valign="top">使用 Docker 或 Node.js 在本機或自己的基礎架構中執行。儲存空間與 OAuth 應用程式由你負責管理。</td>
+    <td width="33.33%" valign="top"><strong>Cloudflare</strong>、<strong>Fly.io</strong>、<strong>RepoCloud</strong>、<strong>nibrun</strong>、<strong>NEXUS AI</strong> 等。</td>
   </tr>
   <tr>
     <td width="33.33%" align="center">🚀 <a href="https://oomol.com/docs/connector-saas/"><strong>OOMOL 代管</strong></a></td>
-    <td width="33.33%" align="center"><a href="cloudflare.md"><strong>部署至 Cloudflare</strong></a></td>
     <td width="33.33%" align="center"><a href="https://oomol.com/docs/openconnector-self-hosting/"><strong>自行代管</strong></a></td>
+    <td width="33.33%" align="center"><a href="deployment-options/README.zh-TW.md"><strong>更多平台</strong></a></td>
   </tr>
 </table>
 
@@ -41,7 +42,7 @@ OpenConnector 是一套供 AI Agent 使用的開放原始碼連接器閘道，�
 自訂用戶端可使用 HTTP/OpenAPI，而 Web 控制台則用於管理與偵錯。
 
 - 將憑證、權限範圍、結構描述、原則及執行記錄保留在可檢視的執行階段中。
-- 可在本機、Fly.io、Cloudflare 相容基礎架構，或 OOMOL 的代管執行階段上運作。
+- 可在本機、自己的基礎架構，或 OOMOL 的代管執行階段上運作。
 - 開放原始碼與商業 SaaS 部署共用相同的服務提供者 ID、Action ID、結構描述及合約。
 
 ## 提供的功能
@@ -50,7 +51,8 @@ OpenConnector 是一套供 AI Agent 使用的開放原始碼連接器閘道，�
 - 支援 API 金鑰、OAuth2、自訂憑證，以及無須驗證的服務提供者。
 - 可檢視的 Action 合約：請求與回應結構描述、必要權限範圍，以及延遲載入的執行器原始碼。
 - 執行階段控制功能，涵蓋連線身分、權限範圍、執行階段權杖、Action 允許/封鎖原則、暫存檔案傳輸及遮蔽敏感資料的執行記錄。
-- 部署選項包括本機 Docker 或 Node.js、使用持久化 SQLite 儲存空間的 Fly.io、搭配 D1/R2/Static Assets 的 Cloudflare Workers，以及 OOMOL 的代管執行階段。
+- 部署選項包括本機 Docker 或 Node.js，以及 OOMOL 的代管執行階段。其他代管平台見
+  [部署方案](deployment-options/README.zh-TW.md)。
 
 ## 適用情境
 
@@ -113,18 +115,7 @@ flowchart LR
 | 方式                        | 適用對象                          | 內容                                                                                                                 |
 | --------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | 開放原始碼、自行代管        | 想完整掌控基礎架構的開發者與團隊  | 本機 Docker 或 Node 執行階段、SQLite 儲存空間、MCP、HTTP、OpenAPI 及 Web 控制台                                      |
-| Fly.io 自行代管             | 想使用代管 Docker 執行階段的團隊  | Node Docker 執行階段、Fly volume 上的 SQLite 儲存空間、TLS、健康檢查、MCP、HTTP、OpenAPI 及 Web 控制台               |
-| Cloudflare 相容部署         | 想要輕量代管執行階段的團隊        | Workers 執行階段、D1 狀態、R2 傳輸檔案及控制台的 Static Assets                                                       |
 | [OOMOL](https://oomol.com/) | 受限於 OAuth 核准或上線期限的團隊 | 使用相同服務提供者與 Action 合約的代管驗證及執行階段基礎架構；介面與開放原始碼版本相容，日後可改用私有或自行代管部署 |
-
-## Cloudflare 快速入門影片
-
-[![將 OpenConnector 部署至 Cloudflare Workers](../assets/cloudflare-quickstart-video.png)](https://www.youtube.com/watch?v=R0V1ZdCuTgc)
-
-[Cloudflare Workers 部署操作示範](https://www.youtube.com/watch?v=R0V1ZdCuTgc)說明如何使用 Workers、D1、R2 及 Web 控制台，
-在 Cloudflare 上啟動 OpenConnector。影片流程與 [cloudflare.md](cloudflare.md) 相同：建立 Cloudflare 資源、將
-`wrangler.example.jsonc` 複製為 `wrangler.local.jsonc`、套用 D1 移轉、設定必要密鑰，最後執行
-`npm run deploy:cloudflare`。
 
 ## 快速開始
 
@@ -188,36 +179,18 @@ OAuth2 應用程式、具名連線、憑證加密、權杖更新及 Action 原�
 控制台支援瀏覽服務提供者、設定 API 金鑰與 OAuth 用戶端、建立執行階段權杖、檢視 Action 結構描述、
 偵錯 Action、查看近期執行記錄，以及存取產生的 OpenAPI 與 MCP 中繼資料。
 
-## Cloudflare 部署
-
-OpenConnector 可部署至 Cloudflare：Workers 負責執行階段、D1 儲存狀態、R2 處理傳輸檔案，Static Assets 則提供 Web 控制台。
-
-資源建立、移轉、密鑰、本機 Worker 預覽及遠端部署方式，請參閱 [cloudflare.md](cloudflare.md)。
-
-## Fly.io 部署
-
-OpenConnector 也可部署至 Fly.io，使用 Node Docker 執行階段，並將 SQLite 資料持久儲存在 Fly volume 上。
-
-應用程式建立、volume 設定、密鑰、部署、自訂網域及擴充方式，請參閱 [fly-io.md](fly-io.md)。
-
 ## Docker 映像檔（GHCR）
 
 使用 GitHub Packages（GHCR）上的預先建置映像檔執行 OpenConnector：`ghcr.io/oomol-lab/open-connector`。
-最新版本使用 `latest`；正式環境請固定版本號，例如 `v1.0.0`；若要使用最新的 `main` 建置則使用 `tip`。
+最新版本使用 `latest`；正式環境請固定具體的 release 版本號；若要使用最新的 `main` 建置則使用 `tip`。
 
 標籤、拉取及執行方式，請參閱 [docker-ghcr.md（英文）](docker-ghcr.md)。
 
-## 用 Wanta 建構你的桌面 Agent
+## 開箱即用的 AI Bot：Leina
 
-OpenConnector 與 [Wanta](https://github.com/oomol-lab/wanta) 是 OOMOL 開源生態中面向 AI Agent
-的兩個專案。OpenConnector 負責將 Gmail、Slack、Notion 等外部服務接入 Agent；Wanta 則提供一套以 OpenCode
-執行的完整桌面 Agent 應用程式，並透過 OpenConnector 使用已連接的 SaaS 服務。
+如果想使用開箱即用的 AI Bot，可以試試 [Leina](https://leina.ai/)。Leina 可連接 1500 多款 SaaS 應用程式，讓你自由組合應用程式連接、技能和知識庫，打造適合團隊工作流程的 AI Agent。
 
-- **本機執行：** 使用自己的 OpenAI 相容模型，無須註冊 Wanta 帳號。
-- **二次開發：** Fork Wanta，自訂提示詞、工具、介面、模型與品牌，建構自己的桌面 Agent。
-- **託管服務：** 選用的[託管服務](https://wanta.ai/)提供託管模型、OAuth 連線與團隊工作區。
-
-歡迎透過 Issue 和 Pull Request 參與貢獻。
+它支援 Slack、Microsoft Teams、Discord、Telegram，以及釘釘、企業微信、飛書和個人微信。你可以直接在聊天中，讓它透過你授權的應用程式查找資訊、彙整週報、整理客戶回饋或準備銷售跟進內容。
 
 ## 文件
 
@@ -225,6 +198,7 @@ OpenConnector 與 [Wanta](https://github.com/oomol-lab/wanta) 是 OOMOL 開源�
 - [開發者工具](sdk-cli.md)
 - [Gmail OAuth 與 SDK 教學（英文）](gmail-oauth-sdk.md)
 - [執行階段 API 與 MCP](runtime-api.md)
+- [部署方案](deployment-options/README.zh-TW.md)
 - [Fly.io 部署](fly-io.md)
 - [Cloudflare 部署](cloudflare.md)
 - [Docker 映像檔（GHCR）（英文）](docker-ghcr.md)

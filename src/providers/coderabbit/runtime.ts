@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { CoderabbitActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -10,7 +10,7 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 export const coderabbitApiBaseUrl = "https://api.coderabbit.ai";
 
@@ -22,7 +22,7 @@ interface CoderabbitCredentialInput {
   apiKey: string;
 }
 
-export const coderabbitActionHandlers: Record<CoderabbitActionName, CoderabbitActionHandler> = {
+export const coderabbitActionHandlers: ProviderActionHandlers<"coderabbit", CoderabbitActionHandler> = {
   async list_users(input, context) {
     return listUsers(input, context);
   },
@@ -146,7 +146,7 @@ export const coderabbitActionHandlers: Record<CoderabbitActionName, CoderabbitAc
     const payload = await requestCoderabbit(
       {
         method: "GET",
-        path: `/v1/roles/${encodeURIComponent(requireInputString(input.roleId, "roleId"))}`,
+        path: `/v1/roles/${encodeURIComponent(requiredInputString(input.roleId, "roleId"))}`,
         search: buildSearchParams({
           org_id: input.orgId,
           include_permissions: optionalBoolean(input.includePermissions),
@@ -182,7 +182,7 @@ export const coderabbitActionHandlers: Record<CoderabbitActionName, CoderabbitAc
     const payload = await requestCoderabbit(
       {
         method: "PATCH",
-        path: `/v1/roles/${encodeURIComponent(requireInputString(input.roleId, "roleId"))}`,
+        path: `/v1/roles/${encodeURIComponent(requiredInputString(input.roleId, "roleId"))}`,
         body: buildRoleBody(input),
       },
       context,
@@ -198,7 +198,7 @@ export const coderabbitActionHandlers: Record<CoderabbitActionName, CoderabbitAc
     await requestCoderabbit(
       {
         method: "DELETE",
-        path: `/v1/roles/${encodeURIComponent(requireInputString(input.roleId, "roleId"))}`,
+        path: `/v1/roles/${encodeURIComponent(requiredInputString(input.roleId, "roleId"))}`,
         search: buildSearchParams({ org_id: input.orgId }),
       },
       context,
@@ -438,10 +438,6 @@ function readObject(value: unknown, fieldName: string): JsonObject {
   return object;
 }
 
-function requireInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, invalidInputError);
-}
-
 function requireStringFromResponse(value: unknown, fieldName: string): string {
   return requiredString(value, fieldName, (message) => new ProviderRequestError(502, message));
 }
@@ -452,8 +448,4 @@ function requireInteger(value: unknown, fieldName: string): number {
     throw new ProviderRequestError(502, `CodeRabbit returned invalid ${fieldName}`);
   }
   return integer;
-}
-
-function invalidInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

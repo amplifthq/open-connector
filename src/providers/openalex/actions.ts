@@ -112,11 +112,10 @@ const listInputSchema = s.object(
   },
 );
 
-export type OpenAlexActionName = "list_entities" | "list_works" | "get_entity" | "get_work" | "autocomplete";
-
 export const openalexActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_entities",
+    operationType: "read",
     description: "List, search, filter, page, or group OpenAlex entities from the supported collections.",
     requiredScopes: [],
     inputSchema: listInputSchema,
@@ -129,6 +128,7 @@ export const openalexActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_works",
+    operationType: "read",
     description: "List, search, filter, page, or group OpenAlex works with work-focused normalized fields.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -158,6 +158,7 @@ export const openalexActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_entity",
+    operationType: "read",
     description: "Get one OpenAlex entity by identifier from a supported collection.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -175,6 +176,7 @@ export const openalexActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_work",
+    operationType: "read",
     description: "Get one OpenAlex work by identifier.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -191,6 +193,7 @@ export const openalexActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "autocomplete",
+    operationType: "read",
     description: "Return OpenAlex autocomplete suggestions for a search string.",
     requiredScopes: [],
     inputSchema: s.object(

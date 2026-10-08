@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { DnsFilterActionName } from "./actions.ts";
 
 import {
   optionalBoolean,
@@ -14,6 +14,7 @@ import { encodePathSegment } from "../../core/request.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -21,12 +22,11 @@ import {
 
 const service = "dns_filter";
 const dnsFilterApiBaseUrl = "https://api.dnsfilter.com";
-const dnsFilterRequestTimeoutMs = 30_000;
 
 type DnsFilterRequestPhase = "validate" | "execute";
 type DnsFilterActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const dnsFilterActionHandlers: Record<DnsFilterActionName, DnsFilterActionHandler> = {
+export const dnsFilterActionHandlers: ProviderActionHandlers<"dns_filter", DnsFilterActionHandler> = {
   get_current_user(_input, context) {
     return getCurrentUser(context);
   },
@@ -64,6 +64,16 @@ export const dnsFilterActionHandlers: Record<DnsFilterActionName, DnsFilterActio
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, dnsFilterActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: dnsFilterApiBaseUrl,
+  auth: { type: "api_key_header", name: "Authorization" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -221,7 +231,7 @@ async function dnsFilterFetch(input: {
     url.search = input.query.toString();
   }
 
-  const timeout = createProviderTimeout(input.signal, dnsFilterRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     return await input.fetcher(url, {
       method: "GET",

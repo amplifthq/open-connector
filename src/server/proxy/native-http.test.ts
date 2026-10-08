@@ -33,7 +33,7 @@ function fixture() {
   const connections = new ConnectionService({ catalog, store, providerLoader });
   const fetcher = vi.fn<typeof fetch>(async () => Response.json({ success: true, result: [] }));
   const runner = new NativeHttpRunner({ catalog, connections, providerLoader, fetcher });
-  return { runner, store, fetcher };
+  return { runner, store, rows, fetcher };
 }
 
 const endpoint = "/accounts/account/workers/observability/telemetry/query";
@@ -65,6 +65,30 @@ function request(body: unknown = query, path = endpoint, method = "POST") {
 }
 
 describe("native Plugin HTTP reads", () => {
+  it("rejects a hosted account without falling back to local credentials or making a provider request", async () => {
+    const f = fixture();
+    f.rows.set("cloudflare_worker:selected", {
+      source: "saas",
+      id: "remote",
+      revision: "revision",
+      service: "cloudflare_worker",
+      connectionName: "selected",
+      reference: {
+        managedProjectId: "project",
+        providerConfigId: "config",
+        externalUserId: "user",
+        connectedAccountId: "account",
+        localRequestId: "request",
+      },
+      profile: { accountId: "account", displayName: "Hosted account", grantedScopes: [] },
+      status: "active",
+      comment: null,
+    });
+    const response = await f.runner.run(request());
+    expect(response.status).toBe(501);
+    expect(await response.json()).toMatchObject({ error: { code: "connection_transport_unavailable" } });
+    expect(f.fetcher).not.toHaveBeenCalled();
+  });
   it("uses only the selected credential, retains query output, and withholds secrets", async () => {
     const f = fixture();
     await f.store.set("cloudflare_worker", "selected", {

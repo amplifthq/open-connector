@@ -1,16 +1,21 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { NewsApiActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "news_api";
 const newsApiBaseUrl = "https://newsapi.org";
 
 type NewsApiActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const newsApiActionHandlers: Record<NewsApiActionName, NewsApiActionHandler> = {
+export const newsApiActionHandlers: ProviderActionHandlers<"news_api", NewsApiActionHandler> = {
   get_everything(input, context) {
     return executeNewsApiGet("/v2/everything", input, context, {
       q: optionalString(input.q),
@@ -61,6 +66,16 @@ export const newsApiActionHandlers: Record<NewsApiActionName, NewsApiActionHandl
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, newsApiActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: newsApiBaseUrl,
+  auth: { type: "api_key_header", name: "x-api-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

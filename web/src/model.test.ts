@@ -1,13 +1,71 @@
-import type { AppData, ProviderDefinition, RunLog } from "./model";
+import type { AppData, FullActionDefinition, ProviderDefinition, RunLog } from "./model";
 
 import { describe, expect, it } from "vitest";
 import {
+  buildActionExamples,
   createOverviewSummary,
   filterProvidersByCategory,
   providerCategoryCounts,
   resolveProviderConnectionStatus,
   sortProviders,
 } from "./model";
+
+describe("buildActionExamples", () => {
+  it("builds request examples against the given origin", () => {
+    const action: FullActionDefinition = {
+      id: "github.get_current_user",
+      service: "github",
+      name: "get_current_user",
+      description: "Get the current user.",
+      requiredScopes: [],
+      inputSchema: { type: "object" },
+      outputSchema: { type: "object" },
+      execution: {
+        locallyExecutable: true,
+        catalogOnly: false,
+        requiredAuthTypes: ["oauth2"],
+        noAuthRunnable: false,
+        needsCredential: true,
+      },
+    };
+
+    const examples = buildActionExamples(action, "https://connector.example.com");
+
+    expect(
+      examples.curl.startsWith("curl -s https://connector.example.com/v1/actions/github.get_current_user \\"),
+    ).toBe(true);
+    expect(examples.typescript).toContain('fetch("https://connector.example.com/v1/actions/github.get_current_user"');
+    expect(examples.curl).not.toContain("localhost");
+    expect(examples.typescript).not.toContain("localhost");
+  });
+
+  it("keeps the cURL example valid when an example value contains an apostrophe", () => {
+    const action: FullActionDefinition = {
+      id: "github.list_repositories",
+      service: "github",
+      name: "list_repositories",
+      description: "List repositories.",
+      requiredScopes: [],
+      inputSchema: {
+        type: "object",
+        properties: { owner: { type: "string", default: "O'Reilly" } },
+        required: ["owner"],
+      },
+      outputSchema: { type: "object" },
+      execution: {
+        locallyExecutable: true,
+        catalogOnly: false,
+        requiredAuthTypes: ["oauth2"],
+        noAuthRunnable: false,
+        needsCredential: true,
+      },
+    };
+
+    const examples = buildActionExamples(action, "https://connector.example.com");
+
+    expect(examples.curl).toContain(`  -d '{"input":{"owner":"O'\\''Reilly"}}'`);
+  });
+});
 
 function provider(service: string, displayName: string): ProviderDefinition {
   return {
@@ -288,6 +346,30 @@ describe("resolveProviderConnectionStatus", () => {
     );
 
     expect(status.connections.map((connection) => connection.connectionName)).toEqual(["work"]);
+  });
+
+  it("treats an enabled Marketplace virtual connection as a managed provider connection", () => {
+    const status = resolveProviderConnectionStatus(
+      oauthProvider("slack", "Slack"),
+      [
+        {
+          id: "marketplace:community:slack",
+          service: "slack",
+          connectionName: "marketplace_community",
+          authType: "marketplace",
+          configured: true,
+          virtual: true,
+          default: true,
+          metadata: {},
+        },
+      ],
+      [],
+    );
+
+    expect(status).toMatchObject({
+      connected: true,
+      marketplaceConnection: { id: "marketplace:community:slack" },
+    });
   });
 });
 

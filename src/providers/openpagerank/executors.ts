@@ -1,8 +1,14 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  ProviderRequestError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 const service = "openpagerank";
 const openPageRankApiBaseUrl = "https://openpagerank.com/api/v1.0";
@@ -12,7 +18,7 @@ const openPageRankValidationDomain = "google.com";
 type OpenPageRankRequestPhase = "validate" | "execute";
 type OpenPageRankActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const openPageRankActionHandlers: Record<string, OpenPageRankActionHandler> = {
+export const openPageRankActionHandlers: ProviderActionHandlers<"openpagerank", OpenPageRankActionHandler> = {
   async get_page_rank(input, context) {
     const payload = await openPageRankGetJson(readDomains(input.domains), context, "execute");
     return normalizeOpenPageRankPayload(payload);
@@ -20,6 +26,16 @@ export const openPageRankActionHandlers: Record<string, OpenPageRankActionHandle
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, openPageRankActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: openPageRankApiBaseUrl,
+  auth: { type: "api_key_header", name: "API-OPR" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

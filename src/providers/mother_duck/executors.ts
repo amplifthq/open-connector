@@ -1,12 +1,18 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { MotherDuckActionName } from "./actions.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { jsonObject } from "../../core/request.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -14,7 +20,6 @@ import {
 
 const service = "mother_duck";
 const motherDuckApiBaseUrl = "https://api.motherduck.com";
-const motherDuckRequestTimeoutMs = 30_000;
 const motherDuckTokenHelpUrl = "https://app.motherduck.com/settings/tokens";
 
 type MotherDuckMethod = "GET" | "POST" | "PUT" | "DELETE";
@@ -30,7 +35,7 @@ interface MotherDuckRequestInput {
   allowEmpty?: boolean;
 }
 
-export const motherDuckActionHandlers: Record<MotherDuckActionName, MotherDuckActionHandler> = {
+export const motherDuckActionHandlers: ProviderActionHandlers<"mother_duck", MotherDuckActionHandler> = {
   list_active_accounts(_input, context) {
     return listActiveAccounts(context);
   },
@@ -58,6 +63,16 @@ export const motherDuckActionHandlers: Record<MotherDuckActionName, MotherDuckAc
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, motherDuckActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: motherDuckApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {
@@ -183,7 +198,7 @@ async function setUserDucklingConfig(input: Record<string, unknown>, context: Ap
 }
 
 async function requestMotherDuckJson(input: MotherDuckRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, motherDuckRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
 
   try {
     const response = await input.context.fetcher(new URL(input.path, motherDuckApiBaseUrl), {

@@ -34,6 +34,82 @@ const formatSchema = s.oneOf(
   ],
   { description: "A requested Firecrawl output format." },
 );
+const v2ScrapeFormatObjectSchema = s.object(
+  "A structured Firecrawl format descriptor.",
+  {
+    type: s.stringEnum("The structured Firecrawl output format type.", [
+      "markdown",
+      "summary",
+      "html",
+      "rawHtml",
+      "rawBase64",
+      "links",
+      "images",
+      "screenshot",
+      "json",
+      "changeTracking",
+      "branding",
+      "product",
+      "menu",
+      "audio",
+      "video",
+      "question",
+      "highlights",
+    ]),
+    schema: looseObject,
+    prompt: s.string("The prompt used for structured output."),
+    checkPromptInjection: s.boolean("Whether to reject prompt injection before structured extraction."),
+    fullPage: s.boolean("Whether a screenshot should capture the full page."),
+    quality: s.integer("The screenshot quality from 1 through 100.", { minimum: 1, maximum: 100 }),
+    viewport: looseObject,
+    modes: s.array(
+      "The change-tracking comparison modes.",
+      s.stringEnum("A change-tracking comparison mode.", ["git-diff", "json"]),
+    ),
+    tag: s.string("The change-tracking history tag."),
+    question: s.string("The natural-language question to answer about the page."),
+    query: s.string("The query used to select relevant page highlights."),
+  },
+  {
+    optional: [
+      "schema",
+      "prompt",
+      "checkPromptInjection",
+      "fullPage",
+      "quality",
+      "viewport",
+      "modes",
+      "tag",
+      "question",
+      "query",
+    ],
+    additionalProperties: false,
+  },
+);
+const v2ScrapeFormatSchema = s.oneOf(
+  [
+    s.stringEnum("A built-in Firecrawl output format.", [
+      "markdown",
+      "html",
+      "rawHtml",
+      "rawBase64",
+      "links",
+      "images",
+      "screenshot",
+      "screenshot@fullPage",
+      "json",
+      "changeTracking",
+      "summary",
+      "branding",
+      "product",
+      "menu",
+      "audio",
+      "video",
+    ]),
+    v2ScrapeFormatObjectSchema,
+  ],
+  { description: "A requested Firecrawl output format." },
+);
 const jsonOptionsSchema = s.looseRequiredObject(
   "Options for structured JSON output.",
   {
@@ -353,53 +429,85 @@ const historicalUsageSchema = s.requiredObject("A Firecrawl historical usage res
 const idInput = s.requiredObject("The input payload for this action.", {
   id: s.nonEmptyString("The Firecrawl job ID."),
 });
-const scrapeInput = s.looseRequiredObject(
-  "The input payload for this action.",
-  {
-    url: s.nonEmptyString("The URL to scrape."),
-    actions: s.array("The browser actions to run before scraping.", browserActionSchema),
-    formats: s.array("The output formats to return.", formatSchema),
-    headers: headersSchema,
-    location: locationSchema,
-    jsonOptions: jsonOptionsSchema,
-    timeout: s.integer("The request timeout in milliseconds."),
-    waitFor: s.integer("The delay before scraping starts."),
-    maxAge: s.integer("The cache max age in milliseconds."),
-    onlyMainContent: s.boolean("Whether to keep only the main content of the page."),
-    includeTags: s.stringArray("The HTML tags that should be prioritized in the extracted content."),
-    excludeTags: s.stringArray("The HTML tags that should be removed from the output."),
-    mobile: s.boolean("Whether to emulate a mobile device."),
-    proxy: s.stringEnum("The proxy mode to use for the request.", ["basic", "stealth", "auto"]),
-    parsers: s.stringArray("The parser plugins to enable for the request."),
-    blockAds: s.boolean("Whether ad resources should be blocked."),
-    storeInCache: s.boolean("Whether Firecrawl should store the result in cache."),
-    removeBase64Images: s.boolean("Whether base64-encoded images should be removed from the output."),
-    skipTlsVerification: s.boolean("Whether TLS verification should be skipped."),
-    zeroDataRetention: s.boolean("Whether the request should opt into zero data retention."),
-  },
-  {
-    optional: [
-      "actions",
-      "formats",
-      "headers",
-      "location",
-      "jsonOptions",
-      "timeout",
-      "waitFor",
-      "maxAge",
-      "onlyMainContent",
-      "includeTags",
-      "excludeTags",
-      "mobile",
-      "proxy",
-      "parsers",
-      "blockAds",
-      "storeInCache",
-      "removeBase64Images",
-      "skipTlsVerification",
-      "zeroDataRetention",
-    ],
-  },
+const scrapeInput = s.requireAnyProperty(
+  s.object(
+    "The current Firecrawl v2 scrape request.",
+    {
+      url: s.string("The URL to scrape."),
+      alexandria: s.unknown("One Alexandria provider-tool call or an array of up to ten calls."),
+      domainTools: s.boolean("Whether to return tool contracts discovered for the scraped domain."),
+      origin: s.string("The request origin accepted with Alexandria calls."),
+      integration: s.string("The integration identifier accepted with Alexandria calls."),
+      actions: s.array("The browser actions to run before scraping.", browserActionSchema),
+      formats: s.array("The output formats to return.", v2ScrapeFormatSchema),
+      headers: headersSchema,
+      location: locationSchema,
+      timeout: s.integer("The request timeout in milliseconds.", { minimum: 1_000, maximum: 300_000 }),
+      waitFor: s.integer("The delay before scraping starts."),
+      maxAge: s.integer("The cache max age in milliseconds."),
+      minAge: s.integer("The minimum acceptable cache age without triggering a fresh scrape."),
+      onlyMainContent: s.boolean("Whether to keep only the main content of the page."),
+      onlyCleanContent: s.boolean("Whether to run Firecrawl's additional LLM-based content cleanup."),
+      includeTags: s.stringArray("The HTML tags that should be prioritized in the extracted content."),
+      excludeTags: s.stringArray("The HTML tags that should be removed from the output."),
+      mobile: s.boolean("Whether to emulate a mobile device."),
+      proxy: s.stringEnum("The proxy mode to use for the request.", ["basic", "enhanced", "auto"]),
+      parsers: s.array(
+        "The parser configurations to enable for the request.",
+        s.oneOf([s.literal("pdf", { description: "The default PDF parser." }), looseObject], {
+          description: "A parser name or configuration.",
+        }),
+      ),
+      blockAds: s.boolean("Whether ad resources should be blocked."),
+      storeInCache: s.boolean("Whether Firecrawl should store the result in cache."),
+      removeBase64Images: s.boolean("Whether base64-encoded images should be removed from the output."),
+      skipTlsVerification: s.boolean("Whether TLS verification should be skipped."),
+      zeroDataRetention: s.boolean("Whether the request should opt into zero data retention."),
+      lockdown: s.boolean("Whether to enable Firecrawl lockdown mode."),
+      redactPII: s.oneOf([s.boolean("Whether to enable default PII redaction."), looseObject], {
+        description: "Whether and how to redact personally identifiable information.",
+      }),
+      profile: looseObject,
+      threatProtection: looseObject,
+      auditMetadata: looseObject,
+    },
+    {
+      optional: [
+        "url",
+        "alexandria",
+        "domainTools",
+        "origin",
+        "integration",
+        "actions",
+        "formats",
+        "headers",
+        "location",
+        "timeout",
+        "waitFor",
+        "maxAge",
+        "minAge",
+        "onlyMainContent",
+        "onlyCleanContent",
+        "includeTags",
+        "excludeTags",
+        "mobile",
+        "proxy",
+        "parsers",
+        "blockAds",
+        "storeInCache",
+        "removeBase64Images",
+        "skipTlsVerification",
+        "zeroDataRetention",
+        "lockdown",
+        "redactPII",
+        "profile",
+        "threatProtection",
+        "auditMetadata",
+      ],
+      additionalProperties: false,
+    },
+  ),
+  ["url", "alexandria"],
 );
 const crawlInput = s.looseRequiredObject(
   "The input payload for this action.",
@@ -495,12 +603,15 @@ const crawlInput = s.looseRequiredObject(
 export const firecrawlActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "scrape",
-    description: "Scrape a single URL with Firecrawl and return the extracted page content in the requested formats.",
+    operationType: "read",
+    description:
+      "Scrape a URL with Firecrawl or execute an enabled Alexandria provider tool and return the requested output formats.",
     inputSchema: scrapeInput,
     outputSchema: scrapeResultSchema,
   }),
   defineProviderAction(service, {
     name: "batch_scrape",
+    operationType: "write",
     description: "Start a Firecrawl batch scrape job for multiple URLs and return the async job ID.",
     inputSchema: s.looseRequiredObject(
       "The input payload for this action.",
@@ -556,66 +667,77 @@ export const firecrawlActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "batch_scrape_get",
+    operationType: "read",
     description: "Get the current status and paged results of a Firecrawl batch scrape job by job ID.",
     inputSchema: idInput,
     outputSchema: pagedJobStatusSchema,
   }),
   defineProviderAction(service, {
     name: "batch_scrape_get_errors",
+    operationType: "read",
     description: "Get the failed URLs and robots.txt blocks from a Firecrawl batch scrape job.",
     inputSchema: idInput,
     outputSchema: errorsSchema,
   }),
   defineProviderAction(service, {
     name: "batch_scrape_cancel",
+    operationType: "destructive",
     description: "Cancel a running Firecrawl batch scrape job by job ID.",
     inputSchema: idInput,
     outputSchema: cancelResultSchema,
   }),
   defineProviderAction(service, {
     name: "crawl",
+    operationType: "write",
     description: "Start a Firecrawl crawl job with compatibility input fields.",
     inputSchema: crawlInput,
     outputSchema: jobStartSchema,
   }),
   defineProviderAction(service, {
     name: "crawl_v2",
+    operationType: "write",
     description: "Start a Firecrawl crawl job with the official v2 crawl fields.",
     inputSchema: crawlInput,
     outputSchema: jobStartSchema,
   }),
   defineProviderAction(service, {
     name: "crawl_get",
+    operationType: "read",
     description: "Get the current status and paged results of a Firecrawl crawl job by job ID.",
     inputSchema: idInput,
     outputSchema: pagedJobStatusSchema,
   }),
   defineProviderAction(service, {
     name: "get_the_status_of_a_crawl_job",
+    operationType: "read",
     description: "Compatibility alias of crawl_get for the crawl status action name.",
     inputSchema: idInput,
     outputSchema: pagedJobStatusSchema,
   }),
   defineProviderAction(service, {
     name: "crawl_get_errors",
+    operationType: "read",
     description: "Get the failed URLs and robots.txt blocks from a Firecrawl crawl job.",
     inputSchema: idInput,
     outputSchema: errorsSchema,
   }),
   defineProviderAction(service, {
     name: "crawl_cancel",
+    operationType: "destructive",
     description: "Cancel a running Firecrawl crawl job by job ID.",
     inputSchema: idInput,
     outputSchema: cancelResultSchema,
   }),
   defineProviderAction(service, {
     name: "crawl_delete",
+    operationType: "destructive",
     description: "Compatibility alias of crawl_cancel for the crawl delete action name.",
     inputSchema: idInput,
     outputSchema: cancelResultSchema,
   }),
   defineProviderAction(service, {
     name: "crawl_list_active",
+    operationType: "read",
     description: "List the currently active Firecrawl crawl jobs for the authenticated team.",
     inputSchema: s.looseObject({}, { description: "The input payload for this action." }),
     outputSchema: s.requiredObject("The output payload for this action.", {
@@ -625,6 +747,7 @@ export const firecrawlActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "crawl_params_preview",
+    operationType: "read",
     description: "Preview the crawl parameters that Firecrawl would infer from a URL and prompt.",
     inputSchema: s.requiredObject("The input payload for this action.", {
       url: s.nonEmptyString("The seed URL for the crawl preview."),
@@ -634,6 +757,7 @@ export const firecrawlActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "extract",
+    operationType: "write",
     description: "Start a Firecrawl extract job that returns structured data for one or more URLs.",
     inputSchema: s.looseRequiredObject(
       "The input payload for this action.",
@@ -665,12 +789,14 @@ export const firecrawlActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "extract_get",
+    operationType: "read",
     description: "Get the current status and output of a Firecrawl extract job by job ID.",
     inputSchema: idInput,
     outputSchema: extractStatusSchema,
   }),
   defineProviderAction(service, {
     name: "search",
+    operationType: "read",
     description: "Search the web with Firecrawl and optionally scrape the top results in the requested formats.",
     inputSchema: s.looseRequiredObject(
       "The input payload for this action.",
@@ -689,6 +815,7 @@ export const firecrawlActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "map_multiple_urls_based_on_options",
+    operationType: "read",
     description: "Discover URLs from a website with Firecrawl's map endpoint using the legacy map action name.",
     inputSchema: s.looseRequiredObject(
       "The input payload for this action.",
@@ -720,6 +847,7 @@ export const firecrawlActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "start_agent",
+    operationType: "write",
     description: "Start a Firecrawl agent job for multi-page autonomous browsing and extraction.",
     inputSchema: s.looseRequiredObject(
       "The input payload for this action.",
@@ -739,18 +867,21 @@ export const firecrawlActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_agent_status",
+    operationType: "read",
     description: "Get the current status and output of a Firecrawl agent job by job ID.",
     inputSchema: idInput,
     outputSchema: agentStatusSchema,
   }),
   defineProviderAction(service, {
     name: "agent_cancel",
+    operationType: "destructive",
     description: "Cancel a running Firecrawl agent job by job ID.",
     inputSchema: idInput,
     outputSchema: cancelResultSchema,
   }),
   defineProviderAction(service, {
     name: "deep_research",
+    operationType: "write",
     description: "Start a Firecrawl deep research job.",
     inputSchema: s.looseRequiredObject(
       "The input payload for this action.",
@@ -782,12 +913,14 @@ export const firecrawlActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_deep_research_status",
+    operationType: "read",
     description: "Get the current status and output of a Firecrawl deep research job by job ID.",
     inputSchema: idInput,
     outputSchema: deepResearchStatusSchema,
   }),
   defineProviderAction(service, {
     name: "llms_txt_generate",
+    operationType: "write",
     description: "Start an LLMs.txt generation job for a website.",
     inputSchema: s.looseRequiredObject(
       "The input payload for this action.",
@@ -805,24 +938,28 @@ export const firecrawlActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "llms_txt_get",
+    operationType: "read",
     description: "Get the current status and generated content of an LLMs.txt job by job ID.",
     inputSchema: idInput,
     outputSchema: llmsTxtStatusSchema,
   }),
   defineProviderAction(service, {
     name: "queue_get",
+    operationType: "read",
     description: "Get the authenticated Firecrawl team's queue status and concurrency information.",
     inputSchema: s.looseObject({}, { description: "The input payload for this action." }),
     outputSchema: queueStatusSchema,
   }),
   defineProviderAction(service, {
     name: "credit_usage_get",
+    operationType: "read",
     description: "Get the authenticated Firecrawl team's current credit usage summary.",
     inputSchema: s.looseObject({}, { description: "The input payload for this action." }),
     outputSchema: usageSchema,
   }),
   defineProviderAction(service, {
     name: "credit_usage_get_historical",
+    operationType: "read",
     description: "Get the authenticated Firecrawl team's historical credit usage summary.",
     inputSchema: s.looseRequiredObject(
       "The input payload for this action.",
@@ -833,12 +970,14 @@ export const firecrawlActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "token_usage_get",
+    operationType: "read",
     description: "Get the authenticated Firecrawl team's current token usage summary.",
     inputSchema: s.looseObject({}, { description: "The input payload for this action." }),
     outputSchema: usageSchema,
   }),
   defineProviderAction(service, {
     name: "token_usage_get_historical",
+    operationType: "read",
     description: "Get the authenticated Firecrawl team's historical token usage summary.",
     inputSchema: s.looseRequiredObject(
       "The input payload for this action.",
@@ -848,35 +987,3 @@ export const firecrawlActions: ActionDefinition[] = [
     outputSchema: historicalUsageSchema,
   }),
 ];
-
-export type FirecrawlActionName =
-  | "scrape"
-  | "batch_scrape"
-  | "batch_scrape_get"
-  | "batch_scrape_get_errors"
-  | "batch_scrape_cancel"
-  | "crawl"
-  | "crawl_v2"
-  | "crawl_get"
-  | "get_the_status_of_a_crawl_job"
-  | "crawl_get_errors"
-  | "crawl_cancel"
-  | "crawl_delete"
-  | "crawl_list_active"
-  | "crawl_params_preview"
-  | "extract"
-  | "extract_get"
-  | "search"
-  | "map_multiple_urls_based_on_options"
-  | "start_agent"
-  | "get_agent_status"
-  | "agent_cancel"
-  | "deep_research"
-  | "get_deep_research_status"
-  | "llms_txt_generate"
-  | "llms_txt_get"
-  | "queue_get"
-  | "credit_usage_get"
-  | "credit_usage_get_historical"
-  | "token_usage_get"
-  | "token_usage_get_historical";

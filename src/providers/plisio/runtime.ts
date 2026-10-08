@@ -1,15 +1,22 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import {
   compactObject,
+  optionalBoolean,
   optionalInteger,
   optionalNumber,
   optionalRecord,
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  ProviderRequestError,
+  providerUserAgent,
+  requiredInputString,
+} from "../provider-runtime.ts";
 
 type PlisioActionContext = ApiKeyProviderContext;
 type PlisioActionHandler = (input: Record<string, unknown>, context: PlisioActionContext) => Promise<unknown>;
@@ -24,7 +31,7 @@ interface PlisioLinksPayload {
 
 export const plisioApiBaseUrl = "https://api.plisio.net";
 
-export const plisioActionHandlers: Record<string, PlisioActionHandler> = {
+export const plisioActionHandlers: ProviderActionHandlers<"plisio", PlisioActionHandler> = {
   create_invoice(input, context) {
     return createInvoice(input, context);
   },
@@ -355,14 +362,6 @@ function requiredIdentifier(value: unknown, fieldName: string): string {
   return requiredInputString(value, fieldName);
 }
 
-function requiredInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function requiredProviderString(value: unknown, fieldName: string): string {
   return requiredString(value, fieldName, () => new ProviderRequestError(502, `Plisio response missing ${fieldName}`));
-}
-
-function optionalBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
 }

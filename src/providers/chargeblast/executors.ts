@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -13,14 +14,13 @@ import {
 
 const service = "chargeblast";
 const chargeblastApiBaseUrl = "https://api.chargeblast.com";
-const defaultRequestTimeoutMs = 30_000;
 const maxNonJsonErrorMessageLength = 300;
 const chargeblastMaxResponseBytes = 10 * 1024 * 1024;
 
 type ChargeblastPhase = "validate" | "execute";
 type ChargeblastActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const chargeblastActionHandlers: Record<string, ChargeblastActionHandler> = {
+export const chargeblastActionHandlers: ProviderActionHandlers<"chargeblast", ChargeblastActionHandler> = {
   async list_alerts(input, context) {
     const payload = await requestChargeblastJson(
       buildPath("/api/v2/alerts", {
@@ -210,7 +210,7 @@ async function requestChargeblastJson(
   context: ApiKeyProviderContext,
   phase: ChargeblastPhase,
 ) {
-  const timeoutHandle = createProviderTimeout(context.signal, defaultRequestTimeoutMs);
+  const timeoutHandle = createProviderTimeout(context.signal);
 
   try {
     const response = await context.fetcher(new URL(path, chargeblastApiBaseUrl), {

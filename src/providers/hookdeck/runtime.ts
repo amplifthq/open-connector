@@ -1,5 +1,5 @@
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { HookdeckActionName } from "./actions.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
 import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
@@ -9,12 +9,10 @@ export const hookdeckApiVersion = "2025-07-01";
 export const hookdeckApiPrefix: string = `/${hookdeckApiVersion}`;
 export const hookdeckValidationPath = "/sources";
 
-const hookdeckRequestTimeoutMs = 30_000;
-
 type HookdeckActionContext = ApiKeyProviderContext;
 type HookdeckActionHandler = (input: Record<string, unknown>, context: HookdeckActionContext) => Promise<unknown>;
 
-export const hookdeckActionHandlers: Record<HookdeckActionName, HookdeckActionHandler> = {
+export const hookdeckActionHandlers: ProviderActionHandlers<"hookdeck", HookdeckActionHandler> = {
   async list_connections(input, context) {
     return normalizeListOutput(
       "connections",
@@ -180,7 +178,7 @@ async function hookdeckRequestJson(
   body?: Record<string, unknown>,
   query?: Record<string, unknown>,
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, hookdeckRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   let response: Response;
   try {
     response = await context.fetcher(buildHookdeckUrl(path, query), {

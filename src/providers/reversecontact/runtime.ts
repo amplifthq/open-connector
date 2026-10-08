@@ -1,4 +1,4 @@
-import type { ReversecontactActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { requiredString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
@@ -23,7 +23,7 @@ interface ApiKeyProviderActionInput {
   input: Record<string, unknown>;
 }
 
-export const reversecontactActionHandlers: Record<ReversecontactActionName, ReversecontactActionHandler> = {
+export const reversecontactActionHandlers: ProviderActionHandlers<"reversecontact", ReversecontactActionHandler> = {
   enrich_person(input, fetcher) {
     const body = normalizePersonInput(input.input);
     return requestReversecontact(personEnrichmentPath, "POST", input.apiKey, body, fetcher);
@@ -129,7 +129,7 @@ function readReversecontactMessage(payload: Record<string, unknown>) {
 
 function mapReversecontactError(status: number, message: string) {
   if (status === 401 || status === 403) {
-    return new ProviderRequestError(409, message);
+    return new ProviderRequestError(401, message);
   }
   if (status === 429) {
     return new ProviderRequestError(429, message);

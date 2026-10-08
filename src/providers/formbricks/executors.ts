@@ -1,11 +1,12 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { FormbricksActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
+  isAbortLikeError,
   ProviderRequestError,
   providerUserAgent,
 } from "../provider-runtime.ts";
@@ -27,7 +28,7 @@ interface FormbricksRequestInput {
   body?: Record<string, unknown>;
 }
 
-export const formbricksActionHandlers: Record<FormbricksActionName, FormbricksActionHandler> = {
+export const formbricksActionHandlers: ProviderActionHandlers<"formbricks", FormbricksActionHandler> = {
   async get_me(_input, context) {
     return normalizeMePayload(
       await requestFormbricksJson(context, {
@@ -448,10 +449,6 @@ function nullableProviderString(value: unknown): string | null {
     return null;
   }
   return typeof value === "string" ? value : null;
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
 }
 
 export const proxy: ProviderProxyExecutor = defineProviderProxy({

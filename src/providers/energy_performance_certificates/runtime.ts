@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { EnergyPerformanceCertificatesActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -10,8 +10,7 @@ import {
   providerUserAgent,
 } from "../provider-runtime.ts";
 
-const energyPerformanceCertificatesApiBaseUrl = "https://api.get-energy-performance-data.communities.gov.uk";
-const requestTimeoutMs = 30_000;
+export const energyPerformanceCertificatesApiBaseUrl = "https://api.get-energy-performance-data.communities.gov.uk";
 
 type EnergyPerformanceCertificatesPhase = "validate" | "execute";
 type SearchFamily = "domestic" | "non-domestic" | "display";
@@ -23,8 +22,8 @@ interface RequestJsonResult {
   response: Response;
 }
 
-export const energyPerformanceCertificatesActionHandlers: Record<
-  EnergyPerformanceCertificatesActionName,
+export const energyPerformanceCertificatesActionHandlers: ProviderActionHandlers<
+  "energy_performance_certificates",
   EnergyPerformanceCertificatesActionHandler
 > = {
   search_domestic_certificates(input, context) {
@@ -127,7 +126,7 @@ async function requestJson(input: {
     }
   }
 
-  const timeout = createProviderTimeout(input.context.signal, requestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   let response: Response;
   let payload: unknown;
   try {

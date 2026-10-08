@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
@@ -6,6 +7,7 @@ import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
   defineProviderProxy,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
@@ -19,7 +21,7 @@ const datagmaMaxResponseBytes = 10 * 1024 * 1024;
 type DatagmaPhase = "validate" | "execute";
 type DatagmaActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-const datagmaActionHandlers: Record<string, DatagmaActionHandler> = {
+const datagmaActionHandlers: ProviderActionHandlers<"datagma", DatagmaActionHandler> = {
   get_credit(input, context) {
     return requestDatagmaResult({
       path: "/api/ingress/v1/mine",
@@ -70,7 +72,7 @@ const datagmaActionHandlers: Record<string, DatagmaActionHandler> = {
   },
   search_phone_numbers(input, context) {
     if (input.email === undefined && input.username === undefined) {
-      throw invalidInput("Provide at least one of email or username");
+      throw providerInputError("Provide at least one of email or username");
     }
     return requestDatagmaResult({
       path: "/api/ingress/v1/search",
@@ -277,24 +279,20 @@ function validateEnrichInput(input: Record<string, unknown>): void {
       (input.fullName !== undefined || (input.firstName !== undefined && input.lastName !== undefined))
     )
   ) {
-    throw invalidInput("Provide data, or provide company with fullName or firstName and lastName");
+    throw providerInputError("Provide data, or provide company with fullName or firstName and lastName");
   }
 }
 
 function validateFindWorkEmailInput(input: Record<string, unknown>): void {
   const hasName = input.fullName !== undefined || (input.firstName !== undefined && input.lastName !== undefined);
   if (!hasName || (input.company === undefined && input.linkedInSlug === undefined)) {
-    throw invalidInput("Provide fullName or firstName and lastName, plus either company or linkedInSlug");
+    throw providerInputError("Provide fullName or firstName and lastName, plus either company or linkedInSlug");
   }
 }
 
 function validateDetectJobChangeInput(input: Record<string, unknown>): void {
   const hasName = input.fullName !== undefined || (input.firstName !== undefined && input.lastName !== undefined);
   if (input.companyName === undefined || !hasName) {
-    throw invalidInput("Provide companyName with fullName or firstName and lastName");
+    throw providerInputError("Provide companyName with fullName or firstName and lastName");
   }
-}
-
-function invalidInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

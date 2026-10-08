@@ -1,9 +1,10 @@
+import type { ProviderActionHandlerSubset } from "../provider-runtime.ts";
 import type { OAuthProviderContext } from "../provider-runtime.ts";
 
-import { compactObject, optionalObjectArray, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { ProviderRequestError, readProviderJsonBody } from "../provider-runtime.ts";
+import { compactObject, optionalObjectArray, optionalRecord, optionalString } from "../../core/cast.ts";
+import { ProviderRequestError, readProviderJsonBody, requiredInputString } from "../provider-runtime.ts";
 
-const feishuOpenBaseUrl = "https://open.feishu.cn/open-apis";
+export const feishuOpenBaseUrl = "https://open.feishu.cn/open-apis";
 
 // Feishu returns HTTP 200 with a non-zero `code` for most failures, so map the
 // well-known auth codes to their real meaning instead of a generic 502. This
@@ -12,6 +13,7 @@ const feishuOpenBaseUrl = "https://open.feishu.cn/open-apis";
 // codes verified against Feishu's generic error-code reference.
 const feishuCredentialErrorCodes = new Set([20005, 20006, 99991661, 99991668, 99991671, 99991677]);
 const feishuScopeErrorCodes = new Set([99991679]);
+const feishuInvalidInputErrorCodes = new Set([800010701, 900015206]);
 
 type FeishuActionContext = Pick<OAuthProviderContext, "accessToken" | "fetcher" | "signal">;
 interface FeishuActionHandler {
@@ -32,7 +34,7 @@ interface FeishuApiRequestInput {
   context: FeishuActionContext;
 }
 
-export const feishuActionHandlers: Record<string, FeishuActionHandler> = {
+export const feishuActionHandlers: ProviderActionHandlerSubset<"feishu", FeishuActionHandler> = {
   get_current_user(_input, context) {
     return feishuGetCurrentUser(context);
   },
@@ -69,7 +71,7 @@ async function feishuGetDocument(
   input: Record<string, unknown>,
   context: FeishuActionContext,
 ): Promise<Record<string, unknown>> {
-  const documentId = requiredFeishuId(input.documentId, "documentId");
+  const documentId = requiredInputString(input.documentId, "documentId");
   const data = await feishuApiRequest({
     path: `/docx/v1/documents/${encodeURIComponent(documentId)}`,
     context,
@@ -87,7 +89,7 @@ async function feishuGetDocumentContent(
   input: Record<string, unknown>,
   context: FeishuActionContext,
 ): Promise<Record<string, unknown>> {
-  const documentId = requiredFeishuId(input.documentId, "documentId");
+  const documentId = requiredInputString(input.documentId, "documentId");
   const data = await feishuApiRequest({
     path: `/docx/v1/documents/${encodeURIComponent(documentId)}/raw_content`,
     query: compactQuery([["lang", optionalScalarString(input.lang)]]),
@@ -103,7 +105,7 @@ async function feishuListDocumentBlocks(
   input: Record<string, unknown>,
   context: FeishuActionContext,
 ): Promise<Record<string, unknown>> {
-  const documentId = requiredFeishuId(input.documentId, "documentId");
+  const documentId = requiredInputString(input.documentId, "documentId");
   const data = await feishuApiRequest({
     path: `/docx/v1/documents/${encodeURIComponent(documentId)}/blocks`,
     query: compactQuery([
@@ -121,7 +123,7 @@ async function feishuListBitableTables(
   input: Record<string, unknown>,
   context: FeishuActionContext,
 ): Promise<Record<string, unknown>> {
-  const appToken = requiredFeishuId(input.appToken, "appToken");
+  const appToken = requiredInputString(input.appToken, "appToken");
   const data = await feishuApiRequest({
     path: `/bitable/v1/apps/${encodeURIComponent(appToken)}/tables`,
     query: compactQuery([
@@ -137,8 +139,8 @@ async function feishuListBitableFields(
   input: Record<string, unknown>,
   context: FeishuActionContext,
 ): Promise<Record<string, unknown>> {
-  const appToken = requiredFeishuId(input.appToken, "appToken");
-  const tableId = requiredFeishuId(input.tableId, "tableId");
+  const appToken = requiredInputString(input.appToken, "appToken");
+  const tableId = requiredInputString(input.tableId, "tableId");
   const data = await feishuApiRequest({
     path: `/bitable/v1/apps/${encodeURIComponent(appToken)}/tables/${encodeURIComponent(tableId)}/fields`,
     query: compactQuery([
@@ -155,8 +157,8 @@ async function feishuSearchBitableRecords(
   input: Record<string, unknown>,
   context: FeishuActionContext,
 ): Promise<Record<string, unknown>> {
-  const appToken = requiredFeishuId(input.appToken, "appToken");
-  const tableId = requiredFeishuId(input.tableId, "tableId");
+  const appToken = requiredInputString(input.appToken, "appToken");
+  const tableId = requiredInputString(input.tableId, "tableId");
   const body = compactObject({
     view_id: optionalString(input.viewId),
     field_names: optionalStringArray(input.fieldNames),
@@ -275,14 +277,13 @@ function mapFeishuErrorStatus(httpStatus: number, code: number): number {
   if (httpStatus === 403 || feishuScopeErrorCodes.has(code)) {
     return 403;
   }
+  if (feishuInvalidInputErrorCodes.has(code)) {
+    return 400;
+  }
   if (httpStatus >= 400 && httpStatus < 500) {
     return httpStatus;
   }
   return 502;
-}
-
-function requiredFeishuId(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function optionalStringArray(value: unknown): string[] | undefined {

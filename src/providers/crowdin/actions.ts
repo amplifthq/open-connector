@@ -5,15 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "crowdin";
 
-export type CrowdinActionName =
-  | "list_projects"
-  | "list_branches"
-  | "create_branch"
-  | "list_directories"
-  | "create_directory"
-  | "list_files"
-  | "upload_file";
-
 const paginationOutput = s.object(
   {
     offset: s.nonNegativeInteger("The current offset in the result set."),
@@ -127,6 +118,7 @@ const branchOrDirectoryFields = {
 export const crowdinActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_projects",
+    operationType: "read",
     description: "List Crowdin projects.",
     requiredScopes: ["crowdin.projects.read"],
     inputSchema: s.object(pageFields, {
@@ -140,6 +132,7 @@ export const crowdinActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_branches",
+    operationType: "read",
     description: "List Crowdin project branches.",
     requiredScopes: ["crowdin.source.read"],
     inputSchema: s.object(
@@ -161,6 +154,7 @@ export const crowdinActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_branch",
+    operationType: "write",
     description: "Create a Crowdin project branch.",
     requiredScopes: ["crowdin.source.write"],
     inputSchema: s.object(
@@ -181,6 +175,7 @@ export const crowdinActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_directories",
+    operationType: "read",
     description: "List Crowdin directories.",
     requiredScopes: ["crowdin.source.read"],
     inputSchema: s.object(
@@ -207,6 +202,7 @@ export const crowdinActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_directory",
+    operationType: "write",
     description: "Create a Crowdin directory.",
     requiredScopes: ["crowdin.source.write"],
     inputSchema: s.object(
@@ -228,6 +224,7 @@ export const crowdinActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_files",
+    operationType: "read",
     description: "List Crowdin source files.",
     requiredScopes: ["crowdin.source.read"],
     inputSchema: s.object(
@@ -251,6 +248,7 @@ export const crowdinActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "upload_file",
+    operationType: "write",
     description: "Upload a source file to Crowdin.",
     requiredScopes: ["crowdin.source.write"],
     inputSchema: s.object(

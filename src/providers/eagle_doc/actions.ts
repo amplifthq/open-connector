@@ -63,16 +63,10 @@ const usageAdditionalInfoSchema = s.looseObject("Additional monthly pricing meta
   PricePerPage: s.number("The in-contract price per page when returned."),
 });
 
-export type EagleDocActionName =
-  | "process_finance_document"
-  | "get_current_usage"
-  | "list_monthly_usage"
-  | "list_usage_logs"
-  | "get_quota";
-
 export const eagleDocActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "process_finance_document",
+    operationType: "write",
     description:
       "Upload one invoice, receipt, or PDF to Eagle Doc Finance OCR and return the structured extraction result.",
     requiredScopes: [],
@@ -146,6 +140,7 @@ export const eagleDocActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_current_usage",
+    operationType: "read",
     description: "Fetch the current billing-month usage counters for the connected Eagle Doc API key.",
     requiredScopes: [],
     inputSchema: s.object("No input parameters are required for the current usage endpoint.", {}),
@@ -162,6 +157,7 @@ export const eagleDocActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_monthly_usage",
+    operationType: "read",
     description: "List Eagle Doc monthly usage history together with pricing metadata for each month returned.",
     requiredScopes: [],
     inputSchema: s.object("No input parameters are required for the monthly usage history endpoint.", {}),
@@ -178,6 +174,7 @@ export const eagleDocActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_usage_logs",
+    operationType: "read",
     description: "List recent Eagle Doc request log rows with processed page counts and timestamps.",
     requiredScopes: [],
     inputSchema: s.object("No input parameters are required for the usage logs endpoint.", {}),
@@ -194,6 +191,7 @@ export const eagleDocActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_quota",
+    operationType: "read",
     description: "Fetch the overall Eagle Doc management quota summary tied to the connected API key.",
     requiredScopes: [],
     inputSchema: s.object("No input parameters are required for the management quota endpoint.", {}),

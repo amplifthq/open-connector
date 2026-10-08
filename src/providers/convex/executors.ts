@@ -1,5 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ConvexActionName } from "./actions.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { isIP } from "node:net";
 import {
@@ -11,10 +11,26 @@ import {
   optionalString,
 } from "../../core/cast.ts";
 import { queryParams } from "../../core/request.ts";
-import { defineBearerProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineBearerProviderExecutors,
+  defineProviderProxy,
+  providerInputError,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "convex";
 const apiBaseUrl = "https://api.convex.dev/v1";
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apiBaseUrl,
+  auth: { type: "bearer" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+  },
+});
 const grantedScopes = [
   "convex.token.read",
   "convex.projects.read",
@@ -40,7 +56,7 @@ interface ConvexContext {
 
 type ConvexActionHandler = (input: Record<string, unknown>, context: ConvexContext) => Promise<unknown>;
 
-const actionHandlers: Record<ConvexActionName, ConvexActionHandler> = {
+const actionHandlers: ProviderActionHandlers<"convex", ConvexActionHandler> = {
   get_token_details(_input, context) {
     return getTokenDetails(context);
   },
@@ -155,7 +171,7 @@ async function getTokenDetails(context: ConvexContext): Promise<unknown> {
 }
 
 async function listProjects(input: Record<string, unknown>, context: ConvexContext): Promise<unknown> {
-  const teamId = integer(input.team_id, "team_id", badInput);
+  const teamId = integer(input.team_id, "team_id", providerInputError);
   const projects = await requestConvex<Array<Record<string, unknown>>>({
     ...context,
     path: `/teams/${teamId}/list_projects`,
@@ -164,7 +180,7 @@ async function listProjects(input: Record<string, unknown>, context: ConvexConte
 }
 
 async function createProject(input: Record<string, unknown>, context: ConvexContext): Promise<unknown> {
-  const teamId = integer(input.team_id, "team_id", badInput);
+  const teamId = integer(input.team_id, "team_id", providerInputError);
   return requestConvex({
     ...context,
     method: "POST",
@@ -179,7 +195,7 @@ async function createProject(input: Record<string, unknown>, context: ConvexCont
 }
 
 async function getProjectById(input: Record<string, unknown>, context: ConvexContext): Promise<unknown> {
-  const projectId = integer(input.project_id, "project_id", badInput);
+  const projectId = integer(input.project_id, "project_id", providerInputError);
   return { project: (await requestConvex({ ...context, path: `/projects/${projectId}` })) ?? {} };
 }
 
@@ -196,13 +212,13 @@ async function getProjectBySlug(input: Record<string, unknown>, context: ConvexC
 }
 
 async function deleteProject(input: Record<string, unknown>, context: ConvexContext): Promise<unknown> {
-  const projectId = integer(input.project_id, "project_id", badInput);
+  const projectId = integer(input.project_id, "project_id", providerInputError);
   await requestConvex({ ...context, method: "POST", path: `/projects/${projectId}/delete` });
   return { success: true };
 }
 
 async function listDeployments(input: Record<string, unknown>, context: ConvexContext): Promise<unknown> {
-  const projectId = integer(input.project_id, "project_id", badInput);
+  const projectId = integer(input.project_id, "project_id", providerInputError);
   const deployments = await requestConvex<Array<Record<string, unknown>>>({
     ...context,
     path: `/projects/${projectId}/list_deployments`,
@@ -223,7 +239,7 @@ async function getDeployment(input: Record<string, unknown>, context: ConvexCont
 }
 
 async function createDeployment(input: Record<string, unknown>, context: ConvexContext): Promise<unknown> {
-  const projectId = integer(input.project_id, "project_id", badInput);
+  const projectId = integer(input.project_id, "project_id", providerInputError);
   const deployment = await requestConvex<Record<string, unknown>>({
     ...context,
     method: "POST",
@@ -282,7 +298,7 @@ async function deleteDeployment(input: Record<string, unknown>, context: ConvexC
 }
 
 async function listDeploymentClasses(input: Record<string, unknown>, context: ConvexContext): Promise<unknown> {
-  const teamId = integer(input.team_id, "team_id", badInput);
+  const teamId = integer(input.team_id, "team_id", providerInputError);
   const items = await requestConvex<Array<Record<string, unknown>>>({
     ...context,
     path: `/teams/${teamId}/list_deployment_classes`,
@@ -291,7 +307,7 @@ async function listDeploymentClasses(input: Record<string, unknown>, context: Co
 }
 
 async function listDeploymentRegions(input: Record<string, unknown>, context: ConvexContext): Promise<unknown> {
-  const teamId = integer(input.team_id, "team_id", badInput);
+  const teamId = integer(input.team_id, "team_id", providerInputError);
   const items = await requestConvex<Array<Record<string, unknown>>>({
     ...context,
     path: `/teams/${teamId}/list_deployment_regions`,
@@ -567,8 +583,4 @@ function readString(value: unknown, fieldName: string): string {
     throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return text;
-}
-
-function badInput(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

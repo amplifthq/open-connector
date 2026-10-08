@@ -1,7 +1,13 @@
+import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-runtime.ts";
 import type { MoreTreesActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  createProviderTimeout,
+  isAbortLikeError,
+  ProviderRequestError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 export interface MoreTreesCredentialCheck {
   providerAccountId?: string;
@@ -10,19 +16,9 @@ export interface MoreTreesCredentialCheck {
   providerMetadata: Record<string, unknown>;
 }
 
-interface ApiKeyProviderActionInput {
-  apiKey: string;
-  actionName: string;
-  input: Record<string, unknown>;
-  providerMetadata?: Record<string, unknown>;
-  values?: Record<string, string>;
-}
-
 export const moreTreesAccountOrigin = "https://user-management-service.platform.moretrees.eco";
 export const moreTreesProjectOrigin = "https://project-management-service.platform.moretrees.eco";
 export const moreTreesTransactionOrigin = "https://transaction-management-service.platform.moretrees.eco";
-export const moreTreesAccountSettingsUrl = "https://platform.moretrees.eco/settings/?tab=account-settings";
-export const moreTreesIntegrationSettingsUrl = "https://platform.moretrees.eco/manage/API";
 export const moreTreesRequestTimeoutMs = 30_000;
 
 const moreTreesAccountPath = "/user-management-api/external/accounts";
@@ -31,18 +27,18 @@ const moreTreesProjectsPath = "/project-management-api/external/projects";
 const moreTreesPlantPath = "/transaction-management-api/external/plant";
 
 type MoreTreesRequestPhase = "validate" | "execute";
-type MoreTreesActionInput = ApiKeyProviderActionInput & {
+type MoreTreesActionInput = ApiKeyActionRequest & {
   actionName: MoreTreesActionName;
   input: Record<string, unknown>;
 };
 type MoreTreesActionHandler = (input: MoreTreesActionInput, fetcher: typeof fetch) => Promise<unknown>;
 
-export const moreTreesActionHandlers: Record<MoreTreesActionName, MoreTreesActionHandler> = {
+export const moreTreesActionHandlers: ProviderActionHandlers<"more_trees", MoreTreesActionHandler> = {
   get_account: executeGetAccount,
   get_forest: executeGetForest,
   list_projects: executeListProjects,
   plant_trees: executePlantTrees,
-} satisfies Record<MoreTreesActionName, MoreTreesActionHandler>;
+};
 
 export async function validateMoreTreesCredential(
   input: Record<string, string>,
@@ -265,7 +261,7 @@ function createMoreTreesError(response: Response, payload: unknown, phase: MoreT
     return new ProviderRequestError(429, message);
   }
   if (response.status === 401 || response.status === 403) {
-    return new ProviderRequestError(phase === "validate" ? 400 : 409, message);
+    return new ProviderRequestError(phase === "validate" ? 400 : 401, message);
   }
   if ([400, 404, 406, 422].includes(response.status)) {
     return new ProviderRequestError(400, message);
@@ -327,11 +323,4 @@ function resolveStoredAccountCode(providerMetadata: Record<string, unknown> | un
 function readOptionalTrimmedString(value: unknown) {
   const text = optionalString(value)?.trim();
   return text || undefined;
-}
-
-function isAbortLikeError(error: unknown) {
-  return (
-    (error instanceof DOMException && error.name === "AbortError") ||
-    (error instanceof Error && error.name === "AbortError")
-  );
 }

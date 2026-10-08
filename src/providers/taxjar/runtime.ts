@@ -1,8 +1,9 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
-import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
+import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
 type QueryValue = string | number | undefined;
 type TaxjarActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -10,21 +11,21 @@ type TaxjarActionHandler = (input: Record<string, unknown>, context: ApiKeyProvi
 export const taxjarApiBaseUrl = "https://api.taxjar.com/v2";
 const validationEndpoint = "/categories";
 
-export const taxjarActionHandlers: Record<string, TaxjarActionHandler> = {
+export const taxjarActionHandlers: ProviderActionHandlers<"taxjar", TaxjarActionHandler> = {
   calculate_sales_tax_for_order(input, context) {
     return taxjarRequest({ path: "/taxes", method: "POST", body: input }, context);
   },
   show_tax_rates_for_location(input, context) {
-    const zip = readRequiredTrimmedString(input.zip, "zip");
+    const zip = requiredInputString(input.zip, "zip");
     return taxjarRequest(
       {
         path: `/rates/${encodeURIComponent(zip)}`,
         method: "GET",
         query: compactObject({
-          country: readOptionalTrimmedString(input.country),
-          state: readOptionalTrimmedString(input.state),
-          city: readOptionalTrimmedString(input.city),
-          street: readOptionalTrimmedString(input.street),
+          country: optionalString(input.country),
+          state: optionalString(input.state),
+          city: optionalString(input.city),
+          street: optionalString(input.street),
         }),
       },
       context,
@@ -53,18 +54,18 @@ export const taxjarActionHandlers: Record<string, TaxjarActionHandler> = {
     );
   },
   show_customer(input, context) {
-    const customerId = readRequiredTrimmedString(input.customer_id, "customer_id");
+    const customerId = requiredInputString(input.customer_id, "customer_id");
     return taxjarRequest({ path: `/customers/${encodeURIComponent(customerId)}`, method: "GET" }, context);
   },
   create_customer(input, context) {
     return taxjarRequest({ path: "/customers", method: "POST", body: input }, context);
   },
   update_customer(input, context) {
-    const customerId = readRequiredTrimmedString(input.customer_id, "customer_id");
+    const customerId = requiredInputString(input.customer_id, "customer_id");
     return taxjarRequest({ path: `/customers/${encodeURIComponent(customerId)}`, method: "PUT", body: input }, context);
   },
   async delete_customer(input, context) {
-    const customerId = readRequiredTrimmedString(input.customer_id, "customer_id");
+    const customerId = requiredInputString(input.customer_id, "customer_id");
     const response = await taxjarRequest(
       { path: `/customers/${encodeURIComponent(customerId)}`, method: "DELETE" },
       context,
@@ -75,21 +76,21 @@ export const taxjarActionHandlers: Record<string, TaxjarActionHandler> = {
     return listTransactions("/transactions/orders", input, context);
   },
   show_order_transaction(input, context) {
-    const transactionId = readRequiredTrimmedString(input.transaction_id, "transaction_id");
+    const transactionId = requiredInputString(input.transaction_id, "transaction_id");
     return taxjarRequest({ path: `/transactions/orders/${encodeURIComponent(transactionId)}`, method: "GET" }, context);
   },
   create_order_transaction(input, context) {
     return taxjarRequest({ path: "/transactions/orders", method: "POST", body: input }, context);
   },
   update_order_transaction(input, context) {
-    const transactionId = readRequiredTrimmedString(input.transaction_id, "transaction_id");
+    const transactionId = requiredInputString(input.transaction_id, "transaction_id");
     return taxjarRequest(
       { path: `/transactions/orders/${encodeURIComponent(transactionId)}`, method: "PUT", body: input },
       context,
     );
   },
   async delete_order_transaction(input, context) {
-    const transactionId = readRequiredTrimmedString(input.transaction_id, "transaction_id");
+    const transactionId = requiredInputString(input.transaction_id, "transaction_id");
     const response = await taxjarRequest(
       { path: `/transactions/orders/${encodeURIComponent(transactionId)}`, method: "DELETE" },
       context,
@@ -100,7 +101,7 @@ export const taxjarActionHandlers: Record<string, TaxjarActionHandler> = {
     return listTransactions("/transactions/refunds", input, context);
   },
   show_refund_transaction(input, context) {
-    const transactionId = readRequiredTrimmedString(input.transaction_id, "transaction_id");
+    const transactionId = requiredInputString(input.transaction_id, "transaction_id");
     return taxjarRequest(
       { path: `/transactions/refunds/${encodeURIComponent(transactionId)}`, method: "GET" },
       context,
@@ -110,14 +111,14 @@ export const taxjarActionHandlers: Record<string, TaxjarActionHandler> = {
     return taxjarRequest({ path: "/transactions/refunds", method: "POST", body: input }, context);
   },
   update_refund_transaction(input, context) {
-    const transactionId = readRequiredTrimmedString(input.transaction_id, "transaction_id");
+    const transactionId = requiredInputString(input.transaction_id, "transaction_id");
     return taxjarRequest(
       { path: `/transactions/refunds/${encodeURIComponent(transactionId)}`, method: "PUT", body: input },
       context,
     );
   },
   async delete_refund_transaction(input, context) {
-    const transactionId = readRequiredTrimmedString(input.transaction_id, "transaction_id");
+    const transactionId = requiredInputString(input.transaction_id, "transaction_id");
     const response = await taxjarRequest(
       { path: `/transactions/refunds/${encodeURIComponent(transactionId)}`, method: "DELETE" },
       context,
@@ -125,7 +126,7 @@ export const taxjarActionHandlers: Record<string, TaxjarActionHandler> = {
     return { deleted: true, transaction_id: transactionId, response };
   },
   async validate_vat_number(input, context) {
-    const vatNumber = readRequiredTrimmedString(input.vat_number, "vat_number");
+    const vatNumber = requiredInputString(input.vat_number, "vat_number");
     const payload = await taxjarRequest({ path: "/validation", method: "GET", query: { vat: vatNumber } }, context);
     return { validation: payload };
   },
@@ -162,9 +163,9 @@ function listTransactions(
       path,
       method: "GET",
       query: compactObject({
-        from_transaction_date: readRequiredTrimmedString(input.from_transaction_date, "from_transaction_date"),
-        to_transaction_date: readRequiredTrimmedString(input.to_transaction_date, "to_transaction_date"),
-        provider: readOptionalTrimmedString(input.provider),
+        from_transaction_date: requiredInputString(input.from_transaction_date, "from_transaction_date"),
+        to_transaction_date: requiredInputString(input.to_transaction_date, "to_transaction_date"),
+        provider: optionalString(input.provider),
       }),
     },
     context,
@@ -247,14 +248,6 @@ function createTaxjarError(status: number, payload: unknown): ProviderRequestErr
 function extractErrorMessage(payload: unknown): string | undefined {
   const object = optionalRecord(payload);
   return optionalString(object?.detail) ?? optionalString(object?.error) ?? optionalString(object?.message);
-}
-
-function readRequiredTrimmedString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
-function readOptionalTrimmedString(value: unknown): string | undefined {
-  return optionalString(value);
 }
 
 function isTimeoutLikeError(error: unknown): boolean {

@@ -4,17 +4,21 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { IntegrationDefinition } from "../../triggers/common/integration.ts";
+import type { PollDefinition } from "../../triggers/common/poll.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { TelegramActionName } from "./actions.ts";
 
 import { optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
 import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
+  isAbortLikeError,
   ProviderRequestError,
   requireApiKeyCredential,
 } from "../provider-runtime.ts";
+import { telegramUpdate } from "./trigger-on-update.ts";
 
 const service = "telegram";
 const telegramApiBaseUrl = "https://api.telegram.org";
@@ -32,7 +36,7 @@ interface TelegramApiEnvelope<T> {
 
 type TelegramActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const telegramActionHandlers: Record<TelegramActionName, TelegramActionHandler> = {
+export const telegramActionHandlers: ProviderActionHandlers<"telegram", TelegramActionHandler> = {
   async get_me(_input, context): Promise<unknown> {
     return normalizeTelegramUser(
       await telegramRequest<Record<string, unknown>>({
@@ -1370,6 +1374,4 @@ function assertValidTelegramBotToken(botToken: string): void {
   }
 }
 
-function isAbortLikeError(error: unknown): boolean {
-  return error instanceof Error && error.name === "AbortError";
-}
+export const triggers: readonly (IntegrationDefinition | PollDefinition)[] = [telegramUpdate];

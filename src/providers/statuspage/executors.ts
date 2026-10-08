@@ -1,13 +1,14 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { StatuspageActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
+import { compactObject, optionalRecord, optionalString, recordOrEmpty } from "../../core/cast.ts";
 import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
+  requiredInputString,
 } from "../provider-runtime.ts";
 
 const service = "statuspage";
@@ -19,7 +20,7 @@ const statuspageValidationPath = "/pages";
 type StatuspageActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 type Normalizer = (input: Record<string, unknown>) => Record<string, unknown>;
 
-export const statuspageActionHandlers: Record<StatuspageActionName, StatuspageActionHandler> = {
+export const statuspageActionHandlers: ProviderActionHandlers<"statuspage", StatuspageActionHandler> = {
   list_pages(_input, context) {
     return normalizeListOutput("pages", statuspageGetJson(statuspageValidationPath, context), normalizePage);
   },
@@ -125,7 +126,7 @@ export const statuspageActionHandlers: Record<StatuspageActionName, StatuspageAc
   async get_automation_email(input, context) {
     const pageId = readPathSegment(input.pageId, "pageId");
     const raw = await statuspageGetJson(`/pages/${pageId}/automation_email`, context);
-    const payload = asLooseObject(raw);
+    const payload = recordOrEmpty(raw);
     const automationEmail = optionalString(payload.automation_email ?? payload.automationEmail);
     if (!automationEmail) {
       throw new ProviderRequestError(502, "Statuspage automation email response is missing automation_email.", payload);
@@ -151,7 +152,7 @@ export const credentialValidators: CredentialValidators = {
     };
     const payload = await statuspageGetJson(statuspageValidationPath, context);
     const pages = readArray(payload, "Statuspage pages response");
-    const firstPage = pages.map(asLooseObject).find((page) => optionalString(page.name));
+    const firstPage = pages.map(recordOrEmpty).find((page) => optionalString(page.name));
 
     return {
       profile: {
@@ -271,7 +272,7 @@ async function normalizeListOutput(
   normalizeItem: Normalizer,
 ): Promise<Record<string, unknown>> {
   const payload = await payloadPromise;
-  const raw = readArray(payload, `Statuspage ${key} response`).map(asLooseObject);
+  const raw = readArray(payload, `Statuspage ${key} response`).map(recordOrEmpty);
   const items = raw.map(normalizeItem);
   return { [key]: items, raw };
 }
@@ -281,7 +282,7 @@ async function normalizeSingleOutput(
   payloadPromise: Promise<unknown>,
   normalizeItem: Normalizer,
 ): Promise<Record<string, unknown>> {
-  const payload = asLooseObject(await payloadPromise);
+  const payload = recordOrEmpty(await payloadPromise);
   return { [key]: normalizeItem(payload), raw: payload };
 }
 
@@ -376,7 +377,7 @@ function buildIncidentComponentIds(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
   }
-  return value.map((item) => readIdValue(readObject(item, "component").componentId, "componentId"));
+  return value.map((item) => requiredInputString(readObject(item, "component").componentId, "componentId"));
 }
 
 function buildIncidentComponents(value: unknown): Record<string, unknown> | undefined {
@@ -386,21 +387,13 @@ function buildIncidentComponents(value: unknown): Record<string, unknown> | unde
   return Object.fromEntries(
     value.map((item) => {
       const component = readObject(item, "component");
-      return [readIdValue(component.componentId, "componentId"), component.status];
+      return [requiredInputString(component.componentId, "componentId"), component.status];
     }),
   );
 }
 
-function readIdValue(value: unknown, fieldName: string): string {
-  const stringValue = optionalString(value);
-  if (!stringValue) {
-    throw new ProviderRequestError(400, `${fieldName} is required.`);
-  }
-  return stringValue;
-}
-
 function readPathSegment(value: unknown, fieldName: string): string {
-  return encodeURIComponent(readIdValue(value, fieldName));
+  return encodeURIComponent(requiredInputString(value, fieldName));
 }
 
 function readObject(value: unknown, fieldName: string): Record<string, unknown> {
@@ -416,8 +409,4 @@ function readArray(value: unknown, label: string): unknown[] {
     throw new ProviderRequestError(502, `${label} is not an array.`, value);
   }
   return value;
-}
-
-function asLooseObject(value: unknown): Record<string, unknown> {
-  return optionalRecord(value) ?? {};
 }

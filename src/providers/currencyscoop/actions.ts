@@ -61,16 +61,10 @@ const ratesOutputSchema = s.object(
   { required: ["meta", "base", "date", "rates"], description: "Exchange rate snapshot returned by CurrencyBeacon." },
 );
 
-export type CurrencyscoopActionName =
-  | "get_currencies"
-  | "get_latest_rates"
-  | "get_historical_rates"
-  | "get_timeseries_rates"
-  | "convert_currency";
-
 export const currencyscoopActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_currencies",
+    operationType: "read",
     description: "Retrieve the supported currencies exposed by CurrencyBeacon.",
     inputSchema: s.object({}, { description: "Input parameters for retrieving supported currencies." }),
     outputSchema: s.object(
@@ -83,6 +77,7 @@ export const currencyscoopActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_latest_rates",
+    operationType: "read",
     description: "Retrieve the latest exchange rates for a base currency from CurrencyBeacon.",
     inputSchema: s.object(
       {
@@ -95,6 +90,7 @@ export const currencyscoopActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_historical_rates",
+    operationType: "read",
     description: "Retrieve historical exchange rates for a specific date from CurrencyBeacon.",
     inputSchema: s.object(
       {
@@ -112,6 +108,7 @@ export const currencyscoopActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_timeseries_rates",
+    operationType: "read",
     description: "Retrieve exchange rates across a date range from CurrencyBeacon.",
     inputSchema: s.object(
       {
@@ -142,6 +139,7 @@ export const currencyscoopActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "convert_currency",
+    operationType: "read",
     description: "Convert an amount between two currencies using CurrencyBeacon exchange rates.",
     inputSchema: s.object(
       {

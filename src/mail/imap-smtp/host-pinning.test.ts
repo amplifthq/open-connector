@@ -281,6 +281,18 @@ describe("mail host pinning", () => {
     expect(configPassedTo(createSmtpTransport)).toMatchObject({ port: 587, secure: false, requireTLS: true });
   });
 
+  it("honors explicit implicit TLS on a non-standard submission port", async () => {
+    const createSmtpTransport = smtpTransportFactory();
+    const protocol = createMailProtocol(guardedConfig, {
+      createSmtpTransport,
+      lookup: lookup(publicIpv4),
+    });
+
+    await protocol.validateSmtpCredential({ ...credential, smtpPort: 994, smtpSecure: true });
+
+    expect(configPassedTo(createSmtpTransport)).toMatchObject({ port: 994, secure: true, requireTLS: false });
+  });
+
   it("pins an IPv6 answer when the host has no IPv4 record", async () => {
     const createImapClient = imapClientFactory();
     const protocol = createMailProtocol(guardedConfig, {

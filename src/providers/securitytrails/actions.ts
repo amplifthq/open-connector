@@ -19,11 +19,10 @@ const pageField = s.integer("The 1-based results page to fetch from the associat
   minimum: 1,
 });
 
-export type SecuritytrailsActionName = "get_domain" | "get_subdomains" | "find_associated_domains" | "get_domain_ssl";
-
 export const securitytrailsActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_domain",
+    operationType: "read",
     description: "Get current DNS and domain details for one hostname from SecurityTrails.",
     inputSchema: s.object("The input payload for current domain details.", {
       hostname: hostnameSchema,
@@ -37,6 +36,7 @@ export const securitytrailsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_subdomains",
+    operationType: "read",
     description: "List known subdomains for one hostname from SecurityTrails.",
     inputSchema: s.object("The input payload for known subdomains.", {
       hostname: hostnameSchema,
@@ -52,6 +52,7 @@ export const securitytrailsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "find_associated_domains",
+    operationType: "read",
     description: "Find domains associated with one hostname in SecurityTrails.",
     inputSchema: s.object(
       "The input payload for associated domains.",
@@ -71,6 +72,7 @@ export const securitytrailsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_domain_ssl",
+    operationType: "read",
     description: "Get SSL certificate details for one hostname from SecurityTrails.",
     inputSchema: s.object("The input payload for SSL certificate details.", {
       hostname: hostnameSchema,

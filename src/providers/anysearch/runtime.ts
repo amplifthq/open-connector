@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -14,6 +15,7 @@ import {
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderJsonBody,
@@ -25,7 +27,6 @@ type AnySearchContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "sign
 
 export const anySearchApiBaseUrl = "https://api.anysearch.com";
 const anySearchMcpEndpoint = anySearchApiBaseUrl + "/mcp";
-const anySearchRequestTimeoutMs = 30_000;
 const anySearchClientHeader = "connector/1.0.0";
 const authenticatedQuotaResponse = Symbol("authenticatedQuotaResponse");
 const credentialErrorSymbols = new Set([
@@ -47,9 +48,11 @@ const invalidInputErrorSymbols = new Set([
   "invalid_request",
   "private_capability_not_enabled",
 ]);
-const inputError = (message: string): ProviderRequestError => new ProviderRequestError(400, message);
 
-export const anySearchActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const anySearchActionHandlers: ProviderActionHandlers<
+  "anysearch",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   search(input, context) {
     return requestAnySearchRest(buildSearchInput(input), context, "execute");
   },
@@ -93,7 +96,7 @@ export async function validateAnySearchApiKey(
 
 function buildSearchInput(input: Record<string, unknown>): Record<string, unknown> {
   return compactObject({
-    query: requiredString(input.query, "query", inputError),
+    query: requiredString(input.query, "query", providerInputError),
     max_results: optionalInteger(input.max_results),
     domain: optionalString(input.domain),
     tag: optionalString(input.tag),
@@ -107,18 +110,18 @@ function buildSearchInput(input: Record<string, unknown>): Record<string, unknow
 function buildGetSubDomainsInput(input: Record<string, unknown>): Record<string, unknown> {
   if (input.domains !== undefined) {
     return {
-      domains: requiredStringArray(input.domains, "domains", inputError),
+      domains: requiredStringArray(input.domains, "domains", providerInputError),
     };
   }
   return {
-    domain: requiredString(input.domain, "domain", inputError),
+    domain: requiredString(input.domain, "domain", providerInputError),
   };
 }
 
 function buildBatchSearchInput(input: Record<string, unknown>): Record<string, unknown> {
-  const queries = objectArray(input.queries, "queries", inputError).map((query, index) =>
+  const queries = objectArray(input.queries, "queries", providerInputError).map((query, index) =>
     compactObject({
-      query: requiredString(query.query, "queries[" + index + "].query", inputError),
+      query: requiredString(query.query, "queries[" + index + "].query", providerInputError),
       domain: optionalString(query.domain),
       sub_domain: optionalString(query.sub_domain),
       sub_domain_params: optionalRecord(query.sub_domain_params),
@@ -129,7 +132,7 @@ function buildBatchSearchInput(input: Record<string, unknown>): Record<string, u
 }
 
 function readExtractUrl(value: unknown): string {
-  const url = requiredString(value, "url", inputError);
+  const url = requiredString(value, "url", providerInputError);
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -146,8 +149,8 @@ function readOptionalStringArray(value: unknown, fieldName: string): string[] | 
   if (value === undefined) {
     return undefined;
   }
-  return requiredStringArray(value, fieldName, inputError).map((item, index) =>
-    requiredString(item, fieldName + "[" + index + "]", inputError),
+  return requiredStringArray(value, fieldName, providerInputError).map((item, index) =>
+    requiredString(item, fieldName + "[" + index + "]", providerInputError),
   );
 }
 
@@ -193,7 +196,7 @@ async function requestAnySearchJson(
   phase: AnySearchRequestPhase,
   extraHeaders: Record<string, string> = {},
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, anySearchRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
 
   try {
     const response = await context.fetcher(url, {

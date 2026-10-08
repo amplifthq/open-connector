@@ -2,6 +2,12 @@ import type { ActionDefinition, JsonSchema } from "../../core/types.ts";
 
 import { s } from "../../core/json-schema.ts";
 import { defineProviderAction } from "../../core/provider-definition.ts";
+import { cloudflareR2AccountActions } from "./actions-account.ts";
+import { cloudflareR2BucketSettingsActions } from "./actions-bucket-settings.ts";
+import { cloudflareR2DomainActions } from "./actions-domains.ts";
+import { cloudflareR2EventNotificationActions } from "./actions-event-notifications.ts";
+import { cloudflareR2ObjectActions } from "./actions-objects.ts";
+import { cloudflareR2Jurisdictions } from "./schemas.ts";
 
 const service = "cloudflare_r2";
 
@@ -15,9 +21,7 @@ const accountIdSchema = s.nonEmptyString(
 );
 const bucketNameSchema = s.string("The R2 bucket name.", { minLength: 3, maxLength: 64 });
 const jurisdictionSchema = s.stringEnum("The jurisdiction where objects in the bucket are guaranteed to be stored.", [
-  "default",
-  "eu",
-  "fedramp",
+  ...cloudflareR2Jurisdictions,
 ]);
 const locationSchema = s.stringEnum("The R2 bucket region hint.", ["apac", "eeur", "enam", "weur", "wnam", "oc"]);
 const storageClassSchema = s.stringEnum("The default storage class for newly uploaded objects.", [
@@ -85,6 +89,20 @@ const corsRuleSchema = s.object(
   { required: ["allowed"], optional: ["id", "exposeHeaders", "maxAgeSeconds"] },
 );
 
+const downloadedObjectSchema = s.requiredObject("A downloaded R2 object stored in local transit storage.", {
+  fileId: s.nonEmptyString("The R2 object key."),
+  name: s.nonEmptyString("The filename used for the local transit file."),
+  mimeType: s.nonEmptyString("The downloaded object MIME type."),
+  sizeBytes: s.nonNegativeInteger("The downloaded object size in bytes."),
+  file: s.requiredObject("The downloaded object in local transit file storage.", {
+    fileId: s.nonEmptyString("The local transit file identifier."),
+    downloadUrl: s.url("The local transit URL for downloading the stored object."),
+    sizeBytes: s.nonNegativeInteger("The stored transit file size in bytes."),
+    name: s.nonEmptyString("The stored transit file name."),
+    mimeType: s.nonEmptyString("The stored transit file MIME type."),
+  }),
+});
+
 const updateBucketInputSchema = s.object(
   "The input payload for this action.",
   {
@@ -97,21 +115,10 @@ const updateBucketInputSchema = s.object(
 ) as JsonSchema;
 updateBucketInputSchema.anyOf = [{ required: ["storageClass"] }, { required: ["jurisdiction"] }];
 
-export type CloudflareR2ActionName =
-  | "list_accounts"
-  | "list_buckets"
-  | "get_bucket"
-  | "create_bucket"
-  | "update_bucket"
-  | "delete_bucket"
-  | "get_bucket_cors_policy"
-  | "update_bucket_cors_policy"
-  | "delete_bucket_cors_policy";
-
-export const cloudflareR2Actions: ActionDefinition[] = [
+const cloudflareR2CoreActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_accounts",
-    effect: "read",
+    operationType: "read",
     description: "List Cloudflare accounts visible to the current credential.",
     requiredScopes: [r2ReadScope],
     providerPermissions: [r2ReadPermission],
@@ -134,7 +141,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_buckets",
-    effect: "read",
+    operationType: "read",
     description: "List the R2 buckets in a Cloudflare account.",
     requiredScopes: [r2ReadScope],
     providerPermissions: [r2ReadPermission],
@@ -161,7 +168,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_bucket",
-    effect: "read",
+    operationType: "read",
     description: "Get one R2 bucket by name.",
     requiredScopes: [r2ReadScope],
     providerPermissions: [r2ReadPermission],
@@ -177,8 +184,27 @@ export const cloudflareR2Actions: ActionDefinition[] = [
     outputSchema: s.object("The output payload for this action.", { bucket: bucketSchema }),
   }),
   defineProviderAction(service, {
+    name: "download_object",
+    operationType: "read",
+    description: "Download one R2 object into local transit file storage.",
+    requiredScopes: [r2ReadScope],
+    providerPermissions: [r2ReadPermission],
+    inputSchema: s.object(
+      "The input payload for downloading one R2 object.",
+      {
+        accountId: accountIdSchema,
+        bucketName: bucketNameSchema,
+        objectKey: s.nonEmptyString("The complete R2 object key. Slashes are preserved as key delimiters."),
+        fileName: s.nonEmptyString("An optional filename override for the local transit file."),
+        jurisdiction: jurisdictionSchema,
+      },
+      { required: ["bucketName", "objectKey"], optional: ["accountId", "fileName", "jurisdiction"] },
+    ),
+    outputSchema: downloadedObjectSchema,
+  }),
+  defineProviderAction(service, {
     name: "create_bucket",
-    effect: "write",
+    operationType: "write",
     description: "Create an R2 bucket in a Cloudflare account.",
     requiredScopes: [r2WriteScope],
     providerPermissions: [r2WritePermission],
@@ -197,7 +223,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_bucket",
-    effect: "write",
+    operationType: "write",
     description: "Update mutable R2 bucket properties such as default storage class or jurisdiction.",
     requiredScopes: [r2WriteScope],
     providerPermissions: [r2WritePermission],
@@ -206,7 +232,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_bucket",
-    effect: "destructive",
+    operationType: "destructive",
     description: "Delete an R2 bucket by name.",
     requiredScopes: [r2WriteScope],
     providerPermissions: [r2WritePermission],
@@ -226,7 +252,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_bucket_cors_policy",
-    effect: "read",
+    operationType: "read",
     description: "Fetch the bucket-level CORS policy for an R2 bucket.",
     requiredScopes: [r2ReadScope],
     providerPermissions: [r2ReadPermission],
@@ -249,7 +275,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_bucket_cors_policy",
-    effect: "write",
+    operationType: "destructive",
     description: "Replace the bucket-level CORS policy for an R2 bucket.",
     requiredScopes: [r2WriteScope],
     providerPermissions: [r2WritePermission],
@@ -270,7 +296,7 @@ export const cloudflareR2Actions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_bucket_cors_policy",
-    effect: "destructive",
+    operationType: "destructive",
     description: "Delete the bucket-level CORS policy for an R2 bucket.",
     requiredScopes: [r2WriteScope],
     providerPermissions: [r2WritePermission],
@@ -288,4 +314,97 @@ export const cloudflareR2Actions: ActionDefinition[] = [
       deleted: s.boolean("Whether the delete request succeeded."),
     }),
   }),
+  defineProviderAction(service, {
+    name: "put_object",
+    operationType: "destructive",
+    description:
+      "Upload one R2 object by relaying a public URL, plain text, or base64-encoded content through the connector. This is the fallback for OAuth connections and callers that cannot PUT directly; custom API token connections should prefer generate_presigned_url with method PUT so the bytes go straight to R2 without the connector size cap.",
+    requiredScopes: [r2WriteScope],
+    providerPermissions: [r2WritePermission],
+    inputSchema: {
+      ...s.object(
+        "The input payload for this action.",
+        {
+          accountId: accountIdSchema,
+          bucketName: bucketNameSchema,
+          objectKey: s.nonEmptyString("The complete R2 object key. Slashes are preserved as key delimiters."),
+          jurisdiction: jurisdictionSchema,
+          sourceUrl: s.url(
+            "A public URL that the connector can fetch and upload to R2. Provide exactly one of sourceUrl, contentText, or contentBase64.",
+          ),
+          contentText: s.string(
+            "The plain-text content to upload. Provide exactly one of sourceUrl, contentText, or contentBase64.",
+          ),
+          contentBase64: s.string(
+            "Base64-encoded binary content to upload. Provide exactly one of sourceUrl, contentText, or contentBase64.",
+          ),
+          contentType: s.string("The Content-Type header to store on the object."),
+        },
+        {
+          required: ["bucketName", "objectKey"],
+          optional: ["accountId", "jurisdiction", "sourceUrl", "contentText", "contentBase64", "contentType"],
+        },
+      ),
+      oneOf: [{ required: ["sourceUrl"] }, { required: ["contentText"] }, { required: ["contentBase64"] }],
+    } as JsonSchema,
+    outputSchema: s.object("The output payload for this action.", {
+      bucketName: s.string("The bucket that received the object."),
+      objectKey: s.string("The uploaded object key."),
+      etag: s.nullable(s.string("The uploaded object ETag, or null when R2 did not return it.")),
+    }),
+  }),
+  defineProviderAction(service, {
+    name: "generate_presigned_url",
+    operationType: "read",
+    description:
+      "Generate a pre-signed R2 URL for a single GET, PUT, or HEAD request so the caller transfers bytes directly with R2. Preferred over the put_object and download_object relays. Requires a custom API token credential; OAuth connections cannot mint R2 S3 signatures.",
+    requiredScopes: [r2ReadScope, r2WriteScope],
+    providerPermissions: [r2ReadPermission, r2WritePermission],
+    inputSchema: s.object(
+      "The input payload for this action.",
+      {
+        accountId: accountIdSchema,
+        bucketName: bucketNameSchema,
+        objectKey: s.nonEmptyString("The complete R2 object key. Slashes are preserved as key delimiters."),
+        method: s.stringEnum(["GET", "PUT", "HEAD"], {
+          description: "The HTTP method that the signed URL should allow.",
+          default: "GET",
+        }),
+        expiresSeconds: s.integer("How long the signed URL remains valid, in seconds.", {
+          minimum: 1,
+          maximum: 604800,
+          default: 3600,
+        }),
+        contentType: s.string(
+          "The Content-Type that must be sent with a signed PUT request. Ignored for GET and HEAD.",
+        ),
+        jurisdiction: jurisdictionSchema,
+      },
+      {
+        required: ["bucketName", "objectKey"],
+        optional: ["accountId", "method", "expiresSeconds", "contentType", "jurisdiction"],
+      },
+    ),
+    outputSchema: s.object("The output payload for this action.", {
+      bucketName: s.string("The bucket used to build the signed URL."),
+      objectKey: s.string("The object key used to build the signed URL."),
+      method: s.string("The signed HTTP method."),
+      expiresSeconds: s.integer("The URL validity duration in seconds."),
+      expiresAt: s.dateTime("The timestamp when the signed URL expires."),
+      url: s.string("The generated pre-signed URL."),
+      requiredHeaders: s.record(
+        "HTTP headers that were included in the signature and must be sent with the request.",
+        s.string("A signed header value."),
+      ),
+    }),
+  }),
+];
+
+export const cloudflareR2Actions: ActionDefinition[] = [
+  ...cloudflareR2CoreActions,
+  ...cloudflareR2ObjectActions,
+  ...cloudflareR2DomainActions,
+  ...cloudflareR2BucketSettingsActions,
+  ...cloudflareR2EventNotificationActions,
+  ...cloudflareR2AccountActions,
 ];

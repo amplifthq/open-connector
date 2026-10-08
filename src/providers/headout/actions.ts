@@ -123,19 +123,10 @@ const bookingSchema = s.object("A normalized Headout booking.", {
   raw: s.unknownObject("The raw Headout booking object."),
 });
 
-export type HeadoutActionName =
-  | "list_cities"
-  | "list_categories_by_city"
-  | "list_products_by_city"
-  | "list_products_by_category"
-  | "get_product"
-  | "list_inventory_by_variant"
-  | "list_bookings"
-  | "get_booking";
-
 export const headoutActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_cities",
+    operationType: "read",
     description: "List active Headout cities.",
     inputSchema: s.actionInput(paginationInputFields, [], "The input payload for listing Headout cities."),
     outputSchema: s.actionOutput(
@@ -148,6 +139,7 @@ export const headoutActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_categories_by_city",
+    operationType: "read",
     description: "List Headout categories for a given city.",
     inputSchema: s.actionInput(
       {
@@ -167,6 +159,7 @@ export const headoutActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_products_by_city",
+    operationType: "read",
     description: "List Headout product listings for a city.",
     inputSchema: s.actionInput(
       {
@@ -188,6 +181,7 @@ export const headoutActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_products_by_category",
+    operationType: "read",
     description: "List Headout product listings for a category.",
     inputSchema: s.actionInput(
       {
@@ -209,6 +203,7 @@ export const headoutActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_product",
+    operationType: "read",
     description: "Get one Headout product with variants and pricing.",
     inputSchema: s.actionInput(
       {
@@ -227,6 +222,7 @@ export const headoutActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_inventory_by_variant",
+    operationType: "read",
     description: "List Headout inventory rows for one variant.",
     inputSchema: s.actionInput(
       {
@@ -249,6 +245,7 @@ export const headoutActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_bookings",
+    operationType: "read",
     description: "List bookings accessible to the current Headout API key.",
     inputSchema: s.actionInput(paginationInputFields, [], "The input payload for listing Headout bookings."),
     outputSchema: s.actionOutput(
@@ -261,6 +258,7 @@ export const headoutActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_booking",
+    operationType: "read",
     description: "Get one booking by its Headout booking id.",
     inputSchema: s.actionInput(
       { bookingId: s.nonEmptyString("The Headout booking identifier.") },

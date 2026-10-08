@@ -1,4 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import {
@@ -13,13 +14,15 @@ import { encodePathSegment } from "../../core/request.ts";
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
 const aimfoxApiBaseUrl = "https://api.aimfox.com/api/v2";
-const aimfoxDefaultRequestTimeoutMs = 30_000;
+const service = "aimfox";
 const leadSearchBodyKeys = [
   "keywords",
   "current_companies",
@@ -38,7 +41,7 @@ const leadSearchBodyKeys = [
 type AimfoxPhase = "validate" | "execute";
 type AimfoxActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const aimfoxActionHandlers: Record<string, AimfoxActionHandler> = {
+export const aimfoxActionHandlers: ProviderActionHandlers<"aimfox", AimfoxActionHandler> = {
   async list_campaigns(input, context) {
     const payload = await requestAimfoxJson({
       path: "/campaigns",
@@ -218,7 +221,18 @@ export const aimfoxActionHandlers: Record<string, AimfoxActionHandler> = {
   },
 };
 
-export const executors: ProviderExecutors = defineApiKeyProviderExecutors("aimfox", aimfoxActionHandlers);
+export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, aimfoxActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: aimfoxApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+    headers.set("content-type", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -275,7 +289,7 @@ async function requestAimfoxJson(input: {
     init.body = JSON.stringify(input.body);
   }
 
-  const timeout = createProviderTimeout(input.context.signal, aimfoxDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const response = await input.context.fetcher(url, {
       ...init,
@@ -387,8 +401,4 @@ function readObjectArray(value: unknown, fieldName: string): Array<Record<string
   }
 
   return value.map((item) => readRequiredObject(item, fieldName));
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

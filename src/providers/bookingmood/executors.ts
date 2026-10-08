@@ -1,8 +1,16 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerInputError,
+  ProviderRequestError,
+  providerResponseError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 const service = "bookingmood";
 const bookingmoodApiBaseUrl = "https://api.bookingmood.com/v1";
@@ -10,7 +18,7 @@ const bookingmoodApiBaseUrl = "https://api.bookingmood.com/v1";
 type BookingmoodMode = "validate" | "execute";
 type BookingmoodActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const bookingmoodActionHandlers: Record<string, BookingmoodActionHandler> = {
+export const bookingmoodActionHandlers: ProviderActionHandlers<"bookingmood", BookingmoodActionHandler> = {
   list_products(input, context) {
     return listBookingmoodProducts(input, context);
   },
@@ -23,6 +31,16 @@ export const bookingmoodActionHandlers: Record<string, BookingmoodActionHandler>
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, bookingmoodActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: bookingmoodApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -85,7 +103,7 @@ async function queryBookingmoodAvailability(
   const payload = await requestBookingmood({
     apiKey: context.apiKey,
     url: bookingmoodUrl("/availability", {
-      product_id: requiredString(input.product_id, "product_id", invalidInputError),
+      product_id: requiredString(input.product_id, "product_id", providerInputError),
       start: optionalString(input.start),
       end: optionalString(input.end),
     }),
@@ -187,7 +205,7 @@ function readArray(value: unknown, message: string): Array<Record<string, unknow
   if (!Array.isArray(value)) {
     throw new ProviderRequestError(502, message);
   }
-  return value.map((item) => requiredRecord(item, message, providerDataError));
+  return value.map((item) => requiredRecord(item, message, providerResponseError));
 }
 
 function readLabel(record: Record<string, unknown> | undefined): string | undefined {
@@ -204,7 +222,7 @@ function readLabel(record: Record<string, unknown> | undefined): string | undefi
 
 function normalizeAvailability(payload: unknown): Array<Record<string, unknown>> {
   if (Array.isArray(payload)) {
-    return payload.map((item) => requiredRecord(item, "Bookingmood availability response", providerDataError));
+    return payload.map((item) => requiredRecord(item, "Bookingmood availability response", providerResponseError));
   }
 
   const record = optionalRecord(payload);
@@ -214,17 +232,9 @@ function normalizeAvailability(payload: unknown): Array<Record<string, unknown>>
 
   for (const value of Object.values(record)) {
     if (Array.isArray(value)) {
-      return value.map((item) => requiredRecord(item, "Bookingmood availability response", providerDataError));
+      return value.map((item) => requiredRecord(item, "Bookingmood availability response", providerResponseError));
     }
   }
 
   return [record];
-}
-
-function invalidInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerDataError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

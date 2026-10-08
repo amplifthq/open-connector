@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { UploadcareActionName } from "./actions.ts";
 
 import { createHash, createHmac } from "node:crypto";
 import {
@@ -12,19 +12,12 @@ import {
   requiredString,
 } from "../../core/cast.ts";
 import { queryParams } from "../../core/request.ts";
-import {
-  createProviderTimeout,
-  isAbortLikeError,
-  providerUserAgent,
-  ProviderRequestError,
-  setSearchParams,
-} from "../provider-runtime.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest, setSearchParams } from "../provider-runtime.ts";
 
 export const uploadcareApiBaseUrl = "https://api.uploadcare.com";
 
 export const uploadcareRestAcceptHeader: string = "application/vnd.uploadcare-v0.7+json";
 export const uploadcareJsonContentType: string = "application/json";
-const uploadcareDefaultRequestTimeoutMs = 30_000;
 
 type UploadcareRequestPhase = "validate" | "execute";
 
@@ -37,7 +30,7 @@ export interface UploadcareContext {
 
 type UploadcareActionHandler = ProviderRuntimeHandler<UploadcareContext>;
 
-export const uploadcareActionHandlers: Record<UploadcareActionName, UploadcareActionHandler> = {
+export const uploadcareActionHandlers: ProviderActionHandlers<"uploadcare", UploadcareActionHandler> = {
   async get_project_info(_input, context) {
     const project = await requestUploadcareJson(context, {
       method: "GET",
@@ -189,32 +182,18 @@ async function requestUploadcareJson(
     secretKey: context.secretKey,
   });
 
-  const timeout = createProviderTimeout(context.signal, uploadcareDefaultRequestTimeoutMs);
-  try {
+  return runProviderRequest({ signal: context.signal, label: "Uploadcare" }, async (signal) => {
     const response = await context.fetcher(url.toString(), {
       method: request.method,
       headers,
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readUploadcarePayload(response);
     if (!response.ok) {
       throw createUploadcareError(response, payload, request.phase);
     }
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Uploadcare request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Uploadcare request failed: ${error.message}` : "Uploadcare request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 export function signUploadcareRequest(input: {

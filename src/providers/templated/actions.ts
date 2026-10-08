@@ -99,18 +99,10 @@ const layerOverrideSchema = s.looseObject("Layer override object forwarded to Te
   html: s.string("Custom HTML content override."),
 });
 
-export type TemplatedActionName =
-  | "get_account"
-  | "list_templates"
-  | "get_template"
-  | "create_render"
-  | "list_renders"
-  | "get_render"
-  | "delete_render";
-
 export const templatedActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_account",
+    operationType: "read",
     description: "Get the current Templated account associated with the API key.",
     inputSchema: s.actionInput({}),
     outputSchema: s.actionOutput(
@@ -122,6 +114,7 @@ export const templatedActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_templates",
+    operationType: "read",
     description: "List Templated templates with optional filters for name, dimensions, and tags.",
     inputSchema: s.actionInput({
       query: nonEmptyString("Optional template name filter."),
@@ -143,6 +136,7 @@ export const templatedActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_template",
+    operationType: "read",
     description: "Retrieve a single Templated template by its template ID.",
     inputSchema: s.actionInput(
       {
@@ -161,6 +155,7 @@ export const templatedActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_render",
+    operationType: "write",
     description:
       "Create a Templated render from one template with optional shared layer overrides and image or PDF output settings.",
     inputSchema: s.actionInput(
@@ -191,6 +186,7 @@ export const templatedActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_renders",
+    operationType: "read",
     description: "List all renders owned by the current Templated account.",
     inputSchema: s.actionInput({}),
     outputSchema: s.actionOutput(
@@ -202,6 +198,7 @@ export const templatedActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_render",
+    operationType: "read",
     description: "Retrieve a single Templated render by its render ID.",
     inputSchema: s.actionInput(
       {
@@ -218,6 +215,7 @@ export const templatedActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_render",
+    operationType: "destructive",
     description: "Delete a Templated render by its render ID.",
     inputSchema: s.actionInput(
       {

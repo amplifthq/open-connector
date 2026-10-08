@@ -1,6 +1,8 @@
 import type { FeishuJsonRequest } from "./client.ts";
 
-import { ProviderRequestError } from "../../provider-runtime.ts";
+import { optionalNumber, optionalRecord, requiredRecord } from "../../../core/cast.ts";
+import { providerInputError, requiredResponseRecord } from "../../provider-runtime.ts";
+import { requireFeishuResponseId } from "./response.ts";
 
 interface OkrActionHandler {
   (input: Record<string, unknown>): Promise<unknown>;
@@ -22,6 +24,13 @@ export function createFeishuOkrActionHandlers(request: FeishuJsonRequest): Recor
     create_okr_progress: (input) => createProgress(input, request),
     update_okr_progress: (input) => updateProgress(input, request),
     delete_okr_progress: (input) => deleteProgress(input, request),
+    list_okr_comments: (input) => listComments(input, request),
+    get_okr_comment: (input) => getComment(input, request),
+    create_okr_comment: (input) => createComment(input, request),
+    update_okr_comment: (input) => updateComment(input, request),
+    solve_okr_comment: (input) => mutateCommentStatus(input, "solve", request),
+    reopen_okr_comment: (input) => mutateCommentStatus(input, "reopen", request),
+    delete_okr_comment: (input) => deleteComment(input, request),
     reorder_okrs: (input) => reorderOkrs(input, request),
     update_okr_weights: (input) => updateWeights(input, request),
     update_okr_indicator: (input) => updateIndicator(input, request),
@@ -50,7 +59,7 @@ async function getCycleDetail(input: Record<string, unknown>, request: FeishuJso
   });
   const enriched = await Promise.all(
     objectives.map(async (objective) => {
-      const objectiveId = requiredString(objective.objective_id ?? objective.id, "objective_id");
+      const objectiveId = requireFeishuResponseId(objective.id, "objective.id");
       const keyResults = await fetchAllPages(request, `/okr/v2/objectives/${encode(objectiveId)}/key_results`, {
         objective_id: objectiveId,
         user_id_type: userIdType,
@@ -163,7 +172,7 @@ async function patchOkr(input: Record<string, unknown>, request: FeishuJsonReque
   });
   const patchedFields = Object.keys(body);
   if (patchedFields.length === 0) {
-    throw invalidInput("at least one OKR field must be patched");
+    throw providerInputError("at least one OKR field must be patched");
   }
   await request({
     method: "PATCH",
@@ -193,7 +202,7 @@ async function createAlignment(input: Record<string, unknown>, request: FeishuJs
   const objectiveId = requiredString(input.objectiveId, "objectiveId");
   const toObjectiveId = requiredString(input.toObjectiveId, "toObjectiveId");
   if (objectiveId === toObjectiveId) {
-    throw invalidInput("an objective cannot align to itself");
+    throw providerInputError("an objective cannot align to itself");
   }
   const data = await request({
     method: "POST",
@@ -204,7 +213,7 @@ async function createAlignment(input: Record<string, unknown>, request: FeishuJs
     },
   });
   return {
-    alignmentId: requiredString(data.alignment_id, "alignment_id"),
+    alignmentId: requireFeishuResponseId(data.alignment_id, "alignment_id"),
     raw: data,
   };
 }
@@ -279,7 +288,7 @@ async function updateProgress(input: Record<string, unknown>, request: FeishuJso
     progress_rate: progressRate(input.percent, input.status),
   });
   if (Object.keys(body).length === 0) {
-    throw invalidInput("content or progress rate is required");
+    throw providerInputError("content or progress rate is required");
   }
   const data = await request({
     method: "PUT",
@@ -297,6 +306,81 @@ async function deleteProgress(input: Record<string, unknown>, request: FeishuJso
     path: `/okr/v1/progress_records/${encode(progressId)}`,
   });
   return { deleted: true, progressId };
+}
+
+async function listComments(input: Record<string, unknown>, request: FeishuJsonRequest) {
+  const data = await request({
+    path: "/okr/v2/comments",
+    query: {
+      target_type: requiredCommentTargetType(input.targetType),
+      target_id: requiredString(input.targetId, "targetId"),
+      page_size: optionalNumber(input.pageSize) ?? 100,
+      page_token: optionalString(input.pageToken),
+      user_id_type: optionalString(input.userIdType) ?? "open_id",
+    },
+  });
+  return normalizePage(data);
+}
+
+async function getComment(input: Record<string, unknown>, request: FeishuJsonRequest) {
+  const commentId = requiredString(input.commentId, "commentId");
+  const data = await request({
+    path: `/okr/v2/comments/${encode(commentId)}`,
+    query: { user_id_type: optionalString(input.userIdType) ?? "open_id" },
+  });
+  return { comment: requiredResponseRecord(data.comment, "Feishu OKR comment") };
+}
+
+async function createComment(input: Record<string, unknown>, request: FeishuJsonRequest) {
+  const data = await request({
+    method: "POST",
+    path: "/okr/v2/comments",
+    query: { user_id_type: optionalString(input.userIdType) ?? "open_id" },
+    body: compact({
+      target: {
+        target_type: requiredCommentTargetType(input.targetType),
+        target_id: requiredString(input.targetId, "targetId"),
+      },
+      content: requiredRecord(input.content, "content", providerInputError),
+      selected_text: optionalString(input.selectedText),
+      ref_comment_id: optionalString(input.refCommentId),
+    }),
+  });
+  return {
+    commentId: requireFeishuResponseId(data.comment_id, "comment_id"),
+    selectionId: optionalString(data.selection_id) ?? null,
+  };
+}
+
+async function updateComment(input: Record<string, unknown>, request: FeishuJsonRequest) {
+  const commentId = requiredString(input.commentId, "commentId");
+  const data = await request({
+    method: "PATCH",
+    path: `/okr/v2/comments/${encode(commentId)}`,
+    query: { user_id_type: optionalString(input.userIdType) ?? "open_id" },
+    body: { content: requiredRecord(input.content, "content", providerInputError) },
+  });
+  return { comment: requiredResponseRecord(data.comment, "Feishu OKR comment") };
+}
+
+async function mutateCommentStatus(
+  input: Record<string, unknown>,
+  operation: "reopen" | "solve",
+  request: FeishuJsonRequest,
+) {
+  const commentId = requiredString(input.commentId, "commentId");
+  const data = await request({
+    method: "POST",
+    path: `/okr/v2/comments/${encode(commentId)}/${operation}`,
+    query: { user_id_type: optionalString(input.userIdType) ?? "open_id" },
+  });
+  return { comments: recordArray(data.affected_comments) };
+}
+
+async function deleteComment(input: Record<string, unknown>, request: FeishuJsonRequest) {
+  const commentId = requiredString(input.commentId, "commentId");
+  await request({ method: "DELETE", path: `/okr/v2/comments/${encode(commentId)}` });
+  return { deleted: true, commentId };
 }
 
 async function reorderOkrs(input: Record<string, unknown>, request: FeishuJsonRequest) {
@@ -347,10 +431,9 @@ async function updateIndicator(input: Record<string, unknown>, request: FeishuJs
   const targetId = requiredString(input.targetId, "targetId");
   const indicators = await request({
     path: `/okr/v2/${targetType === "objective" ? "objectives" : "key_results"}/${encode(targetId)}/indicators`,
-    query: { page_size: 1 },
   });
-  const indicator = recordArray(indicators.items ?? indicators.indicators)[0];
-  const indicatorId = requiredString(indicator?.indicator_id ?? indicator?.id, "indicator_id");
+  const indicator = optionalRecord(indicators.indicator);
+  const indicatorId = requireFeishuResponseId(indicator?.id, "indicator.id");
   const currentValue = requiredNumber(input.currentValue, "currentValue");
   await request({
     method: "PATCH",
@@ -417,7 +500,7 @@ function progressRate(percent: unknown, status: unknown) {
     return undefined;
   }
   if (stringStatus && numericPercent == null) {
-    throw invalidInput("percent is required when status is provided");
+    throw providerInputError("percent is required when status is provided");
   }
   const statuses: Record<string, number> = { normal: 0, overdue: 1, done: 2 };
   return compact({
@@ -427,14 +510,21 @@ function progressRate(percent: unknown, status: unknown) {
 }
 
 function extractTargetId(data: Record<string, unknown>, type: "objective" | "key_result") {
-  return requiredString(data[type === "objective" ? "objective_id" : "key_result_id"], `${type}_id`);
+  return requireFeishuResponseId(data[type === "objective" ? "objective_id" : "key_result_id"], `${type}_id`);
 }
 
 function requiredTargetType(value: unknown): "objective" | "key_result" {
   if (value === "objective" || value === "key_result") {
     return value;
   }
-  throw invalidInput("targetType must be objective or key_result");
+  throw providerInputError("targetType must be objective or key_result");
+}
+
+function requiredCommentTargetType(value: unknown): "cycle" | "key_result" | "objective" | "progress" {
+  if (value === "cycle" || value === "progress" || value === "objective" || value === "key_result") {
+    return value;
+  }
+  throw providerInputError("targetType must be cycle, progress, objective, or key_result");
 }
 
 function normalizePage(data: Record<string, unknown>) {
@@ -465,7 +555,7 @@ function requiredString(value: unknown, field: string) {
   if (typeof value === "string" && value.length > 0) {
     return value;
   }
-  throw invalidInput(`${field} must be a non-empty string`);
+  throw providerInputError(`${field} must be a non-empty string`);
 }
 
 function optionalString(value: unknown) {
@@ -475,7 +565,7 @@ function optionalString(value: unknown) {
 function requiredStringArray(value: unknown, field: string) {
   const values = optionalStringArray(value);
   if (!values) {
-    throw invalidInput(`${field} must contain at least one string`);
+    throw providerInputError(`${field} must contain at least one string`);
   }
   return values;
 }
@@ -492,17 +582,9 @@ function requiredNumber(value: unknown, field: string) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
-  throw invalidInput(`${field} must be a number`);
-}
-
-function optionalNumber(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  throw providerInputError(`${field} must be a number`);
 }
 
 function encode(value: string) {
   return encodeURIComponent(value);
-}
-
-function invalidInput(message: string) {
-  return new ProviderRequestError(400, message);
 }

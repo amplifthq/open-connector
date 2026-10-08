@@ -5,8 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "plasmic";
 
-export type PlasmicActionName = "list_items" | "count_items";
-
 const querySchema = s.looseObject(
   "A Plasmic CMS query object serialized into the q query parameter. Use official keys such as where, limit, and offset.",
 );
@@ -39,6 +37,7 @@ const rowSchema = s.looseObject("A Plasmic CMS row with stable system fields and
 export const plasmicActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_items",
+    operationType: "read",
     description: "List rows from a Plasmic CMS model with optional q query filters, draft mode, and locale selection.",
     requiredScopes: [],
     inputSchema: readItemsInputSchema,
@@ -48,6 +47,7 @@ export const plasmicActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "count_items",
+    operationType: "read",
     description:
       "Count rows in a Plasmic CMS model using the same q query filters, draft mode, and locale selection as list_items.",
     requiredScopes: [],

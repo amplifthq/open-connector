@@ -5,21 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "kommo";
 
-export type KommoActionName =
-  | "get_account"
-  | "list_leads"
-  | "get_lead"
-  | "list_contacts"
-  | "get_contact"
-  | "list_companies"
-  | "get_company"
-  | "list_tasks"
-  | "get_task"
-  | "list_users"
-  | "get_user"
-  | "list_pipelines"
-  | "get_pipeline";
-
 const idSchema = s.positiveInteger("The Kommo numeric identifier.");
 const pageSchema = s.positiveInteger("The 1-based Kommo result page to fetch.");
 const limitSchema = s.positiveInteger("The number of Kommo records to fetch per request.", {
@@ -386,6 +371,7 @@ const getByIdOnlyInputSchema = s.object("The input payload for reading one Kommo
 export const kommoActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_account",
+    operationType: "read",
     description: "Get Kommo account information for the connected account.",
     inputSchema: withInputSchema,
     outputSchema: s.object("The Kommo account response.", {
@@ -395,6 +381,7 @@ export const kommoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_leads",
+    operationType: "read",
     description: "List leads from the connected Kommo account.",
     inputSchema: leadListInputSchema,
     outputSchema: s.object("The Kommo leads list response.", {
@@ -404,6 +391,7 @@ export const kommoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_lead",
+    operationType: "read",
     description: "Get one Kommo lead by ID.",
     inputSchema: getByIdInputSchema,
     outputSchema: s.object("The Kommo lead response.", {
@@ -413,6 +401,7 @@ export const kommoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_contacts",
+    operationType: "read",
     description: "List contacts from the connected Kommo account.",
     inputSchema: contactListInputSchema,
     outputSchema: s.object("The Kommo contacts list response.", {
@@ -422,6 +411,7 @@ export const kommoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_contact",
+    operationType: "read",
     description: "Get one Kommo contact by ID.",
     inputSchema: getByIdInputSchema,
     outputSchema: s.object("The Kommo contact response.", {
@@ -431,6 +421,7 @@ export const kommoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_companies",
+    operationType: "read",
     description: "List companies from the connected Kommo account.",
     inputSchema: companyListInputSchema,
     outputSchema: s.object("The Kommo companies list response.", {
@@ -440,6 +431,7 @@ export const kommoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_company",
+    operationType: "read",
     description: "Get one Kommo company by ID.",
     inputSchema: getByIdInputSchema,
     outputSchema: s.object("The Kommo company response.", {
@@ -449,6 +441,7 @@ export const kommoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_tasks",
+    operationType: "read",
     description: "List tasks from the connected Kommo account.",
     inputSchema: taskListInputSchema,
     outputSchema: s.object("The Kommo tasks list response.", {
@@ -458,6 +451,7 @@ export const kommoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_task",
+    operationType: "read",
     description: "Get one Kommo task by ID.",
     inputSchema: getByIdOnlyInputSchema,
     outputSchema: s.object("The Kommo task response.", {
@@ -467,6 +461,7 @@ export const kommoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_users",
+    operationType: "read",
     description: "List users from the connected Kommo account.",
     inputSchema: usersListInputSchema,
     outputSchema: s.object("The Kommo users list response.", {
@@ -476,6 +471,7 @@ export const kommoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Get one Kommo user by ID.",
     inputSchema: getByIdInputSchema,
     outputSchema: s.object("The Kommo user response.", {
@@ -485,6 +481,7 @@ export const kommoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_pipelines",
+    operationType: "read",
     description: "List lead pipelines from the connected Kommo account.",
     inputSchema: s.object("The input payload for listing Kommo pipelines.", {}),
     outputSchema: s.object("The Kommo pipelines list response.", {
@@ -494,6 +491,7 @@ export const kommoActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_pipeline",
+    operationType: "read",
     description: "Get one Kommo lead pipeline by ID.",
     inputSchema: getByIdOnlyInputSchema,
     outputSchema: s.object("The Kommo pipeline response.", {

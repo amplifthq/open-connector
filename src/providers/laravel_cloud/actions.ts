@@ -111,19 +111,10 @@ const deploymentIncludeSchema = s.array(
   { minItems: 1 },
 );
 
-export type LaravelCloudActionName =
-  | "get_organization"
-  | "list_regions"
-  | "list_applications"
-  | "get_application"
-  | "list_environments"
-  | "get_environment"
-  | "list_deployments"
-  | "get_deployment";
-
 export const laravelCloudActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_organization",
+    operationType: "read",
     description: "Get the Laravel Cloud organization associated with the API token.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for getting the Laravel Cloud organization.", {}),
@@ -133,6 +124,7 @@ export const laravelCloudActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_regions",
+    operationType: "read",
     description: "List cloud regions currently available in Laravel Cloud.",
     requiredScopes: [],
     inputSchema: s.object("The input payload for listing Laravel Cloud regions.", {}),
@@ -142,6 +134,7 @@ export const laravelCloudActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_applications",
+    operationType: "read",
     description: "List Laravel Cloud applications for the authenticated organization.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -163,6 +156,7 @@ export const laravelCloudActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_application",
+    operationType: "read",
     description: "Get a specific Laravel Cloud application.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -180,6 +174,7 @@ export const laravelCloudActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_environments",
+    operationType: "read",
     description: "List Laravel Cloud environments for an application.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -202,6 +197,7 @@ export const laravelCloudActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_environment",
+    operationType: "read",
     description: "Get a specific Laravel Cloud environment.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -219,6 +215,7 @@ export const laravelCloudActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_deployments",
+    operationType: "read",
     description: "List Laravel Cloud deployments for an environment.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -241,6 +238,7 @@ export const laravelCloudActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_deployment",
+    operationType: "read",
     description: "Get a specific Laravel Cloud deployment.",
     requiredScopes: [],
     inputSchema: s.object(

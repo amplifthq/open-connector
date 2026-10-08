@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { KeeperScimActionName } from "./actions.ts";
 
 import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -21,7 +21,6 @@ const keeperScimRegionBaseUrls = {
 
 const defaultKeeperScimRegion = "us";
 const keeperScimConfigPath = "/ServiceProviderConfig";
-const keeperScimRequestTimeoutMs = 30_000;
 
 type KeeperScimRegion = keyof typeof keeperScimRegionBaseUrls;
 type KeeperScimRequestPhase = "validate" | "execute";
@@ -40,7 +39,10 @@ interface KeeperScimActionContext {
   signal?: AbortSignal;
 }
 
-export const keeperScimActionHandlers: Record<KeeperScimActionName, ProviderRuntimeHandler<KeeperScimActionContext>> = {
+export const keeperScimActionHandlers: ProviderActionHandlers<
+  "keeper_scim",
+  ProviderRuntimeHandler<KeeperScimActionContext>
+> = {
   async get_service_provider_config(_input, context) {
     const payload = await requestKeeperScimJson({
       path: keeperScimConfigPath,
@@ -137,14 +139,13 @@ export function resolveKeeperScimConfig(input: {
   providerMetadata?: Record<string, unknown>;
   values?: Record<string, unknown>;
 }): KeeperScimConfig {
-  const nodeId =
-    readOptionalTrimmedString(input.values?.nodeId) ?? readOptionalTrimmedString(input.providerMetadata?.nodeId);
+  const nodeId = optionalString(input.values?.nodeId) ?? optionalString(input.providerMetadata?.nodeId);
   if (!nodeId) {
     throw new ProviderRequestError(400, "Keeper SCIM nodeId is required");
   }
 
   const region = readKeeperScimRegion(
-    readOptionalTrimmedString(input.values?.region) ?? readOptionalTrimmedString(input.providerMetadata?.region),
+    optionalString(input.values?.region) ?? optionalString(input.providerMetadata?.region),
   );
   const apiBaseUrl = keeperScimRegionBaseUrls[region];
   return {
@@ -163,7 +164,7 @@ async function requestKeeperScimJson(input: {
 }): Promise<unknown> {
   let response: Response;
   let payload: unknown;
-  const timeout = createProviderTimeout(input.context.signal, keeperScimRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const url = new URL(`${input.context.config.nodeBaseUrl}${input.path}`);
     for (const [key, value] of input.searchParams ?? []) {
@@ -321,15 +322,11 @@ function requireObjectPayload(payload: unknown, label: string): Record<string, u
 }
 
 function readRequiredString(input: Record<string, unknown>, key: string, label: string): string {
-  const value = readOptionalTrimmedString(input[key]);
+  const value = optionalString(input[key]);
   if (!value) {
     throw new ProviderRequestError(400, `${label} is required`);
   }
   return value;
-}
-
-function readOptionalTrimmedString(value: unknown): string | undefined {
-  return optionalString(value);
 }
 
 function readStringArray(value: unknown): string[] {

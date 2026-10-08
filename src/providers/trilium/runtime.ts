@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { createHash } from "node:crypto";
@@ -8,6 +9,7 @@ import {
   createProviderTimeout,
   isAbortLikeError,
   providerFetch,
+  providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderJsonBody,
@@ -41,7 +43,7 @@ const triliumRequestTimeoutMs = 60_000;
 const triliumTextContentMaxBytes = 10 * 1024 * 1024;
 const triliumAttachmentMaxBytes = 20 * 1024 * 1024;
 
-export const triliumActionHandlers: Record<string, ProviderRuntimeHandler<TriliumContext>> = {
+export const triliumActionHandlers: ProviderActionHandlers<"trilium", ProviderRuntimeHandler<TriliumContext>> = {
   async search_notes(input, context) {
     const payload = requireResponseObject(
       await requestActionJson(context, "notes", {
@@ -228,7 +230,7 @@ export const triliumActionHandlers: Record<string, ProviderRuntimeHandler<Triliu
 
   async create_attribute(input, context) {
     if (input.type === "relation" && (typeof input.value !== "string" || !input.value)) {
-      throw inputError("A relation attribute requires a target note id in value.");
+      throw providerInputError("A relation attribute requires a target note id in value.");
     }
     const attribute = requireResponseObject(
       await requestActionJson(context, "attributes", {
@@ -412,7 +414,7 @@ export function createTriliumContext(
   signal?: AbortSignal,
 ): TriliumContext {
   return {
-    apiToken: requiredString(apiTokenInput, "apiKey", inputError),
+    apiToken: requiredString(apiTokenInput, "apiKey", providerInputError),
     baseUrl: normalizeTriliumBaseUrl(baseUrlInput),
     fetcher,
     signal,
@@ -425,16 +427,16 @@ export function normalizeTriliumBaseUrl(
 ): string {
   const rawValue = optionalString(value)?.trim();
   if (!rawValue) {
-    throw inputError("baseUrl is required");
+    throw providerInputError("baseUrl is required");
   }
 
   const url = assertPublicHttpUrl(rawValue, {
     fieldName: "baseUrl",
     allowPrivateNetwork,
-    createError: inputError,
+    createError: providerInputError,
   });
   if (url.username || url.password) {
-    throw inputError("baseUrl must not include username or password");
+    throw providerInputError("baseUrl must not include username or password");
   }
 
   url.search = "";
@@ -534,7 +536,7 @@ async function downloadAttachmentSource(
   mimeTypeInput: string | undefined,
   signal?: AbortSignal,
 ): Promise<AttachmentSource> {
-  const url = assertPublicHttpUrl(fileUrl, { fieldName: "fileUrl", createError: inputError });
+  const url = assertPublicHttpUrl(fileUrl, { fieldName: "fileUrl", createError: providerInputError });
   const timeout = createProviderTimeout(signal, triliumRequestTimeoutMs);
   try {
     const response = await providerFetch(url, {
@@ -619,7 +621,7 @@ function entityPath(collection: "attachments" | "attributes" | "branches" | "not
 
 function requireInputString(value: unknown, fieldName: string, allowEmpty = false) {
   if (typeof value !== "string" || (!allowEmpty && !value)) {
-    throw inputError(`${fieldName} is required`);
+    throw providerInputError(`${fieldName} is required`);
   }
   return value;
 }
@@ -648,7 +650,7 @@ function requireResponseObjectArray(value: unknown, operation: string) {
 
 function requireAnyInputField(input: Record<string, unknown>, fields: readonly string[], message: string): void {
   if (!fields.some((field) => Object.hasOwn(input, field))) {
-    throw inputError(message);
+    throw providerInputError(message);
   }
 }
 
@@ -678,8 +680,4 @@ function trimTrailingSlash(value: string) {
     end -= 1;
   }
   return value.slice(0, end);
-}
-
-function inputError(message: string) {
-  return new ProviderRequestError(400, message);
 }

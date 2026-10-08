@@ -1,19 +1,13 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { SimplesatActionName } from "./actions.ts";
 
 import { optionalRawString, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import {
-  createProviderTimeout,
-  isAbortLikeError,
-  providerUserAgent,
-  ProviderRequestError,
-} from "../provider-runtime.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
 
 export const simplesatApiBaseUrl = "https://api.simplesat.io";
 export const simplesatValidationPath = "/api/v1/surveys";
 
-const simplesatDefaultRequestTimeoutMs = 30_000;
 const simplesatCredentialHelpUrl = "https://app.simplesat.io/settings/api-keys/";
 
 type SimplesatRequestPhase = "validate" | "execute";
@@ -57,7 +51,7 @@ const customerBodyMappings = [
   { input: "customAttributes", body: "custom_attributes" },
 ] satisfies BodyFieldMapping[];
 
-export const simplesatActionHandlers: Record<SimplesatActionName, SimplesatActionHandler> = {
+export const simplesatActionHandlers: ProviderActionHandlers<"simplesat", SimplesatActionHandler> = {
   async list_surveys(input, context) {
     const payload = await requestSimplesatJson({
       apiKey: context.apiKey,
@@ -226,14 +220,12 @@ export async function validateSimplesatCredential(
 }
 
 async function requestSimplesatJson(input: SimplesatRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, simplesatDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.signal, label: "Simplesat" }, async (signal) => {
     const response = await input.fetcher(buildSimplesatUrl(input), {
       method: input.method,
       headers: buildSimplesatHeaders(input.apiKey, input.body),
       body: input.body === undefined ? undefined : JSON.stringify(input.body),
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readSimplesatPayload(response);
     if (!response.ok) {
@@ -241,20 +233,7 @@ async function requestSimplesatJson(input: SimplesatRequestInput): Promise<unkno
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Simplesat request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Simplesat request failed: ${error.message}` : "Simplesat request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildSimplesatHeaders(apiKey: string, body: Record<string, unknown> | undefined): Record<string, string> {

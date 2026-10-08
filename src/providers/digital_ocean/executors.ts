@@ -1,5 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { DigitalOceanActionName } from "./actions.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   optionalIntegerLike,
@@ -13,14 +13,16 @@ import { compactJson, encodePathSegment, jsonObject } from "../../core/request.t
 import {
   createProviderTimeout,
   defineApiKeyProviderExecutors,
+  defineProviderProxy,
   isAbortLikeError,
+  providerInputError,
+  providerResponseError,
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
 const service = "digital_ocean";
 const digitalOceanApiBaseUrl = "https://api.digitalocean.com/v2";
-const requestTimeoutMs = 30_000;
 
 interface DigitalOceanContext {
   apiKey: string;
@@ -30,7 +32,7 @@ interface DigitalOceanContext {
 
 type DigitalOceanActionHandler = (input: Record<string, unknown>, context: DigitalOceanContext) => Promise<unknown>;
 
-export const digitalOceanActionHandlers: Record<DigitalOceanActionName, DigitalOceanActionHandler> = {
+export const digitalOceanActionHandlers: ProviderActionHandlers<"digital_ocean", DigitalOceanActionHandler> = {
   get_account(_input, context) {
     return getAccount(context);
   },
@@ -83,6 +85,16 @@ export const digitalOceanActionHandlers: Record<DigitalOceanActionName, DigitalO
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, digitalOceanActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: digitalOceanApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -249,7 +261,7 @@ async function digitalOceanFetch(input: {
       url.searchParams.set(key, String(value));
     }
   }
-  const timeout = createProviderTimeout(input.signal, requestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const headers = jsonObject({
       accept: "application/json",
@@ -335,12 +347,4 @@ function requireResponseArray(value: unknown, fieldName: string): Array<Record<s
     throw new ProviderRequestError(502, `DigitalOcean response missing ${fieldName}`);
   }
   return value.map((item) => requiredRecord(item, fieldName, providerResponseError));
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerResponseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

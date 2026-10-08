@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { optionalInteger, optionalNumber, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
@@ -7,7 +8,6 @@ import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "
 
 export const moorchehApiBaseUrl = "https://api.moorcheh.ai/v1";
 
-const requestTimeoutMs = 30_000;
 const namespaceNamePattern = /^[A-Za-z0-9_-]+$/u;
 
 type RequestPhase = "validate" | "execute";
@@ -18,7 +18,10 @@ interface MoorchehRequestInput {
   body?: Record<string, unknown>;
 }
 
-export const moorchehActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const moorchehActionHandlers: ProviderActionHandlers<
+  "moorcheh",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   create_text_namespace(input, context) {
     return requestMoorchehJson(
       {
@@ -145,7 +148,7 @@ async function requestMoorchehJson(
   context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
   phase: RequestPhase,
 ): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(context.signal, requestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   let response: Response;
   let payload: unknown;
   try {

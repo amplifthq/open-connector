@@ -1,28 +1,23 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
-import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  createProviderTimeout,
-  isAbortLikeError,
-  providerUserAgent,
-  ProviderRequestError,
-} from "../provider-runtime.ts";
+import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
 
 const beamerApiBaseUrl = "https://api.getbeamer.com/v0";
-const beamerTimeoutMs = 30_000;
 
 type BeamerPhase = "validate" | "execute";
 type BeamerActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 type BeamerContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 
-export const beamerActionHandlers: Record<string, BeamerActionHandler> = {
+export const beamerActionHandlers: ProviderActionHandlers<"beamer", BeamerActionHandler> = {
   async get_feed_url(input, context) {
     const payload = await beamerGetJson(
       "/url",
       buildBeamerQuery({
         language: readOptionalLanguageCode(input.language),
-        filterByUrl: readOptionalBoolean(input.filterByUrl),
+        filterByUrl: optionalBoolean(input.filterByUrl),
         filter: optionalString(input.filter),
       }),
       context,
@@ -35,7 +30,7 @@ export const beamerActionHandlers: Record<string, BeamerActionHandler> = {
   },
 
   async count_unread_posts(input, context) {
-    const filterByUserId = readOptionalBoolean(input.filterByUserId);
+    const filterByUserId = optionalBoolean(input.filterByUserId);
     const userId = optionalString(input.userId);
     if (filterByUserId && !userId) {
       throw new ProviderRequestError(400, "userId is required when filterByUserId is true");
@@ -57,7 +52,7 @@ export const beamerActionHandlers: Record<string, BeamerActionHandler> = {
   },
 
   async list_posts(input, context) {
-    const filterByUserId = readOptionalBoolean(input.filterByUserId);
+    const filterByUserId = optionalBoolean(input.filterByUserId);
     const userId = optionalString(input.userId);
     if (filterByUserId && !userId) {
       throw new ProviderRequestError(400, "userId is required when filterByUserId is true");
@@ -73,20 +68,20 @@ export const beamerActionHandlers: Record<string, BeamerActionHandler> = {
         dateTo: optionalString(input.dateTo),
         language: readOptionalLanguageCode(input.language),
         category: optionalString(input.category),
-        published: readOptionalBoolean(input.published),
-        archived: readOptionalBoolean(input.archived),
-        expired: readOptionalBoolean(input.expired),
+        published: optionalBoolean(input.published),
+        archived: optionalBoolean(input.archived),
+        expired: optionalBoolean(input.expired),
         filterByUserId,
         userFirstName: optionalString(input.userFirstName),
         userLastName: optionalString(input.userLastName),
         userEmail: optionalString(input.userEmail),
         userId,
-        traceableLinks: readOptionalBoolean(input.traceableLinks),
-        ignoreRequestDetails: readOptionalBoolean(input.ignoreRequestDetails),
-        saveViews: readOptionalBoolean(input.saveViews),
+        traceableLinks: optionalBoolean(input.traceableLinks),
+        ignoreRequestDetails: optionalBoolean(input.ignoreRequestDetails),
+        saveViews: optionalBoolean(input.saveViews),
         maxResults: readOptionalPositiveInteger(input.maxResults, "maxResults"),
         page: readOptionalPositiveInteger(input.page, "page"),
-        ignoreFilters: readOptionalBoolean(input.ignoreFilters),
+        ignoreFilters: optionalBoolean(input.ignoreFilters),
       }),
       context,
       "execute",
@@ -108,28 +103,28 @@ export const beamerActionHandlers: Record<string, BeamerActionHandler> = {
         title: readRequiredStringArray(input.title, "title"),
         content: readRequiredStringArray(input.content, "content"),
         category: optionalString(input.category),
-        publish: readOptionalBoolean(input.publish),
-        archive: readOptionalBoolean(input.archive),
-        pinned: readOptionalBoolean(input.pinned),
-        showInWidget: readOptionalBoolean(input.showInWidget),
-        showInStandalone: readOptionalBoolean(input.showInStandalone),
+        publish: optionalBoolean(input.publish),
+        archive: optionalBoolean(input.archive),
+        pinned: optionalBoolean(input.pinned),
+        showInWidget: optionalBoolean(input.showInWidget),
+        showInStandalone: optionalBoolean(input.showInStandalone),
         boostedAnnouncement: optionalString(input.boostedAnnouncement),
         linkUrl: readOptionalStringArray(input.linkUrl),
         linkText: readOptionalStringArray(input.linkText),
-        linksInNewWindow: readOptionalBoolean(input.linksInNewWindow),
+        linksInNewWindow: optionalBoolean(input.linksInNewWindow),
         date: optionalString(input.date),
         dueDate: optionalString(input.dueDate),
         language: readOptionalLanguageArray(input.language),
         filter: optionalString(input.filter),
         filterUserId: optionalString(input.filterUserId),
         filterUrl: optionalString(input.filterUrl),
-        enableFeedback: readOptionalBoolean(input.enableFeedback),
-        enableReactions: readOptionalBoolean(input.enableReactions),
-        enableSocialShare: readOptionalBoolean(input.enableSocialShare),
-        autoOpen: readOptionalBoolean(input.autoOpen),
-        sendPushNotification: readOptionalBoolean(input.sendPushNotification),
+        enableFeedback: optionalBoolean(input.enableFeedback),
+        enableReactions: optionalBoolean(input.enableReactions),
+        enableSocialShare: optionalBoolean(input.enableSocialShare),
+        autoOpen: optionalBoolean(input.autoOpen),
+        sendPushNotification: optionalBoolean(input.sendPushNotification),
         userEmail: optionalString(input.userEmail),
-        fixedBoostedAnnouncement: readOptionalBoolean(input.fixedBoostedAnnouncement),
+        fixedBoostedAnnouncement: optionalBoolean(input.fixedBoostedAnnouncement),
       }),
       context,
       "execute",
@@ -214,12 +209,10 @@ async function requestBeamerJson(
   context: BeamerContext,
   phase: BeamerPhase,
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(context.signal, beamerTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: context.signal, label: "Beamer" }, async (signal) => {
     const response = await context.fetcher(url, {
       ...init,
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readBeamerPayload(response);
 
@@ -228,20 +221,7 @@ async function requestBeamerJson(
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Beamer request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Beamer request failed: ${error.message}` : "Beamer request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function beamerUrl(path: string): URL {
@@ -435,10 +415,6 @@ function readOptionalStringLike(value: unknown): string | undefined {
 function readOptionalLanguageCode(value: unknown): string | undefined {
   const parsed = readOptionalStringLike(value);
   return parsed ? parsed.toUpperCase() : undefined;
-}
-
-function readOptionalBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
 }
 
 function readOptionalBooleanLike(value: unknown): boolean | undefined {

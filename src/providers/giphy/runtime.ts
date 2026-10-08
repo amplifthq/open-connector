@@ -1,17 +1,24 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { GiphyActionName } from "./actions.ts";
 
-import { compactObject, optionalInteger, optionalRecord, optionalString, stringArray } from "../../core/cast.ts";
+import {
+  compactObject,
+  optionalBoolean,
+  optionalInteger,
+  optionalRecord,
+  optionalString,
+  stringArray,
+} from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const giphyApiBaseUrl = "https://api.giphy.com/v1";
+export const giphyApiBaseUrl = "https://api.giphy.com/v1";
 const giphyValidationPath = "/gifs/trending";
 
 type QueryValue = string | number | boolean | undefined;
 type GiphyActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const giphyActionHandlers: Record<GiphyActionName, GiphyActionHandler> = {
+export const giphyActionHandlers: ProviderActionHandlers<"giphy", GiphyActionHandler> = {
   search_gifs(input, context) {
     return giphyList(
       "/gifs/search",
@@ -331,10 +338,6 @@ function toGiphyContextQuery(input: Record<string, unknown>): Record<string, Que
     country_code: optionalString(input.countryCode),
     region: optionalString(input.region),
   });
-}
-
-function optionalBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
 }
 
 function toPagination(value: unknown, count: number): Record<string, number> {

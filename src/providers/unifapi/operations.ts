@@ -1,4 +1,4 @@
-import type { JsonSchema } from "../../core/types.ts";
+import type { ActionDefinition, JsonSchema } from "../../core/types.ts";
 
 import { s } from "../../core/json-schema.ts";
 import { browserOperations } from "./operations/browser.ts";
@@ -22,6 +22,7 @@ export type UnifapiActionMethod = "GET" | "POST";
 
 export interface UnifapiOperation {
   name: string;
+  operationType: ActionDefinition["operationType"];
   operationId: string;
   description: string;
   method: UnifapiActionMethod;
@@ -96,7 +97,3 @@ export const unifapiOperations: readonly UnifapiOperation[] = operationDefinitio
   ...operation,
   outputSchema: operation.paginated ? paginatedOutputSchema : baseOutputSchema,
 }));
-
-export const unifapiOperationByActionName: Map<string, UnifapiOperation> = new Map(
-  unifapiOperations.map((operation) => [operation.name, operation]),
-);

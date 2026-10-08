@@ -1,13 +1,19 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
-import type { LoopReturnsActionName } from "./actions.ts";
 
-import { compactObject, optionalRecord, optionalString, positiveInteger } from "../../core/cast.ts";
+import {
+  compactObject,
+  optionalBooleanOrNull,
+  optionalRawString,
+  optionalRecord,
+  optionalString,
+  positiveInteger,
+  rawStringOrNull,
+} from "../../core/cast.ts";
 import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 export const loopReturnsApiBaseUrl = "https://api.loopreturns.com/api/v1";
-
-const loopReturnsRequestTimeoutMs = 30_000;
 
 type LoopReturnsRequestPhase = "validate" | "execute";
 type QueryValue = string | number | boolean | undefined;
@@ -24,19 +30,19 @@ interface LoopReturnsRequestOptions {
   notFoundAsInvalidInput?: boolean;
 }
 
-export const loopReturnsActionHandlers: Record<LoopReturnsActionName, LoopReturnsActionHandler> = {
+export const loopReturnsActionHandlers: ProviderActionHandlers<"loop_returns", LoopReturnsActionHandler> = {
   async list_returns(input, context) {
     const payload = await requestLoopReturnsJson({
       apiKey: context.apiKey,
       path: "/warehouse/return/list",
       query: compactObject({
-        from: optionalQueryString(input.from),
-        to: optionalQueryString(input.to),
-        filter: optionalQueryString(input.filter),
-        state: optionalQueryString(input.state),
+        from: optionalRawString(input.from),
+        to: optionalRawString(input.to),
+        filter: optionalRawString(input.filter),
+        state: optionalRawString(input.state),
         paginate: true,
         pageSize: optionalQueryNumber(input.pageSize),
-        cursor: optionalQueryString(input.cursor),
+        cursor: optionalRawString(input.cursor),
       }),
       fetcher: context.fetcher,
       signal: context.signal,
@@ -50,8 +56,8 @@ export const loopReturnsActionHandlers: Record<LoopReturnsActionName, LoopReturn
     const query = compactObject({
       return_id: optionalQueryNumber(input.returnId),
       order_id: optionalQueryNumber(input.orderId),
-      order_name: optionalQueryString(input.orderName),
-      currency_type: optionalQueryString(input.currencyType),
+      order_name: optionalRawString(input.orderName),
+      currency_type: optionalRawString(input.currencyType),
     });
     const identifierCount = [query.return_id, query.order_id, query.order_name].filter(
       (value) => value !== undefined,
@@ -195,7 +201,7 @@ export async function validateLoopReturnsCredential(
 }
 
 async function requestLoopReturnsJson(options: LoopReturnsRequestOptions): Promise<unknown> {
-  const timeout = createProviderTimeout(options.signal, loopReturnsRequestTimeoutMs);
+  const timeout = createProviderTimeout(options.signal);
   const url = new URL(`${loopReturnsApiBaseUrl}${options.path}`);
   appendQuery(url, options.query);
 
@@ -324,8 +330,8 @@ function normalizeReturnsList(payload: unknown): {
   const record = requireObject(payload, "Loop Returns list response");
   const returns = Array.isArray(record.returns) ? record.returns : [];
   return {
-    nextPageUrl: nullableString(record.nextPageUrl),
-    previousPageUrl: nullableString(record.previousPageUrl),
+    nextPageUrl: rawStringOrNull(record.nextPageUrl),
+    previousPageUrl: rawStringOrNull(record.previousPageUrl),
     returns: returns.map((item) => normalizeReturnSummary(requireObject(item, "Loop return"))),
   };
 }
@@ -333,18 +339,18 @@ function normalizeReturnsList(payload: unknown): {
 function normalizeReturnSummary(record: Record<string, unknown>): Record<string, unknown> {
   return {
     id: requiredProviderString(record.id, "return id"),
-    state: nullableString(record.state),
-    createdAt: nullableString(record.created_at),
-    updatedAt: nullableString(record.updated_at),
+    state: rawStringOrNull(record.state),
+    createdAt: rawStringOrNull(record.created_at),
+    updatedAt: rawStringOrNull(record.updated_at),
     orderId: nullableStringFromValue(record.order_id),
     orderName: nullableStringFromValue(record.order_name),
     providerOrderId: nullableStringFromValue(record.provider_order_id),
-    customer: nullableString(record.customer),
-    currency: nullableString(record.currency),
+    customer: rawStringOrNull(record.customer),
+    currency: rawStringOrNull(record.currency),
     total: nullableStringFromValue(record.total),
-    outcome: nullableString(record.outcome),
+    outcome: rawStringOrNull(record.outcome),
     destinationId: nullableStringFromValue(record.destination_id),
-    statusPageUrl: nullableString(record.status_page_url),
+    statusPageUrl: rawStringOrNull(record.status_page_url),
     raw: record,
   };
 }
@@ -352,21 +358,21 @@ function normalizeReturnSummary(record: Record<string, unknown>): Record<string,
 function normalizeReturnDetails(record: Record<string, unknown>): Record<string, unknown> {
   return {
     id: nullableStringFromValue(record.id),
-    state: nullableString(record.state),
-    createdAt: nullableString(record.created_at),
-    updatedAt: nullableString(record.updated_at),
+    state: rawStringOrNull(record.state),
+    createdAt: rawStringOrNull(record.created_at),
+    updatedAt: rawStringOrNull(record.updated_at),
     orderId: nullableStringFromValue(record.order_id),
     orderName: nullableStringFromValue(record.order_name),
     providerOrderId: nullableStringFromValue(record.provider_order_id),
-    customerEmail: nullableString(record.customer_email) ?? nullableString(record.customer),
-    currency: nullableString(record.currency),
+    customerEmail: rawStringOrNull(record.customer_email) ?? rawStringOrNull(record.customer),
+    currency: rawStringOrNull(record.currency),
     total: nullableStringFromValue(record.total),
     refund: nullableStringFromValue(record.refund),
-    outcome: nullableString(record.outcome),
-    carrier: nullableString(record.carrier),
-    trackingNumber: nullableString(record.tracking_number),
+    outcome: rawStringOrNull(record.outcome),
+    carrier: rawStringOrNull(record.carrier),
+    trackingNumber: rawStringOrNull(record.tracking_number),
     destinationId: nullableStringFromValue(record.destination_id),
-    statusPageUrl: nullableString(record.status_page_url),
+    statusPageUrl: rawStringOrNull(record.status_page_url),
     lineItems: Array.isArray(record.line_items)
       ? record.line_items.filter(
           (item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item),
@@ -379,9 +385,9 @@ function normalizeReturnDetails(record: Record<string, unknown>): Record<string,
 function normalizeDestination(record: Record<string, unknown>): Record<string, unknown> {
   return {
     id: readProviderInteger(record.id, "destination id"),
-    type: nullableString(record.type),
-    name: nullableString(record.name),
-    enabled: nullableBoolean(record.enabled),
+    type: rawStringOrNull(record.type),
+    name: rawStringOrNull(record.name),
+    enabled: optionalBooleanOrNull(record.enabled),
     providerLocationId: nullableInteger(record.provider_location_id),
     address: normalizeAddress(record.address),
     raw: record,
@@ -395,13 +401,13 @@ function normalizeAddress(value: unknown): Record<string, unknown> | null {
   }
 
   return {
-    address1: nullableString(record.address1),
-    address2: nullableString(record.address2),
-    city: nullableString(record.city),
-    state: nullableString(record.state),
-    zip: nullableString(record.zip),
-    country: nullableString(record.country),
-    countryCode: nullableString(record.country_code),
+    address1: rawStringOrNull(record.address1),
+    address2: rawStringOrNull(record.address2),
+    city: rawStringOrNull(record.city),
+    state: rawStringOrNull(record.state),
+    zip: rawStringOrNull(record.zip),
+    country: rawStringOrNull(record.country),
+    countryCode: rawStringOrNull(record.country_code),
   };
 }
 
@@ -438,10 +444,6 @@ function nullableInteger(value: unknown): number | null {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
-function nullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
-
 function nullableStringFromValue(value: unknown): string | null {
   if (value === null || value === undefined) {
     return null;
@@ -455,16 +457,8 @@ function nullableStringFromValue(value: unknown): string | null {
   return null;
 }
 
-function nullableBoolean(value: unknown): boolean | null {
-  return typeof value === "boolean" ? value : null;
-}
-
 function isValidationAuthError(error: unknown): error is ProviderRequestError {
   return error instanceof ProviderRequestError && error.status === 400;
-}
-
-function optionalQueryString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
 }
 
 function optionalQueryNumber(value: unknown): number | undefined {

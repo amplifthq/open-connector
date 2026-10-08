@@ -1,10 +1,16 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalString, requiredString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
 import { arrayPayload, objectPayload, requestJson } from "../http-json-runtime.ts";
-import { defineProviderExecutors, ProviderRequestError, requireApiKeyCredential } from "../provider-runtime.ts";
+import {
+  defineProviderExecutors,
+  defineProviderProxy,
+  ProviderRequestError,
+  requireApiKeyCredential,
+} from "../provider-runtime.ts";
 
 const service = "recruitee";
 const apiBaseUrl = "https://api.recruitee.com";
@@ -18,7 +24,7 @@ interface RecruiteeContext {
 
 type Handler = ProviderRuntimeHandler<RecruiteeContext>;
 
-export const recruiteeActionHandlers: Record<string, Handler> = {
+export const recruiteeActionHandlers: ProviderActionHandlers<"recruitee", Handler> = {
   async list_offers(_input, context) {
     const raw = objectPayload(await recruiteeRequest("/offers", context), "offers");
     return { offers: arrayPayload(raw.offers, "offers"), raw };
@@ -89,6 +95,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<RecruiteeCon
       fetcher,
       signal: context.signal,
     };
+  },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
   },
 });
 

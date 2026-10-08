@@ -4,29 +4,27 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { TremendousActionName } from "./actions.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { jsonObject } from "../../core/request.ts";
 import {
-  createProviderTimeout,
   defineApiKeyProviderExecutors,
   defineProviderProxy,
-  isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 export const tremendousApiBaseUrl = "https://api.tremendous.com/api/v2";
 export const tremendousValidationPath = "/organizations";
 const service = "tremendous";
-const tremendousDefaultRequestTimeoutMs = 30_000;
 
 type TremendousPhase = "validate" | "execute";
 type TremendousActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const tremendousActionHandlers: Record<TremendousActionName, TremendousActionHandler> = {
+export const tremendousActionHandlers: ProviderActionHandlers<"tremendous", TremendousActionHandler> = {
   async list_products(input, context) {
     const payload = await requestTremendousJson({
       context,
@@ -274,14 +272,12 @@ async function requestTremendousJson(input: {
   query?: URLSearchParams;
   body?: Record<string, unknown>;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, tremendousDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "Tremendous" }, async (signal) => {
     const response = await input.context.fetcher(buildTremendousUrl(input), {
       method: input.method,
       headers: buildTremendousHeaders(input.context.apiKey, Boolean(input.body)),
       body: input.body ? JSON.stringify(input.body) : undefined,
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readTremendousPayload(response);
 
@@ -290,20 +286,7 @@ async function requestTremendousJson(input: {
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Tremendous request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Tremendous request failed: ${error.message}` : "Tremendous request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildTremendousUrl(input: { path: string; query?: URLSearchParams }): URL {

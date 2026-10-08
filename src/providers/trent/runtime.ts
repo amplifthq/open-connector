@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -9,7 +10,7 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const trentChatApiBaseUrl = "https://chat.trent.ai";
+export const trentChatApiBaseUrl: string = "https://chat.trent.ai";
 const trentChatPath = "/v1/chat";
 const trentRenewalUrl = "https://app.trent.ai/api-keys/renew?client=openclaw";
 const trentDefaultRequestTimeoutMs = 300_000;
@@ -20,7 +21,7 @@ const trentClientInfo = {
 
 type TrentRequestPhase = "validate" | "execute";
 
-export const trentActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const trentActionHandlers: ProviderActionHandlers<"trent", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   send_chat(input, context) {
     return sendTrentChat(input, context);
   },

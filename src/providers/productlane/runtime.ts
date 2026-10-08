@@ -1,21 +1,15 @@
+import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProductlaneActionName } from "./actions.ts";
 
 import { requiredString } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { encodePathSegment } from "../../core/request.ts";
+import { providerInputError, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 export interface ProductlaneCredentialCheck {
   providerAccountId?: string;
   accountLabel: string;
   providerScopes: string[];
   providerMetadata: Record<string, unknown>;
-}
-
-interface ApiKeyProviderActionInput {
-  apiKey: string;
-  actionName: string;
-  input: Record<string, unknown>;
-  providerMetadata?: Record<string, unknown>;
-  values?: Record<string, string>;
 }
 
 export const productlaneApiBaseUrl = "https://productlane.com/api/v2";
@@ -38,7 +32,7 @@ type ProductlaneRequestOptions = {
   body?: unknown;
 };
 
-export const productlaneActionHandlers: Record<ProductlaneActionName, ProductlaneActionHandler> = {
+export const productlaneActionHandlers: ProviderActionHandlers<"productlane", ProductlaneActionHandler> = {
   get_authenticated_identity(_input, context) {
     return requestProductlaneJson({
       path: productlaneValidationPath,
@@ -141,7 +135,7 @@ export const productlaneActionHandlers: Record<ProductlaneActionName, Productlan
       method: "DELETE",
     });
   },
-} satisfies Record<ProductlaneActionName, ProductlaneActionHandler>;
+};
 
 function requireAtMostOneCompanySelector(input: Record<string, unknown>): void {
   const selectorCount = ["company_id", "company_name", "company_external_id"].filter(
@@ -188,7 +182,7 @@ export async function validateProductlaneCredential(
 }
 
 export async function executeProductlaneAction(
-  input: ApiKeyProviderActionInput & {
+  input: ApiKeyActionRequest & {
     actionName: ProductlaneActionName;
     input: Record<string, unknown>;
   },
@@ -265,12 +259,16 @@ function mapProductlaneError(status: number, payload: unknown, phase: "validate"
   const message = readErrorMessage(payload) ?? `Productlane API request failed with status ${status}`;
   const providerCode = readErrorCode(payload);
 
-  if (status === 401 || status === 410) {
-    return phase === "validate" ? new ProviderRequestError(400, message) : new ProviderRequestError(409, message);
+  if (status === 401) {
+    return phase === "validate" ? new ProviderRequestError(400, message) : new ProviderRequestError(401, message);
+  }
+
+  if (status === 410) {
+    return providerInputError(message);
   }
 
   if (status === 403) {
-    // Productlane 官方错误契约区分 scope_required 与 forbidden：https://productlane.mintlify.dev/docs/api-v2/errors
+    // Productlane's official error contract distinguishes scope_required from forbidden: https://productlane.mintlify.dev/docs/api-v2/errors
     if (phase === "execute" && providerCode === "scope_required") {
       return new ProviderRequestError(403, message);
     }
@@ -321,10 +319,6 @@ function readErrorMessage(payload: unknown) {
 function omitId(input: Record<string, unknown>) {
   const { id: _id, ...body } = input;
   return body;
-}
-
-function encodePathSegment(value: unknown) {
-  return encodeURIComponent(String(value));
 }
 
 function readObject(value: unknown) {

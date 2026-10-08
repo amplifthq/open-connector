@@ -298,43 +298,56 @@ const deleteVideoOutputSchema = s.actionOutput(
 export const heygenActions: ActionDefinition[] = [
   action(
     "get_current_user",
+    "read",
     "Retrieve profile information for the HeyGen account associated with the API key.",
     emptyInputSchema,
     singleObjectOutputSchema("user", "The current HeyGen user object."),
   ),
   action(
     "get_remaining_quota",
+    "read",
     "Retrieve the remaining generation quota for the authenticated HeyGen account.",
     emptyInputSchema,
     singleObjectOutputSchema("quota", "The HeyGen quota object."),
   ),
   action(
     "list_avatars",
+    "read",
     "List HeyGen avatars and talking photos available for video generation.",
     emptyInputSchema,
     listAvatarsOutputSchema,
   ),
   action(
     "get_avatar",
+    "read",
     "Retrieve details for a single HeyGen avatar by avatar ID.",
     getByAvatarIdInputSchema,
     singleObjectOutputSchema("avatar", "The HeyGen avatar detail object."),
   ),
-  action("list_voices", "List HeyGen voices available for video narration.", emptyInputSchema, listVoicesOutputSchema),
+  action(
+    "list_voices",
+    "read",
+    "List HeyGen voices available for video narration.",
+    emptyInputSchema,
+    listVoicesOutputSchema,
+  ),
   action(
     "list_templates",
+    "read",
     "List HeyGen templates created under the authenticated account.",
     emptyInputSchema,
     listTemplatesOutputSchema,
   ),
   action(
     "get_template",
+    "read",
     "Retrieve variable definitions and metadata for a single HeyGen template.",
     getByTemplateIdInputSchema,
     singleObjectOutputSchema("template", "The HeyGen template detail object."),
   ),
   defineProviderAction(service, {
     name: "generate_video",
+    operationType: "write",
     description: "Start an asynchronous HeyGen avatar video generation job and return the generated video ID.",
     followUpActions: ["heygen.get_video_status"],
     asyncLifecycle: {
@@ -346,6 +359,7 @@ export const heygenActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "generate_template_video",
+    operationType: "write",
     description: "Start an asynchronous HeyGen template video generation job with explicit template variables.",
     followUpActions: ["heygen.get_video_status"],
     asyncLifecycle: {
@@ -357,81 +371,72 @@ export const heygenActions: ActionDefinition[] = [
   }),
   action(
     "get_video_status",
+    "read",
     "Retrieve processing status and download URLs for a HeyGen video by video ID.",
     getByVideoIdInputSchema,
     videoStatusOutputSchema,
   ),
   action(
     "get_shareable_video_url",
+    "read",
     "Retrieve a public share URL for a rendered HeyGen video by video ID.",
     getByVideoIdInputSchema,
     shareableUrlOutputSchema,
   ),
   action(
     "upload_asset",
+    "write",
     "Upload an image, video, or audio file to HeyGen and return an asset ID usable in video generation.",
     uploadAssetInputSchema,
     uploadedAssetOutputSchema,
   ),
   action(
     "list_assets",
+    "read",
     "List uploaded HeyGen image, video, and audio assets so they can be reused in video generation.",
     listAssetsInputSchema,
     listAssetsOutputSchema,
   ),
   action(
     "delete_asset",
+    "destructive",
     "Delete a HeyGen asset that is no longer needed.",
     getByAssetIdInputSchema,
     deleteAssetOutputSchema,
   ),
   action(
     "list_videos",
+    "read",
     "List generated HeyGen videos for historical result management.",
     listVideosInputSchema,
     listVideosOutputSchema,
   ),
   action(
     "delete_video",
+    "destructive",
     "Delete a generated or translated HeyGen video that is no longer needed.",
     deleteVideoInputSchema,
     deleteVideoOutputSchema,
   ),
   action(
     "list_folders",
+    "read",
     "List HeyGen folders and folder IDs that can be used with HeyGen video generation inputs.",
     listFoldersInputSchema,
     listFoldersOutputSchema,
   ),
 ];
 
-export type HeygenActionName =
-  | "get_current_user"
-  | "get_remaining_quota"
-  | "list_avatars"
-  | "get_avatar"
-  | "list_voices"
-  | "list_templates"
-  | "get_template"
-  | "generate_video"
-  | "generate_template_video"
-  | "get_video_status"
-  | "get_shareable_video_url"
-  | "upload_asset"
-  | "list_assets"
-  | "delete_asset"
-  | "list_videos"
-  | "delete_video"
-  | "list_folders";
-
 function action(
-  name: HeygenActionName,
+  name: string,
+  operationType: ActionDefinition["operationType"],
   description: string,
   inputSchema: JsonSchema,
   outputSchema: JsonSchema,
 ): ActionDefinition {
   return defineProviderAction(service, {
     name,
+    operationType,
     description,
     inputSchema,
     outputSchema,

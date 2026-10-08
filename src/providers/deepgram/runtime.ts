@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import {
   optionalNumber,
@@ -7,11 +8,12 @@ import {
   optionalString,
   compactObject,
   optionalBoolean,
+  recordOrEmpty,
 } from "../../core/cast.ts";
-import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { encodePathSegment } from "../../core/request.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
 
-const deepgramApiBaseUrl = "https://api.deepgram.com/v1";
-const deepgramDefaultRequestTimeoutMs = 30_000;
+export const deepgramApiBaseUrl: string = "https://api.deepgram.com/v1";
 
 type DeepgramPhase = "validate" | "execute";
 type DeepgramActionHandler = (
@@ -20,7 +22,7 @@ type DeepgramActionHandler = (
   apiKey: string,
 ) => Promise<unknown>;
 
-export const deepgramActionHandlers: Record<string, DeepgramActionHandler> = {
+export const deepgramActionHandlers: ProviderActionHandlers<"deepgram", DeepgramActionHandler> = {
   async list_projects(_input, fetcher, apiKey) {
     const payload = await requestDeepgramJson({
       path: "/projects",
@@ -159,13 +161,11 @@ async function requestDeepgramJson(input: {
   fetcher: typeof fetch;
   phase: DeepgramPhase;
 }) {
-  const timeoutHandle = createProviderTimeout(undefined, deepgramDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ label: "Deepgram" }, async (signal) => {
     const response = await input.fetcher(buildDeepgramUrl(input), {
       method: input.method,
       headers: buildDeepgramHeaders(input.apiKey),
-      signal: timeoutHandle.signal,
+      signal,
     });
     const payload = await readDeepgramPayload(response);
 
@@ -174,22 +174,7 @@ async function requestDeepgramJson(input: {
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-
-    if (timeoutHandle.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Deepgram request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Deepgram request failed: ${error.message}` : "Deepgram request failed",
-    );
-  } finally {
-    timeoutHandle.cleanup();
-  }
+  });
 }
 
 function buildDeepgramHeaders(apiKey: string) {
@@ -239,7 +224,7 @@ function createDeepgramError(status: number, payload: unknown, phase: DeepgramPh
   }
 
   if (phase === "execute" && (status === 401 || status === 403)) {
-    return new ProviderRequestError(409, message);
+    return new ProviderRequestError(401, message);
   }
 
   if (phase === "execute" && status >= 400 && status < 500) {
@@ -288,7 +273,7 @@ function normalizeProjectList(payload: unknown) {
   const payloadRecord = optionalRecord(payload);
   return {
     projects: normalizeProjectSummaryArray(payloadRecord?.projects),
-    raw: normalizeRawObject(payload),
+    raw: recordOrEmpty(payload),
   };
 }
 
@@ -305,7 +290,7 @@ function normalizeProjectKeys(payload: unknown) {
   const payloadRecord = optionalRecord(payload);
   return {
     apiKeys: normalizeProjectKeyArray(payloadRecord?.api_keys),
-    raw: normalizeRawObject(payload),
+    raw: recordOrEmpty(payload),
   };
 }
 
@@ -313,7 +298,7 @@ function normalizeProjectBalances(payload: unknown) {
   const payloadRecord = optionalRecord(payload);
   return {
     balances: normalizeBalanceArray(payloadRecord?.balances),
-    raw: normalizeRawObject(payload),
+    raw: recordOrEmpty(payload),
   };
 }
 
@@ -322,7 +307,7 @@ function normalizeModelList(payload: unknown) {
   return {
     stt: normalizeModelArray(payloadRecord?.stt),
     tts: normalizeModelArray(payloadRecord?.tts),
-    raw: normalizeRawObject(payload),
+    raw: recordOrEmpty(payload),
   };
 }
 
@@ -432,10 +417,6 @@ function normalizeStringArray(value: unknown) {
   });
 }
 
-function normalizeRawObject(value: unknown) {
-  return optionalRecord(value) ?? {};
-}
-
 function readRequiredString(value: unknown, fieldName: string) {
   const trimmed = optionalString(value)?.trim();
   if (!trimmed) {
@@ -466,17 +447,4 @@ function readNullableBoolean(value: unknown) {
   }
   const parsed = optionalBoolean(value);
   return parsed ?? null;
-}
-
-function encodePathSegment(value: string) {
-  return encodeURIComponent(value);
-}
-
-function isAbortLikeError(error: unknown) {
-  if (!error || typeof error !== "object") {
-    return false;
-  }
-
-  const name = "name" in error ? String(error.name) : "";
-  return name === "AbortError" || name === "TimeoutError";
 }

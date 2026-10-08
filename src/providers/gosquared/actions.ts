@@ -5,12 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "gosquared";
 
-export type GosquaredActionName =
-  | "get_token_info"
-  | "get_now_overview"
-  | "get_now_time_series"
-  | "get_trends_aggregate";
-
 const siteTokenSchema = s.nonEmptyString(
   "GoSquared site_token for the project to query. Omit this to use the siteToken saved on the connection.",
 );
@@ -41,6 +35,7 @@ const rawOutputSchema = s.actionOutput(
 export const gosquaredActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_token_info",
+    operationType: "read",
     description: "Fetch scope and authorization information for the connected GoSquared API key.",
     inputSchema: s.actionInput({}, [], "This action does not require input fields."),
     outputSchema: s.actionOutput(
@@ -53,6 +48,7 @@ export const gosquaredActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_now_overview",
+    operationType: "read",
     description: "Retrieve a realtime GoSquared Now overview for the configured project.",
     inputSchema: s.actionInput(
       {
@@ -68,6 +64,7 @@ export const gosquaredActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_now_time_series",
+    operationType: "read",
     description: "Retrieve GoSquared Now visitor counts over time for the configured project.",
     inputSchema: s.actionInput(
       {
@@ -84,6 +81,7 @@ export const gosquaredActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_trends_aggregate",
+    operationType: "read",
     description: "Retrieve GoSquared Trends aggregate metrics for a project over a time period.",
     inputSchema: s.actionInput(
       {

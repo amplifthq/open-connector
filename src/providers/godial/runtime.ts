@@ -1,18 +1,18 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { GodialActionName } from "./actions.ts";
 
-import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { optionalRecord, optionalString } from "../../core/cast.ts";
+import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
-const godialApiBaseUrl = "https://enterprise.godial.cc";
+export const godialApiBaseUrl = "https://enterprise.godial.cc";
 const godialValidationPath = "/meta/api/externals/accounts/list";
 
 type GodialMode = "validation" | "execution";
 type GodialMethod = "GET" | "POST";
 type GodialActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const godialActionHandlers: Record<GodialActionName, GodialActionHandler> = {
+export const godialActionHandlers: ProviderActionHandlers<"godial", GodialActionHandler> = {
   list_accounts(_input, context) {
     return listAccounts(context);
   },
@@ -95,7 +95,7 @@ async function listLists(context: ApiKeyProviderContext): Promise<unknown> {
 }
 
 async function listContactsInList(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const listId = requireInputString(input.listId, "listId");
+  const listId = requiredInputString(input.listId, "listId");
   const payload = await godialRequest({
     method: "GET",
     path: `/meta/api/externals/contact/list/${encodeURIComponent(listId)}`,
@@ -113,7 +113,7 @@ async function listContactsInList(input: Record<string, unknown>, context: ApiKe
 }
 
 async function getContact(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
-  const contactId = requireInputString(input.contactId, "contactId");
+  const contactId = requiredInputString(input.contactId, "contactId");
   const payload = await godialRequest({
     method: "GET",
     path: `/meta/api/externals/contact/${encodeURIComponent(contactId)}/view`,
@@ -137,7 +137,7 @@ async function createContact(input: Record<string, unknown>, context: ApiKeyProv
 
   setOptionalField(body, "name", input.name);
   setOptionalField(body, "email", input.email);
-  body.set("phone", requireInputString(input.phone, "phone"));
+  body.set("phone", requiredInputString(input.phone, "phone"));
   setOptionalField(body, "secondPhone", input.secondPhone);
   setOptionalField(body, "companyName", input.companyName);
   setOptionalField(body, "note", input.note);
@@ -255,19 +255,15 @@ function readGodialMessage(payload: unknown): string | undefined {
   return optionalString(record?.message) ?? optionalString(record?.error) ?? optionalString(record?.detail);
 }
 
-function requireInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
-}
-
 function setOptionalField(body: URLSearchParams, key: string, value: unknown, required = false): void {
   if (value === undefined) {
     if (required) {
-      body.set(key, requireInputString(value, key));
+      body.set(key, requiredInputString(value, key));
     }
     return;
   }
 
-  body.set(key, requireInputString(value, key));
+  body.set(key, requiredInputString(value, key));
 }
 
 function readArrayPayload(value: unknown, fieldName: string): Array<Record<string, unknown>> {

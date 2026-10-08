@@ -1,12 +1,12 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { VestaboardActionName } from "./actions.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { jsonObject } from "../../core/request.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
-const vestaboardCloudApiBaseUrl = "https://cloud.vestaboard.com";
+export const vestaboardCloudApiBaseUrl = "https://cloud.vestaboard.com";
 const vestaboardTransitionPath = "/transition";
 
 type VestaboardRequestPhase = "validate" | "execute";
@@ -24,7 +24,7 @@ interface VestaboardRequestInput {
   signal?: AbortSignal;
 }
 
-export const vestaboardActionHandlers: Record<VestaboardActionName, VestaboardActionHandler> = {
+export const vestaboardActionHandlers: ProviderActionHandlers<"vestaboard", VestaboardActionHandler> = {
   async get_current_message(_input, context) {
     const payload = await requestVestaboardJson({
       path: "/",

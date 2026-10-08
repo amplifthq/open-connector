@@ -1,4 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import {
@@ -8,7 +9,12 @@ import {
   requiredRecord,
   requiredStringArray,
 } from "../../core/cast.ts";
-import { providerUserAgent, ProviderRequestError, readProviderJsonBody } from "../provider-runtime.ts";
+import {
+  providerInputError,
+  providerUserAgent,
+  ProviderRequestError,
+  readProviderJsonBody,
+} from "../provider-runtime.ts";
 
 export const honeyhiveApiBaseUrl = "https://api.honeyhive.ai";
 export const honeyhiveValidationPath = "/v1/datasets";
@@ -22,7 +28,10 @@ interface HoneyhiveRequestOptions extends ApiKeyProviderContext {
   body?: unknown;
 }
 
-export const honeyhiveActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const honeyhiveActionHandlers: ProviderActionHandlers<
+  "honeyhive",
+  ProviderRuntimeHandler<ApiKeyProviderContext>
+> = {
   async list_datasets(input, context) {
     const payload = await requestHoneyhiveJson({
       ...context,
@@ -343,8 +352,4 @@ function requiredHoneyhiveId(value: unknown, fieldName: string): string {
     throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return id;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

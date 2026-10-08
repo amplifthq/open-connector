@@ -114,61 +114,59 @@ const teamsOutputSchema = s.object("MeetGeek teams response.", {
   viewAccess: s.array("Teams where the API key can view meetings.", looseRecordSchema),
 });
 
-export type MeetGeekActionName =
-  | "list_meetings"
-  | "list_team_meetings"
-  | "get_meeting"
-  | "get_summary"
-  | "get_transcript"
-  | "get_highlights"
-  | "get_insights"
-  | "list_teams";
-
 export const meetGeekActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_meetings",
+    operationType: "read",
     description: "List paginated past meetings from MeetGeek.",
     inputSchema: paginatedInputSchema,
     outputSchema: meetingsPageOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_team_meetings",
+    operationType: "read",
     description: "List paginated past meetings for a MeetGeek team.",
     inputSchema: teamMeetingsInputSchema,
     outputSchema: meetingsPageOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_meeting",
+    operationType: "read",
     description: "Get details for a MeetGeek meeting.",
     inputSchema: meetingInputSchema,
     outputSchema: meetingOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_summary",
+    operationType: "read",
     description: "Get the summary and AI insights for a MeetGeek meeting.",
     inputSchema: meetingInputSchema,
     outputSchema: summaryOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_transcript",
+    operationType: "read",
     description: "Get paginated transcript sentences for a MeetGeek meeting.",
     inputSchema: transcriptInputSchema,
     outputSchema: transcriptOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_highlights",
+    operationType: "read",
     description: "Get highlights for a MeetGeek meeting, optionally filtered by type.",
     inputSchema: highlightsInputSchema,
     outputSchema: highlightsOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_insights",
+    operationType: "read",
     description: "Get KPI and improvement insights for a MeetGeek meeting.",
     inputSchema: meetingInputSchema,
     outputSchema: insightsOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_teams",
+    operationType: "read",
     description: "List MeetGeek teams available to the API key.",
     inputSchema: regionOnlyInputSchema,
     outputSchema: teamsOutputSchema,

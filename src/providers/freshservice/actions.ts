@@ -256,6 +256,7 @@ const freshserviceCreateServiceRequestOutputSchema = s.requiredObject(
 export const freshserviceActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_tickets",
+    operationType: "read",
     description: "List Freshservice tickets with optional filters, pagination, and include expansions.",
     requiredScopes: [],
     inputSchema: freshserviceTicketListInputSchema,
@@ -263,6 +264,7 @@ export const freshserviceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_ticket",
+    operationType: "read",
     description: "Get one Freshservice ticket by identifier with optional include expansions.",
     requiredScopes: [],
     inputSchema: freshserviceGetTicketInputSchema,
@@ -270,6 +272,7 @@ export const freshserviceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_ticket",
+    operationType: "write",
     description: "Create a Freshservice ticket for an incident or service request workflow.",
     requiredScopes: [],
     inputSchema: freshserviceCreateTicketInputSchema,
@@ -277,6 +280,7 @@ export const freshserviceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_locations",
+    operationType: "read",
     description: "List Freshservice locations to help callers resolve account-level location metadata.",
     requiredScopes: [],
     inputSchema: freshserviceListLocationsInputSchema,
@@ -284,6 +288,7 @@ export const freshserviceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_service_catalog_items",
+    operationType: "read",
     description:
       "List Freshservice service catalog items so callers can discover item display IDs before placing requests.",
     requiredScopes: [],
@@ -292,17 +297,10 @@ export const freshserviceActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_service_request",
+    operationType: "write",
     description: "Create a Freshservice service request for one service catalog item.",
     requiredScopes: [],
     inputSchema: freshserviceCreateServiceRequestInputSchema,
     outputSchema: freshserviceCreateServiceRequestOutputSchema,
   }),
 ];
-
-export type FreshserviceActionName =
-  | "list_tickets"
-  | "get_ticket"
-  | "create_ticket"
-  | "list_locations"
-  | "list_service_catalog_items"
-  | "create_service_request";

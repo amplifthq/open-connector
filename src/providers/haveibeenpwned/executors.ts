@@ -1,9 +1,24 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { HaveIBeenPwnedActionName } from "./actions.ts";
 
-import { compactObject, optionalBoolean, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  compactObject,
+  optionalBoolean,
+  optionalRecord,
+  optionalString,
+  rawStringOrNull,
+  requiredString,
+} from "../../core/cast.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  isAbortLikeError,
+  providerInputError,
+  providerUserAgent,
+  ProviderRequestError,
+  requiredResponseRecord,
+} from "../provider-runtime.ts";
 
 const service = "haveibeenpwned";
 const haveibeenpwnedApiBaseUrl = "https://haveibeenpwned.com/api/v3";
@@ -30,7 +45,7 @@ interface HaveIBeenPwnedSubscription {
   IncludesKAnon: boolean;
 }
 
-export const haveibeenpwnedActionHandlers: Record<HaveIBeenPwnedActionName, HaveIBeenPwnedActionHandler> = {
+export const haveibeenpwnedActionHandlers: ProviderActionHandlers<"haveibeenpwned", HaveIBeenPwnedActionHandler> = {
   list_breaches(input, context) {
     return executeListBreaches(input, context);
   },
@@ -55,6 +70,16 @@ export const haveibeenpwnedActionHandlers: Record<HaveIBeenPwnedActionName, Have
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, haveibeenpwnedActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: haveibeenpwnedApiBaseUrl,
+  auth: { type: "api_key_header", name: "hibp-api-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -336,7 +361,7 @@ function normalizeBreachArray(value: unknown, label: string): Array<Record<strin
 }
 
 function normalizeBreach(value: unknown, label: string): Record<string, unknown> {
-  const record = requireObject(value, label);
+  const record = requiredResponseRecord(value, label);
 
   return {
     Name: requireString(record.Name, `${label}.Name`),
@@ -357,7 +382,7 @@ function normalizeBreach(value: unknown, label: string): Record<string, unknown>
     IsSubscriptionFree: requireBoolean(record.IsSubscriptionFree, `${label}.IsSubscriptionFree`),
     IsStealerLog: requireBoolean(record.IsStealerLog, `${label}.IsStealerLog`),
     LogoPath: requireString(record.LogoPath, `${label}.LogoPath`),
-    Attribution: nullableString(record.Attribution),
+    Attribution: rawStringOrNull(record.Attribution),
   };
 }
 
@@ -370,19 +395,19 @@ function normalizePasteArray(value: unknown, label: string): Array<Record<string
 }
 
 function normalizePaste(value: unknown, label: string): Record<string, unknown> {
-  const record = requireObject(value, label);
+  const record = requiredResponseRecord(value, label);
 
   return {
     Source: requireString(record.Source, `${label}.Source`),
     Id: requireString(record.Id, `${label}.Id`),
-    Title: nullableString(record.Title),
-    Date: nullableString(record.Date),
+    Title: rawStringOrNull(record.Title),
+    Date: rawStringOrNull(record.Date),
     EmailCount: requireInteger(record.EmailCount, `${label}.EmailCount`),
   };
 }
 
 function normalizeSubscription(value: unknown): HaveIBeenPwnedSubscription {
-  const record = requireObject(value, "HIBP /subscription/status response");
+  const record = requiredResponseRecord(value, "HIBP /subscription/status response");
 
   return {
     SubscriptionName: requireString(record.SubscriptionName, "subscription.SubscriptionName"),
@@ -406,14 +431,6 @@ function normalizeSubscription(value: unknown): HaveIBeenPwnedSubscription {
     IncludesCustomerDomains: requireBoolean(record.IncludesCustomerDomains, "subscription.IncludesCustomerDomains"),
     IncludesKAnon: requireBoolean(record.IncludesKAnon, "subscription.IncludesKAnon"),
   };
-}
-
-function requireObject(value: unknown, label: string): Record<string, unknown> {
-  const record = optionalRecord(value);
-  if (!record) {
-    throw new ProviderRequestError(502, `${label} must be an object`);
-  }
-  return record;
 }
 
 function requireString(value: unknown, label: string): string {
@@ -446,24 +463,7 @@ function requireStringArray(value: unknown, label: string): string[] {
   return value.map((item, index) => requireString(item, `${label}[${index}]`));
 }
 
-function nullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
-
 function stringifyOptionalBoolean(value: unknown): string | undefined {
   const parsed = optionalBoolean(value);
   return parsed === undefined ? undefined : String(parsed);
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function isAbortLikeError(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === "object" &&
-    "name" in error &&
-    String((error as { name?: unknown }).name) === "AbortError"
-  );
 }

@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { FinageActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -9,10 +9,17 @@ import {
   optionalInteger,
   optionalRecord,
   optionalString,
-  requiredString,
   stringArray,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerResponseError,
+  providerUserAgent,
+  ProviderRequestError,
+  requiredInputString,
+  requiredResponseRecord,
+} from "../provider-runtime.ts";
 
 const service = "finage";
 const finageApiBaseUrl = "https://api.finage.co.uk";
@@ -22,21 +29,21 @@ type FinageQueryValue = string | number | boolean | undefined;
 type FinageActionContext = ApiKeyProviderContext;
 type FinageActionHandler = (input: Record<string, unknown>, context: FinageActionContext) => Promise<unknown>;
 
-export const finageActionHandlers: Record<FinageActionName, FinageActionHandler> = {
+export const finageActionHandlers: ProviderActionHandlers<"finage", FinageActionHandler> = {
   list_stock_symbols(input, context) {
     return listStockSymbols(input, context);
   },
   get_last_quote(input, context) {
-    return getLastQuote(readInputString(input.symbol, "symbol"), context, "execute");
+    return getLastQuote(requiredInputString(input.symbol, "symbol"), context, "execute");
   },
   get_last_trade(input, context) {
-    return getLastTrade(readInputString(input.symbol, "symbol"), context, "execute");
+    return getLastTrade(requiredInputString(input.symbol, "symbol"), context, "execute");
   },
   get_aggregates(input, context) {
     return getAggregates(input, context);
   },
   get_previous_close(input, context) {
-    return getPreviousClose(readInputString(input.symbol, "symbol"), context);
+    return getPreviousClose(requiredInputString(input.symbol, "symbol"), context);
   },
   get_snapshot(input, context) {
     return getSnapshot(input, context);
@@ -44,6 +51,16 @@ export const finageActionHandlers: Record<FinageActionName, FinageActionHandler>
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, finageActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: finageApiBaseUrl,
+  auth: { type: "api_key_query", name: "apikey" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -87,7 +104,7 @@ async function listStockSymbols(input: Record<string, unknown>, context: FinageA
 
   return {
     page: readRequiredInteger(payload.page, "page"),
-    symbols: objectArray(payload.symbols, "symbols", providerError).map(normalizeSymbol),
+    symbols: objectArray(payload.symbols, "symbols", providerResponseError).map(normalizeSymbol),
   };
 }
 
@@ -102,11 +119,11 @@ async function getLastTrade(symbol: string, context: FinageActionContext, phase:
 }
 
 async function getAggregates(input: Record<string, unknown>, context: FinageActionContext): Promise<unknown> {
-  const symbol = readInputString(input.symbol, "symbol");
+  const symbol = requiredInputString(input.symbol, "symbol");
   const multiplier = readRequiredInputInteger(input.multiplier, "multiplier");
-  const timespan = readInputString(input.timespan, "timespan");
-  const dateFrom = readInputString(input.dateFrom, "dateFrom");
-  const dateTo = readInputString(input.dateTo, "dateTo");
+  const timespan = requiredInputString(input.timespan, "timespan");
+  const dateFrom = requiredInputString(input.dateFrom, "dateFrom");
+  const dateTo = requiredInputString(input.dateTo, "dateTo");
   if (dateFrom > dateTo) {
     throw new ProviderRequestError(400, "dateTo must be greater than or equal to dateFrom");
   }
@@ -131,7 +148,7 @@ async function getPreviousClose(symbol: string, context: FinageActionContext): P
 
 async function getSnapshot(input: Record<string, unknown>, context: FinageActionContext): Promise<unknown> {
   const symbols = stringArray(input.symbols, "symbols", (message) => new ProviderRequestError(400, message)).map(
-    (value, index) => readInputString(value, `symbols[${index}]`),
+    (value, index) => requiredInputString(value, `symbols[${index}]`),
   );
   if (symbols.length === 0) {
     throw new ProviderRequestError(400, "symbols must be a non-empty string array");
@@ -156,10 +173,10 @@ async function getSnapshot(input: Record<string, unknown>, context: FinageAction
   return {
     totalResults: readRequiredInteger(payload.totalResults, "totalResults"),
     lastQuotes: includeQuotes
-      ? objectArray(payload.lastQuotes, "lastQuotes", providerError).map(normalizeSnapshotQuote)
+      ? objectArray(payload.lastQuotes, "lastQuotes", providerResponseError).map(normalizeSnapshotQuote)
       : [],
     lastTrades: includeTrades
-      ? objectArray(payload.lastTrades, "lastTrades", providerError).map(normalizeSnapshotTrade)
+      ? objectArray(payload.lastTrades, "lastTrades", providerResponseError).map(normalizeSnapshotTrade)
       : [],
   };
 }
@@ -185,7 +202,7 @@ async function finageGet(
     if (!response.ok || isFinageErrorPayload(payload)) {
       throw buildFinageError(phase, response.status, payload);
     }
-    return readRequiredObject(payload, "payload");
+    return requiredResponseRecord(payload, "payload");
   } catch (error) {
     if (error instanceof ProviderRequestError) {
       throw error;
@@ -308,7 +325,7 @@ function normalizeTrade(input: Record<string, unknown>): Record<string, unknown>
 }
 
 function normalizeAggregateResponse(input: Record<string, unknown>): Record<string, unknown> {
-  const results = objectArray(input.results, "results", providerError).map(normalizeAggregateBar);
+  const results = objectArray(input.results, "results", providerResponseError).map(normalizeAggregateBar);
 
   return {
     symbol: readRequiredString(input.symbol, "symbol"),
@@ -348,24 +365,12 @@ function normalizeSnapshotTrade(input: Record<string, unknown>): Record<string, 
   };
 }
 
-function readRequiredObject(value: unknown, fieldName: string): Record<string, unknown> {
-  const record = optionalRecord(value);
-  if (!record) {
-    throw new ProviderRequestError(502, `${fieldName} must be an object`);
-  }
-  return record;
-}
-
 function readRequiredString(value: unknown, fieldName: string): string {
   const normalized = optionalString(value);
   if (!normalized) {
     throw new ProviderRequestError(502, `${fieldName} must be a string`);
   }
   return normalized;
-}
-
-function readInputString(value: unknown, fieldName: string): string {
-  return requiredString(value, fieldName, (message) => new ProviderRequestError(400, message));
 }
 
 function readRequiredNumber(value: unknown, fieldName: string): number {
@@ -387,8 +392,4 @@ function readRequiredInputInteger(value: unknown, fieldName: string): number {
     throw new ProviderRequestError(400, `${fieldName} must be an integer`);
   }
   return value;
-}
-
-function providerError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

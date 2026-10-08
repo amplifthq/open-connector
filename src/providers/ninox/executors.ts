@@ -1,20 +1,19 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { NinoxActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
   defineApiKeyProviderExecutors,
-  isAbortLikeError,
+  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 export const ninoxApiBaseUrl = "https://api.ninox.com/v1";
 
 const service = "ninox";
-const ninoxDefaultRequestTimeoutMs = 30_000;
 const ninoxValidationPath = "/teams";
 
 type NinoxPhase = "validate" | "execute";
@@ -37,7 +36,7 @@ interface NinoxTablePath {
   tableId: string;
 }
 
-export const ninoxActionHandlers: Record<NinoxActionName, NinoxActionHandler> = {
+export const ninoxActionHandlers: ProviderActionHandlers<"ninox", NinoxActionHandler> = {
   list_workspaces(_input, context) {
     return listWorkspaces(context);
   },
@@ -77,6 +76,16 @@ export const ninoxActionHandlers: Record<NinoxActionName, NinoxActionHandler> = 
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, ninoxActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: ninoxApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -206,7 +215,7 @@ async function listRecords(input: Record<string, unknown>, context: ApiKeyProvid
     context,
     phase: "execute",
     query: compactObject({
-      choiceStyle: readOptionalTrimmedString(input.choiceStyle),
+      choiceStyle: optionalString(input.choiceStyle),
     }),
   });
 
@@ -224,8 +233,8 @@ async function getRecord(input: Record<string, unknown>, context: ApiKeyProvider
       context,
       phase: "execute",
       query: compactObject({
-        choiceStyle: readOptionalTrimmedString(input.choiceStyle),
-        style: readOptionalTrimmedString(input.style),
+        choiceStyle: optionalString(input.choiceStyle),
+        style: optionalString(input.style),
       }),
     }),
     "record",
@@ -245,9 +254,9 @@ async function searchRecord(input: Record<string, unknown>, context: ApiKeyProvi
     phase: "execute",
     method: "POST",
     query: compactObject({
-      style: readOptionalTrimmedString(input.style),
-      dateStyle: readOptionalTrimmedString(input.dateStyle),
-      choiceStyle: readOptionalTrimmedString(input.choiceStyle),
+      style: optionalString(input.style),
+      dateStyle: optionalString(input.dateStyle),
+      choiceStyle: optionalString(input.choiceStyle),
     }),
     body: {
       filters,
@@ -319,9 +328,7 @@ async function deleteRecords(input: Record<string, unknown>, context: ApiKeyProv
 }
 
 async function requestNinoxJson(input: NinoxRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, ninoxDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "Ninox" }, async (signal) => {
     const response = await input.context.fetcher(buildNinoxUrl(input.path, input.query), {
       method: input.method ?? "GET",
       headers: {
@@ -331,7 +338,7 @@ async function requestNinoxJson(input: NinoxRequestInput): Promise<unknown> {
         "user-agent": providerUserAgent,
       },
       body: input.body === undefined ? undefined : JSON.stringify(input.body),
-      signal: timeout.signal,
+      signal,
     });
 
     if (input.allowNoContent && response.status === 204) {
@@ -344,21 +351,7 @@ async function requestNinoxJson(input: NinoxRequestInput): Promise<unknown> {
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Ninox request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Ninox request failed: ${error.message}` : "Ninox request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildNinoxUrl(path: string, query?: Record<string, NinoxQueryValue>): URL {
@@ -586,15 +579,11 @@ function readRecordIdArray(value: unknown, fieldName: string): number[] {
 }
 
 function requireTrimmedString(input: Record<string, unknown>, fieldName: string): string {
-  const value = readOptionalTrimmedString(input[fieldName]);
+  const value = optionalString(input[fieldName]);
   if (!value) {
     throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return value;
-}
-
-function readOptionalTrimmedString(value: unknown): string | undefined {
-  return optionalString(value);
 }
 
 function requirePositiveInteger(value: unknown, fieldName: string): number {

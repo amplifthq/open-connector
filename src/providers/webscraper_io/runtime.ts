@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { WebscraperIoActionName } from "./actions.ts";
 
 import {
   objectArray,
@@ -13,12 +13,12 @@ import {
 import {
   createProviderTimeout,
   isAbortLikeError,
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
 } from "../provider-runtime.ts";
 
-const webscraperIoApiBaseUrl = "https://api.webscraper.io/api/v1";
-const webscraperIoRequestTimeoutMs = 30_000;
+export const webscraperIoApiBaseUrl = "https://api.webscraper.io/api/v1";
 
 type WebscraperIoPhase = "validate" | "execute";
 type WebscraperIoActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -31,7 +31,7 @@ interface WebscraperIoRequestInput {
   phase: WebscraperIoPhase;
 }
 
-export const webscraperIoActionHandlers: Record<WebscraperIoActionName, WebscraperIoActionHandler> = {
+export const webscraperIoActionHandlers: ProviderActionHandlers<"webscraper_io", WebscraperIoActionHandler> = {
   async get_account_info(_input, context) {
     const payload = await requestWebscraperIoJson({ path: "/account", phase: "execute" }, context);
     return normalizeAccountInfo(requireDataObject(payload, "Web Scraper Cloud account"));
@@ -174,7 +174,7 @@ async function requestWebscraperIoJson(
   input: WebscraperIoRequestInput,
   context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
 ): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(context.signal, webscraperIoRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(buildWebscraperIoUrl(input.path, context.apiKey, input.query), {
       method: input.method ?? "GET",
@@ -211,7 +211,7 @@ async function requestWebscraperIoText(
   input: Pick<WebscraperIoRequestInput, "path" | "query" | "phase">,
   context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
 ): Promise<string> {
-  const timeout = createProviderTimeout(context.signal, webscraperIoRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(buildWebscraperIoUrl(input.path, context.apiKey, input.query), {
       method: "GET",
@@ -529,8 +529,4 @@ function omitKeys(input: Record<string, unknown>, keys: string[]): Record<string
 
 function withoutUndefined(input: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

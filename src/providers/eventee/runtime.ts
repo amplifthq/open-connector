@@ -1,11 +1,11 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { EventeeActionName } from "./actions.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import { isAbortLikeError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const eventeeApiBaseUrl = "https://api.eventee.com/public/v1";
+export const eventeeApiBaseUrl = "https://api.eventee.com/public/v1";
 const eventeeValidationPath = "/groups";
 
 type EventeeRequestMode = "validate" | "execute";
@@ -17,7 +17,7 @@ interface EventeeRequestOptions {
   mode: EventeeRequestMode;
 }
 
-export const eventeeActionHandlers: Record<EventeeActionName, EventeeActionHandler> = {
+export const eventeeActionHandlers: ProviderActionHandlers<"eventee", EventeeActionHandler> = {
   async get_event_content(_input, context) {
     const payload = await requestEventeeObject({ path: "/content", mode: "execute" }, context);
     return {

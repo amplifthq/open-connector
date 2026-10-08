@@ -2,14 +2,6 @@ import type { ActionDefinition } from "../../../core/types.ts";
 
 import { s } from "../../../core/json-schema.ts";
 import { defineProviderAction } from "../../../core/provider-definition.ts";
-export const feishuCalendarProviderPermissions: readonly string[] = [
-  "calendar:calendar.event:read",
-  "calendar:calendar.event:create",
-  "calendar:calendar.event:update",
-  "calendar:calendar.event:delete",
-  "calendar:calendar.event:reply",
-  "calendar:calendar.free_busy:read",
-];
 const calendarId = s.string("The Feishu calendar ID. Use `primary` for the caller's primary calendar.", {
   minLength: 1,
 });
@@ -101,6 +93,7 @@ export function createFeishuCalendarActions(service: string): readonly ActionDef
   return [
     defineProviderAction(service, {
       name: "list_calendar_agenda",
+      operationType: "read",
       description: "List event instances in a Feishu calendar over a bounded time range.",
       requiredScopes: ["calendar:calendar.event:read"],
       providerPermissions: ["calendar:calendar.event:read"],
@@ -119,6 +112,7 @@ export function createFeishuCalendarActions(service: string): readonly ActionDef
     }),
     defineProviderAction(service, {
       name: "search_calendar_events",
+      operationType: "read",
       description: "Search Feishu calendar events by text, time range, and attendee identifiers.",
       requiredScopes: ["calendar:calendar.event:read"],
       providerPermissions: ["calendar:calendar.event:read"],
@@ -144,6 +138,7 @@ export function createFeishuCalendarActions(service: string): readonly ActionDef
     }),
     defineProviderAction(service, {
       name: "get_calendar_event",
+      operationType: "read",
       description: "Get the complete details of one Feishu calendar event.",
       requiredScopes: ["calendar:calendar.event:read"],
       providerPermissions: ["calendar:calendar.event:read"],
@@ -158,6 +153,7 @@ export function createFeishuCalendarActions(service: string): readonly ActionDef
     }),
     defineProviderAction(service, {
       name: "create_calendar_event",
+      operationType: "write",
       description:
         "Create a Feishu calendar event and add attendees, rolling back the event if attendee creation fails.",
       requiredScopes: [
@@ -209,6 +205,7 @@ export function createFeishuCalendarActions(service: string): readonly ActionDef
     }),
     defineProviderAction(service, {
       name: "update_calendar_event",
+      operationType: "destructive",
       description: "Update Feishu calendar event fields and incrementally add or remove attendees.",
       requiredScopes: ["calendar:calendar.event:update"],
       providerPermissions: ["calendar:calendar.event:update"],
@@ -270,6 +267,7 @@ export function createFeishuCalendarActions(service: string): readonly ActionDef
     }),
     defineProviderAction(service, {
       name: "delete_calendar_event",
+      operationType: "destructive",
       description: "Delete a Feishu calendar event.",
       requiredScopes: ["calendar:calendar.event:delete"],
       providerPermissions: ["calendar:calendar.event:delete"],
@@ -297,6 +295,7 @@ export function createFeishuCalendarActions(service: string): readonly ActionDef
     }),
     defineProviderAction(service, {
       name: "query_calendar_freebusy",
+      operationType: "read",
       description: "Query a Feishu user's free/busy periods and RSVP status.",
       requiredScopes: ["calendar:calendar.free_busy:read"],
       providerPermissions: ["calendar:calendar.free_busy:read"],
@@ -317,6 +316,7 @@ export function createFeishuCalendarActions(service: string): readonly ActionDef
     }),
     defineProviderAction(service, {
       name: "find_calendar_rooms",
+      operationType: "read",
       description: "Find meeting rooms available for the specified event time slots.",
       requiredScopes: ["calendar:calendar.free_busy:read"],
       providerPermissions: ["calendar:calendar.free_busy:read"],
@@ -373,6 +373,7 @@ export function createFeishuCalendarActions(service: string): readonly ActionDef
     }),
     defineProviderAction(service, {
       name: "suggest_calendar_times",
+      operationType: "read",
       description: "Suggest available meeting times for Feishu users and chats.",
       requiredScopes: ["calendar:calendar.free_busy:read"],
       providerPermissions: ["calendar:calendar.free_busy:read"],
@@ -411,6 +412,7 @@ export function createFeishuCalendarActions(service: string): readonly ActionDef
     }),
     defineProviderAction(service, {
       name: "reply_calendar_event",
+      operationType: "write",
       description: "Accept, decline, or tentatively accept a Feishu calendar event invitation.",
       requiredScopes: ["calendar:calendar.event:reply"],
       providerPermissions: ["calendar:calendar.event:reply"],
@@ -438,6 +440,7 @@ export function createFeishuCalendarActions(service: string): readonly ActionDef
     }),
     defineProviderAction(service, {
       name: "get_calendar_meeting_info",
+      operationType: "read",
       description: "Get video meeting and meeting-note relations for calendar event instances.",
       requiredScopes: ["calendar:calendar.event:read"],
       providerPermissions: ["calendar:calendar.event:read"],

@@ -1,0 +1,1500 @@
+import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { OAuthProviderContext } from "../provider-runtime.ts";
+import type { SlackNormalizedConversationType } from "./constants.ts";
+
+import {
+  compactObject,
+  optionalBoolean,
+  optionalInteger,
+  optionalNumber,
+  optionalRecord,
+  optionalString,
+  optionalStringArray,
+  requiredString,
+} from "../../core/cast.ts";
+import { assertPublicHttpUrl, readBoundedResponseBytes } from "../../core/request.ts";
+import {
+  createProviderTimeout,
+  defineProviderExecutors,
+  isAbortLikeError,
+  ProviderRequestError,
+  providerInputError,
+  providerResponseError,
+  providerUserAgent,
+  requiredInputString,
+  requiredResponseRecord,
+  runProviderRequest,
+  withRetryAfterSeconds,
+} from "../provider-runtime.ts";
+import { slackConversationTypes } from "./constants.ts";
+
+export const slackApiBaseUrl = "https://slack.com/api";
+const slackFileUrlMaxBytes = 100 * 1024 * 1024;
+
+type SlackActionContext = Omit<OAuthProviderContext, "providerSecret" | "tokenType">;
+type SlackOAuthTokenKind = "bot" | "user";
+
+interface SlackPayloadError {
+  ok?: boolean;
+  error?: string;
+  response_metadata?: Record<string, unknown>;
+}
+
+interface SlackRequestJsonInput {
+  method: string;
+  accessToken: string;
+  fetcher: typeof fetch;
+  signal?: AbortSignal;
+  body?: Record<string, unknown>;
+}
+
+export type SlackActionHandler = (input: Record<string, unknown>, context: SlackActionContext) => Promise<unknown>;
+
+/** Build Slack executors that reject credentials issued for the other authorization path. */
+export function defineSlackProviderExecutors(
+  service: "slack" | "slackbot",
+  tokenKind: SlackOAuthTokenKind,
+  handlers: Record<string, SlackActionHandler>,
+): ProviderExecutors {
+  return defineProviderExecutors<SlackActionContext>({
+    service,
+    handlers,
+    async createContext(context, fetcher): Promise<SlackActionContext> {
+      const credential = await context.getCredential(service);
+      let accessToken: string;
+      if (credential?.authType === "oauth2") {
+        if (readSlackTokenKind(credential.accessToken, credential.metadata) != tokenKind) {
+          throw new ProviderRequestError(
+            401,
+            `Reconnect ${service} with ${tokenKind} authorization before running its actions.`,
+          );
+        }
+        accessToken = credential.accessToken;
+      } else if (credential?.authType === "api_key") {
+        // A pasted token was authorized by no OAuth flow, so the user/bot flow
+        // gate above has nothing to check for it; Slack enforces its own
+        // per-method token rules. Mirrors github and notion, whose api_key arm
+        // is likewise "use this bearer as-is".
+        accessToken = credential.apiKey;
+      } else {
+        throw new ProviderRequestError(401, `Configure ${service} credentials first.`);
+      }
+      const providerContext: SlackActionContext = {
+        accessToken,
+        fetcher,
+        signal: context.signal,
+      };
+      if (context.transitFiles) {
+        providerContext.transitFiles = context.transitFiles;
+      }
+      return providerContext;
+    },
+  });
+}
+
+export const slackActionHandlers: ProviderActionHandlers<"slack", SlackActionHandler> = {
+  get_current_user(_input, context) {
+    return slackGetCurrentUser(context);
+  },
+  list_channels(input, context) {
+    return slackListChannels(input, context);
+  },
+  get_channel_messages(input, context) {
+    return slackGetChannelMessages(input, context);
+  },
+  conversations_members(input, context) {
+    return slackConversationsMembers(input, context);
+  },
+  search_messages(input, context) {
+    return slackSearchMessages(input, context);
+  },
+  search_context(input, context) {
+    return slackSearchContext(input, context);
+  },
+  post_message(input, context) {
+    return slackPostMessage(input, context);
+  },
+  reply_message(input, context) {
+    return slackReplyMessage(input, context);
+  },
+  get_thread(input, context) {
+    return slackGetThread(input, context);
+  },
+  list_conversations(input, context) {
+    return slackListConversations(input, context);
+  },
+  get_conversation(input, context) {
+    return slackGetConversation(input, context);
+  },
+  open_conversation(input, context) {
+    return slackOpenConversation(input, context);
+  },
+  list_users(input, context) {
+    return slackListUsers(input, context);
+  },
+  get_user(input, context) {
+    return slackGetUser(input, context);
+  },
+  post_ephemeral_message(input, context) {
+    return slackPostEphemeralMessage(input, context);
+  },
+  get_message_permalink(input, context) {
+    return slackGetMessagePermalink(input, context);
+  },
+  update_message(input, context) {
+    return slackUpdateMessage(input, context);
+  },
+  delete_message(input, context) {
+    return slackDeleteMessage(input, context);
+  },
+  schedule_message(input, context) {
+    return slackScheduleMessage(input, context);
+  },
+  add_reaction(input, context) {
+    return slackAddReaction(input, context);
+  },
+  remove_reaction(input, context) {
+    return slackRemoveReaction(input, context);
+  },
+  get_reactions(input, context) {
+    return slackGetReactions(input, context);
+  },
+  list_reactions(input, context) {
+    return slackListReactions(input, context);
+  },
+  upload_file(input, context) {
+    return slackUploadFile(input, context);
+  },
+  list_files(input, context) {
+    return slackListFiles(input, context);
+  },
+  get_file(input, context) {
+    return slackGetFile(input, context);
+  },
+  download_file(input, context) {
+    return slackDownloadFile(input, context);
+  },
+  delete_file(input, context) {
+    return slackDeleteFile(input, context);
+  },
+};
+
+export const slackCredentialValidators: CredentialValidators = {
+  async apiKey(input, { fetcher, signal }) {
+    const payload = await slackAuthTest({ accessToken: input.apiKey, fetcher, signal });
+
+    return {
+      profile: slackCredentialProfile(payload),
+      metadata: {
+        currentAccount: payload,
+      },
+    };
+  },
+  async oauth2(input, { fetcher, signal }) {
+    const payload = await slackAuthTest({ accessToken: input.accessToken, fetcher, signal });
+
+    const responseScopes = readSlackCredentialScopes(input.accessToken, input.metadata);
+
+    return {
+      profile: slackCredentialProfile(payload),
+      grantedScopes: responseScopes.length > 0 ? responseScopes : input.profile.grantedScopes,
+      metadata: {
+        currentAccount: payload,
+      },
+    };
+  },
+};
+
+interface SlackAuthTestPayload extends SlackPayloadError {
+  team?: unknown;
+  team_id?: unknown;
+  user_id?: unknown;
+  bot_id?: unknown;
+}
+
+interface SlackAuthTestIdentity {
+  teamId: string;
+  userId: string;
+  botId: string | undefined;
+}
+
+async function slackAuthTest(input: Omit<SlackRequestJsonInput, "method" | "body">): Promise<SlackAuthTestPayload> {
+  return slackRequestJson<SlackAuthTestPayload>({ ...input, method: "auth.test" });
+}
+
+/**
+ * Read the identity `auth.test` reports for a token. Slack documents `team_id`
+ * and `user_id` on every successful response and `bot_id` only for bot tokens,
+ * so a response missing either required ID is malformed rather than anonymous:
+ * no fallback identity is manufactured for it, because a connection keyed on a
+ * placeholder cannot be told apart from another token in the same state.
+ */
+function readSlackAuthTestIdentity(payload: SlackAuthTestPayload): SlackAuthTestIdentity {
+  return {
+    teamId: requireSlackId(payload.team_id, "auth.test team_id"),
+    userId: requireSlackId(payload.user_id, "auth.test user_id"),
+    botId: payload.bot_id === undefined ? undefined : requireSlackId(payload.bot_id, "auth.test bot_id"),
+  };
+}
+
+function slackCredentialProfile(payload: SlackAuthTestPayload): { accountId: string; displayName: string } {
+  const identity = readSlackAuthTestIdentity(payload);
+  return {
+    accountId: identity.userId,
+    displayName: optionalString(payload.team) ?? identity.teamId,
+  };
+}
+
+async function slackGetCurrentUser(context: SlackActionContext): Promise<unknown> {
+  const identity = readSlackAuthTestIdentity(await slackAuthTest(context));
+  return { teamId: identity.teamId, userId: identity.userId, isBot: identity.botId !== undefined };
+}
+
+async function slackListChannels(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const url = slackApiUrl("conversations.list");
+  if (input.limit != null) {
+    url.searchParams.set("limit", String(input.limit));
+  }
+
+  const payload = await slackGetJson<{
+    ok: boolean;
+    channels?: Array<{ id: string; name: string }>;
+    error?: string;
+  }>(url, context);
+
+  return {
+    channels: (payload.channels ?? []).map((channel) => ({
+      channelId: channel.id,
+      name: channel.name,
+    })),
+  };
+}
+
+async function slackGetChannelMessages(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const url = slackApiUrl("conversations.history");
+  url.searchParams.set("channel", String(input.channelId));
+  if (input.limit != null) {
+    url.searchParams.set("limit", String(input.limit));
+  }
+  if (input.cursor != null) {
+    url.searchParams.set("cursor", String(input.cursor));
+  }
+  applySlackHistoryWindow(url, input);
+  const includeRaw = applySlackIncludeRaw(url, input);
+
+  return readSlackMessagePage(
+    await slackGetJson<SlackMessagePagePayload>(url, context),
+    "conversations.history",
+    includeRaw,
+  );
+}
+
+async function slackConversationsMembers(
+  input: Record<string, unknown>,
+  context: SlackActionContext,
+): Promise<unknown> {
+  const url = slackApiUrl("conversations.members");
+  url.searchParams.set("channel", String(input.channelId));
+  if (input.cursor != null) {
+    url.searchParams.set("cursor", String(input.cursor));
+  }
+  if (input.limit != null) {
+    url.searchParams.set("limit", String(input.limit));
+  }
+
+  const payload = await slackGetJson<
+    SlackPayloadError & {
+      members?: unknown;
+    }
+  >(url, context);
+
+  return {
+    memberIds: requireSlackArray(payload.members, "conversations.members members").map((member) =>
+      requireSlackId(member, "conversations.members member"),
+    ),
+    nextCursor: readSlackNextCursor(payload, "conversations.members"),
+  };
+}
+
+async function slackSearchMessages(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const includeRaw = input.includeRaw === true;
+  const query = requiredString(input.query, "query", (message) => new ProviderRequestError(400, message));
+  if (input.page != null && input.cursor != null) {
+    throw new ProviderRequestError(400, "page and cursor cannot be used together");
+  }
+  const url = slackApiUrl("search.messages");
+  url.searchParams.set("query", query);
+  if (input.count != null) {
+    url.searchParams.set("count", String(input.count));
+  }
+  if (input.page != null) {
+    url.searchParams.set("page", String(input.page));
+  }
+  if (input.cursor != null) {
+    url.searchParams.set("cursor", String(input.cursor));
+  }
+  if (input.highlight != null) {
+    url.searchParams.set("highlight", String(input.highlight));
+  }
+  if (input.sort != null) {
+    url.searchParams.set("sort", String(input.sort));
+  }
+  if (input.sortDir != null) {
+    url.searchParams.set("sort_dir", String(input.sortDir));
+  }
+  if (input.teamId != null) {
+    url.searchParams.set("team_id", String(input.teamId));
+  }
+
+  const payload = await slackGetJson<{
+    ok: boolean;
+    query?: string;
+    messages?: {
+      matches?: Array<Record<string, unknown>>;
+      total?: number;
+      pagination?: Record<string, unknown>;
+      paging?: Record<string, unknown>;
+    };
+    response_metadata?: { next_cursor?: string };
+    error?: string;
+  }>(url, context);
+
+  return {
+    query: optionalString(payload.query) ?? query,
+    matches: (payload.messages?.matches ?? []).map((match) => normalizeSearchMessageMatch(match, includeRaw)),
+    total: typeof payload.messages?.total === "number" ? payload.messages.total : 0,
+    pagination: payload.messages?.pagination ?? {},
+    paging: payload.messages?.paging ?? {},
+    nextCursor: normalizeNextCursor(payload.response_metadata?.next_cursor),
+  };
+}
+
+async function slackSearchContext(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const query = requiredString(input.query, "query", (message) => new ProviderRequestError(400, message));
+  const payload = await slackRequestJson<{
+    ok: boolean;
+    results?: { messages?: Array<Record<string, unknown>> };
+    response_metadata?: { next_cursor?: string };
+    error?: string;
+  }>({
+    ...context,
+    method: "assistant.search.context",
+    body: {
+      query,
+      content_types: ["messages"],
+      channel_types: Array.isArray(input.channelTypes) ? input.channelTypes : undefined,
+      context_channel_id: optionalString(input.contextChannelId),
+      cursor: optionalString(input.cursor),
+      limit: input.limit,
+      sort: input.sort,
+      sort_dir: input.sortDir,
+      before: input.before,
+      after: input.after,
+      include_context_messages: optionalBoolean(input.includeContextMessages),
+      include_bots: optionalBoolean(input.includeBots),
+      include_message_blocks: optionalBoolean(input.includeMessageBlocks),
+      highlight: optionalBoolean(input.highlight),
+      term_clauses: Array.isArray(input.termClauses) ? input.termClauses : undefined,
+      modifiers: optionalString(input.modifiers),
+      include_archived_channels: optionalBoolean(input.includeArchivedChannels),
+      disable_semantic_search: optionalBoolean(input.disableSemanticSearch),
+    },
+  });
+  return {
+    messages: payload.results?.messages ?? [],
+    nextCursor: normalizeNextCursor(payload.response_metadata?.next_cursor),
+  };
+}
+
+async function slackPostMessage(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const payload = await slackRequestJson<{
+    ok: boolean;
+    ts?: string;
+    channel?: string;
+    error?: string;
+  }>({
+    ...context,
+    method: "chat.postMessage",
+    body: buildSlackMessagePayload(input),
+  });
+
+  return {
+    ts: payload.ts ?? "",
+    channelId: payload.channel ?? String(input.channelId),
+  };
+}
+
+async function slackReplyMessage(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const payload = await slackRequestJson<{
+    ok: boolean;
+    ts?: string;
+    channel?: string;
+    error?: string;
+  }>({
+    ...context,
+    method: "chat.postMessage",
+    body: buildSlackMessagePayload(input, {
+      thread_ts: String(input.threadTs),
+      reply_broadcast: optionalBoolean(input.replyBroadcast),
+    }),
+  });
+
+  return {
+    ts: payload.ts ?? "",
+    channelId: payload.channel ?? String(input.channelId),
+  };
+}
+
+async function slackGetThread(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const url = slackApiUrl("conversations.replies");
+  url.searchParams.set("channel", String(input.channelId));
+  url.searchParams.set("ts", String(input.threadTs));
+  if (input.limit != null) {
+    url.searchParams.set("limit", String(input.limit));
+  }
+  if (input.cursor != null) {
+    url.searchParams.set("cursor", String(input.cursor));
+  }
+  applySlackHistoryWindow(url, input);
+  const includeRaw = applySlackIncludeRaw(url, input);
+
+  return readSlackMessagePage(
+    await slackGetJson<SlackMessagePagePayload>(url, context),
+    "conversations.replies",
+    includeRaw,
+  );
+}
+
+async function slackListConversations(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const url = slackApiUrl("conversations.list");
+  url.searchParams.set("limit", String(input.limit ?? 200));
+  url.searchParams.set(
+    "types",
+    Array.isArray(input.types) ? input.types.map((value) => String(value)).join(",") : slackConversationTypes.join(","),
+  );
+  if (input.cursor != null) {
+    url.searchParams.set("cursor", String(input.cursor));
+  }
+  if (input.excludeArchived != null) {
+    url.searchParams.set("exclude_archived", String(input.excludeArchived));
+  }
+
+  const payload = await slackGetJson<
+    SlackPayloadError & {
+      channels?: unknown;
+    }
+  >(url, context);
+
+  // Discovery may prune against this page. Never manufacture an empty list or
+  // terminal cursor from an unreadable enumeration response.
+  return {
+    conversations: requireSlackArray(payload.channels, "conversations.list channels").map((channel) =>
+      normalizeListedConversation(channel),
+    ),
+    nextCursor: normalizeNextCursor(readSlackNextCursor(payload, "conversations.list")),
+  };
+}
+
+async function slackGetConversation(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const url = slackApiUrl("conversations.info");
+  url.searchParams.set("channel", String(input.channelId));
+  if (input.includeLocale != null) {
+    url.searchParams.set("include_locale", String(input.includeLocale));
+  }
+  if (input.includeNumMembers != null) {
+    url.searchParams.set("include_num_members", String(input.includeNumMembers));
+  }
+
+  const payload = await slackGetJson<{
+    ok: boolean;
+    channel?: Record<string, unknown>;
+    error?: string;
+  }>(url, context);
+
+  return {
+    conversation: normalizeConversation(payload.channel ?? {}),
+  };
+}
+
+async function slackOpenConversation(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const userIds = Array.isArray(input.userIds) ? input.userIds.map(String) : [];
+  if (userIds.length !== 1) {
+    throw new ProviderRequestError(400, "open_conversation only supports one userId");
+  }
+
+  const payload = await slackRequestJson<{
+    ok: boolean;
+    channel?: Record<string, unknown>;
+    error?: string;
+  }>({
+    ...context,
+    method: "conversations.open",
+    body: {
+      users: userIds[0],
+      return_im: true,
+      prevent_creation: optionalBoolean(input.preventCreation),
+    },
+  });
+
+  const conversation = normalizeConversation(payload.channel ?? {});
+  return {
+    channelId: conversation.channelId,
+    conversation,
+  };
+}
+
+async function slackListUsers(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const url = slackApiUrl("users.list");
+  url.searchParams.set("limit", String(input.limit ?? 200));
+  if (input.cursor != null) {
+    url.searchParams.set("cursor", String(input.cursor));
+  }
+  if (input.includeLocale != null) {
+    url.searchParams.set("include_locale", String(input.includeLocale));
+  }
+
+  const payload = await slackGetJson<{
+    ok: boolean;
+    members?: Array<Record<string, unknown>>;
+    response_metadata?: { next_cursor?: string };
+    error?: string;
+  }>(url, context);
+
+  return {
+    users: (payload.members ?? []).map((member) => normalizeUser(member)),
+    nextCursor: normalizeNextCursor(payload.response_metadata?.next_cursor),
+  };
+}
+
+async function slackGetUser(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const url = slackApiUrl("users.info");
+  url.searchParams.set("user", String(input.userId));
+  if (input.includeLocale != null) {
+    url.searchParams.set("include_locale", String(input.includeLocale));
+  }
+
+  const payload = await slackGetJson<{
+    ok: boolean;
+    user?: Record<string, unknown>;
+    error?: string;
+  }>(url, context);
+
+  return {
+    user: normalizeUser(payload.user ?? {}),
+  };
+}
+
+async function slackPostEphemeralMessage(
+  input: Record<string, unknown>,
+  context: SlackActionContext,
+): Promise<unknown> {
+  const payload = await slackRequestJson<{
+    ok: boolean;
+    channel?: string;
+    message_ts?: string;
+    error?: string;
+  }>({
+    ...context,
+    method: "chat.postEphemeral",
+    body: buildSlackMessagePayload(input, { user: String(input.userId) }),
+  });
+
+  return {
+    channelId: payload.channel ?? String(input.channelId),
+    messageTs: payload.message_ts ?? "",
+  };
+}
+
+async function slackGetMessagePermalink(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const url = slackApiUrl("chat.getPermalink");
+  url.searchParams.set("channel", String(input.channelId));
+  url.searchParams.set("message_ts", String(input.messageTs));
+
+  const payload = await slackGetJson<{
+    ok: boolean;
+    channel?: string;
+    permalink?: string;
+    error?: string;
+  }>(url, context);
+
+  return {
+    channelId: payload.channel ?? String(input.channelId),
+    messageTs: String(input.messageTs),
+    permalink: payload.permalink ?? "",
+  };
+}
+
+async function slackUpdateMessage(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const payload = await slackRequestJson<{
+    ok: boolean;
+    channel?: string;
+    ts?: string;
+    error?: string;
+  }>({
+    ...context,
+    method: "chat.update",
+    body: buildSlackMessagePayload(input, { ts: String(input.messageTs) }),
+  });
+
+  return {
+    channelId: payload.channel ?? String(input.channelId),
+    messageTs: payload.ts ?? String(input.messageTs),
+  };
+}
+
+async function slackDeleteMessage(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const payload = await slackRequestJson<{
+    ok: boolean;
+    channel?: string;
+    ts?: string;
+    error?: string;
+  }>({
+    ...context,
+    method: "chat.delete",
+    body: {
+      channel: String(input.channelId),
+      ts: String(input.messageTs),
+    },
+  });
+
+  return {
+    channelId: payload.channel ?? String(input.channelId),
+    messageTs: payload.ts ?? String(input.messageTs),
+  };
+}
+
+async function slackScheduleMessage(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const postAt = Number(input.postAt);
+  if (postAt <= Math.floor(Date.now() / 1000)) {
+    throw new ProviderRequestError(400, "postAt must be in the future");
+  }
+
+  const payload = await slackRequestJson<{
+    ok: boolean;
+    channel?: string;
+    scheduled_message_id?: string;
+    post_at?: number | string;
+    error?: string;
+  }>({
+    ...context,
+    method: "chat.scheduleMessage",
+    body: buildSlackMessagePayload(input, { post_at: postAt }),
+  });
+
+  return {
+    channelId: payload.channel ?? String(input.channelId),
+    scheduledMessageId: payload.scheduled_message_id ?? "",
+    postAt: normalizeScheduledPostAt(payload.post_at, postAt),
+  };
+}
+
+async function slackAddReaction(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  await slackRequestJson({
+    ...context,
+    method: "reactions.add",
+    body: buildReactionPayload(input),
+  });
+
+  return { success: true };
+}
+
+async function slackRemoveReaction(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  await slackRequestJson({
+    ...context,
+    method: "reactions.remove",
+    body: buildReactionPayload(input),
+  });
+
+  return { success: true };
+}
+
+async function slackGetReactions(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const url = slackApiUrl("reactions.get");
+  url.searchParams.set("channel", String(input.channelId));
+  url.searchParams.set("timestamp", String(input.messageTs));
+  if (typeof input.full === "boolean") {
+    url.searchParams.set("full", String(input.full));
+  }
+
+  const payload = await slackGetJson<{
+    ok: boolean;
+    message?: Record<string, unknown>;
+    error?: string;
+  }>(url, context);
+
+  return {
+    item: payload.message ?? {},
+  };
+}
+
+async function slackListReactions(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const url = slackApiUrl("reactions.list");
+  url.searchParams.set("limit", String(input.limit ?? 100));
+  if (input.userId != null) {
+    url.searchParams.set("user", String(input.userId));
+  }
+  if (input.cursor != null) {
+    url.searchParams.set("cursor", String(input.cursor));
+  }
+  if (typeof input.full === "boolean") {
+    url.searchParams.set("full", String(input.full));
+  }
+
+  const payload = await slackGetJson<SlackPayloadError & { items?: unknown }>(url, context);
+
+  return {
+    items: requireSlackArray(payload.items, "reactions.list items").map((item) => {
+      const record = optionalRecord(item);
+      if (!record) {
+        throw slackResponseError("reactions.list item");
+      }
+      return normalizeSlackReactionItem(record);
+    }),
+    nextCursor: normalizeNextCursor(readSlackNextCursor(payload, "reactions.list")),
+  };
+}
+
+async function slackUploadFile(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const content = await resolveSlackFileContent(input, context);
+  const filename = String(input.filename);
+  const uploadUrlPayload = await slackFormRequestJson<{
+    ok: boolean;
+    upload_url?: string;
+    file_id?: string;
+    error?: string;
+  }>(context, "files.getUploadURLExternal", {
+    filename,
+    length: content.byteLength,
+    alt_txt: optionalString(input.altText),
+    snippet_type: optionalString(input.snippetType),
+  });
+
+  const uploadUrl = requiredString(uploadUrlPayload.upload_url, "file.upload_url", slackResponseError);
+  const fileId = requiredString(uploadUrlPayload.file_id, "file.file_id", slackResponseError);
+  await uploadSlackFileContent(uploadUrl, filename, content, optionalString(input.mimeType), context);
+
+  const completePayload = await slackFormRequestJson<{
+    ok: boolean;
+    files?: Array<Record<string, unknown>>;
+    error?: string;
+  }>(context, "files.completeUploadExternal", {
+    files: JSON.stringify([
+      compactObject({
+        id: fileId,
+        title: optionalString(input.title),
+      }),
+    ]),
+    channel_id: optionalString(input.channelId),
+    initial_comment: optionalString(input.initialComment),
+    thread_ts: optionalString(input.threadTs),
+  });
+
+  return {
+    fileId,
+    files: (completePayload.files ?? []).map((file) => normalizeFile(file)),
+  };
+}
+
+async function slackListFiles(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const url = slackApiUrl("files.list");
+  if (input.channelId != null) {
+    url.searchParams.set("channel", String(input.channelId));
+  }
+  if (input.userId != null) {
+    url.searchParams.set("user", String(input.userId));
+  }
+  if (input.types != null) {
+    url.searchParams.set("types", String(input.types));
+  }
+  if (input.page != null) {
+    url.searchParams.set("page", String(input.page));
+  }
+  if (input.count != null) {
+    url.searchParams.set("count", String(input.count));
+  }
+
+  const payload = await slackGetJson<{
+    ok: boolean;
+    files?: Array<Record<string, unknown>>;
+    paging?: Record<string, unknown>;
+    error?: string;
+  }>(url, context);
+
+  return {
+    files: (payload.files ?? []).map((file) => normalizeFile(file)),
+    paging: payload.paging ?? {},
+  };
+}
+
+async function slackGetFile(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const url = slackApiUrl("files.info");
+  url.searchParams.set("file", String(input.fileId));
+
+  const payload = await slackGetJson<{
+    ok: boolean;
+    file?: Record<string, unknown>;
+    error?: string;
+  }>(url, context);
+
+  return {
+    file: normalizeFile(payload.file ?? {}),
+  };
+}
+
+async function slackDownloadFile(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  const { transitFiles } = context;
+  if (!transitFiles) {
+    throw providerInputError("Slack download_file requires transit file storage");
+  }
+  const fileId = requiredInputString(input.fileId, "fileId");
+
+  return runProviderRequest({ signal: context.signal, label: "Slack file download" }, async (signal) => {
+    signal.throwIfAborted();
+    const infoUrl = slackApiUrl("files.info");
+    infoUrl.searchParams.set("file", fileId);
+    const payload = await slackGetJson<SlackPayloadError & { file?: unknown }>(infoUrl, { ...context, signal });
+    const metadata = requiredResponseRecord(payload.file, "Slack file metadata");
+    const privateUrl = optionalString(metadata.url_private_download) ?? optionalString(metadata.url_private);
+    if (metadata.is_external === true || !privateUrl) {
+      throw providerInputError("This Slack file has no downloadable Slack-hosted content");
+    }
+    const url = assertPublicHttpUrl(privateUrl, { fieldName: "Slack file URL", createError: providerResponseError });
+    // Only Slack's file origin may receive the connection's bearer token.
+    // The shared fetch guard drops it if a redirect crosses origins.
+    if (url.origin !== "https://files.slack.com") {
+      throw providerResponseError("Slack file URL must use https://files.slack.com");
+    }
+    if ((optionalNumber(metadata.size) ?? 0) > transitFiles.maxBytes) {
+      throw new ProviderRequestError(413, `Slack file download exceeds ${transitFiles.maxBytes} bytes`);
+    }
+
+    const response = await context.fetcher(url, {
+      headers: { authorization: `Bearer ${context.accessToken}`, "user-agent": providerUserAgent },
+      signal,
+    });
+    try {
+      if (!response.ok) {
+        throw new ProviderRequestError(response.status, `Slack file download failed with HTTP ${response.status}`);
+      }
+      const mimeType =
+        optionalString(response.headers.get("content-type")) ??
+        optionalString(metadata.mimetype) ??
+        "application/octet-stream";
+      // Slack can return a sign-in page instead of the requested bytes.
+      if (mimeType.split(";")[0]?.trim().toLowerCase() === "text/html" && metadata.mimetype !== "text/html") {
+        throw providerResponseError("Slack returned an HTML page instead of the requested file");
+      }
+      const bytes = await readBoundedResponseBytes(response, {
+        maxBytes: transitFiles.maxBytes,
+        fieldName: "Slack file download",
+        createError: (message) => new ProviderRequestError(413, message),
+      });
+      signal.throwIfAborted();
+      const name = optionalString(metadata.name) ?? fileId;
+      const file = await transitFiles.create(new File([Uint8Array.from(bytes)], name, { type: mimeType }));
+      return { fileId, file };
+    } finally {
+      await response.body?.cancel().catch(() => undefined);
+    }
+  });
+}
+
+async function slackDeleteFile(input: Record<string, unknown>, context: SlackActionContext): Promise<unknown> {
+  await slackRequestJson({
+    ...context,
+    method: "files.delete",
+    body: {
+      file: String(input.fileId),
+    },
+  });
+
+  return {
+    success: true,
+    fileId: String(input.fileId),
+  };
+}
+
+async function slackGetJson<T extends SlackPayloadError>(url: URL, context: SlackActionContext): Promise<T> {
+  const response = await context.fetcher(url.toString(), {
+    headers: slackHeaders(context.accessToken),
+    signal: context.signal,
+  });
+  return readSlackResponseJson<T>(response);
+}
+
+async function slackRequestJson<T extends SlackPayloadError>(input: SlackRequestJsonInput): Promise<T> {
+  const response = await input.fetcher(slackApiUrl(input.method).toString(), {
+    method: "POST",
+    headers: slackHeaders(input.accessToken),
+    body: input.body === undefined ? undefined : JSON.stringify(compactObject(input.body)),
+    signal: input.signal,
+  });
+  return readSlackResponseJson<T>(response);
+}
+
+async function slackFormRequestJson<T extends SlackPayloadError>(
+  context: SlackActionContext,
+  method: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(compactObject(body))) {
+    params.set(key, String(value));
+  }
+
+  const response = await context.fetcher(slackApiUrl(method).toString(), {
+    method: "POST",
+    headers: {
+      ...slackHeaders(context.accessToken),
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: params.toString(),
+    signal: context.signal,
+  });
+  return readSlackResponseJson<T>(response);
+}
+
+async function readSlackResponseJson<T extends SlackPayloadError>(response: Response): Promise<T> {
+  const payload = (optionalRecord(await response.json().catch(() => undefined)) ?? {}) as T;
+  if (!response.ok) {
+    throw slackHttpError(response, payload);
+  }
+  assertSlackPayload(payload);
+  // Preserve HTTP/Slack failures (including Retry-After) above, but require
+  // affirmative success before any action can normalize an upstream payload.
+  if (payload.ok !== true) {
+    throw slackResponseError("ok");
+  }
+  return payload;
+}
+
+function buildSlackMessagePayload(
+  input: Record<string, unknown>,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const payload = compactObject({
+    channel: String(input.channelId),
+    text: optionalString(input.text),
+    blocks: Array.isArray(input.blocks) ? input.blocks : undefined,
+    attachments: Array.isArray(input.attachments) ? input.attachments : undefined,
+    unfurl_links: optionalBoolean(input.unfurlLinks),
+    unfurl_media: optionalBoolean(input.unfurlMedia),
+    metadata: optionalRecord(input.metadata),
+    ...extra,
+  });
+
+  if (!payload.text && !payload.blocks && !payload.attachments) {
+    throw new ProviderRequestError(400, "Provide at least one message content field: text, blocks, or attachments.");
+  }
+
+  return payload;
+}
+
+function buildReactionPayload(input: Record<string, unknown>): Record<string, unknown> {
+  return {
+    channel: String(input.channelId),
+    timestamp: String(input.messageTs),
+    name: String(input.name),
+  };
+}
+
+async function resolveSlackFileContent(
+  input: Record<string, unknown>,
+  context: SlackActionContext,
+): Promise<Uint8Array> {
+  const fileUrl = requiredString(input.fileUrl, "fileUrl", (message) => new ProviderRequestError(400, message));
+  assertFetchableFileUrl(fileUrl);
+  const timeout = createProviderTimeout(context.signal);
+  try {
+    const response = await context.fetcher(fileUrl, { signal: timeout.signal });
+    if (!response.ok) {
+      throw new ProviderRequestError(400, `failed to fetch fileUrl: ${response.status}`);
+    }
+    return await readBoundedResponseBytes(response, {
+      maxBytes: slackFileUrlMaxBytes,
+      fieldName: "fileUrl",
+      createError: (message) => new ProviderRequestError(400, message),
+    });
+  } catch (error) {
+    if (error instanceof ProviderRequestError) {
+      throw error;
+    }
+    if (timeout.didTimeout() && isAbortLikeError(error)) {
+      throw new ProviderRequestError(504, "failed to fetch fileUrl: request timed out");
+    }
+    throw new ProviderRequestError(
+      502,
+      error instanceof Error ? `failed to fetch fileUrl: ${error.message}` : "failed to fetch fileUrl",
+    );
+  } finally {
+    timeout.cleanup();
+  }
+}
+
+async function uploadSlackFileContent(
+  uploadUrl: string,
+  filename: string,
+  content: Uint8Array,
+  mimeType: string | undefined,
+  context: SlackActionContext,
+): Promise<void> {
+  const bytes = new Uint8Array(content);
+  const body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  const response = await context.fetcher(uploadUrl, {
+    method: "POST",
+    headers: {
+      "content-type": mimeType ?? "application/octet-stream",
+    },
+    body,
+    signal: context.signal,
+  });
+  if (response.ok) {
+    return;
+  }
+
+  const message =
+    (await response.text().catch(() => "")) || `slack file upload failed with ${response.status}: ${filename}`;
+  throw new ProviderRequestError(response.status, message);
+}
+
+function normalizeNextCursor(cursor: string | undefined): string | null {
+  return cursor ? cursor : null;
+}
+
+function readSlackScopes(value: unknown): string[] {
+  return (optionalString(value) ?? "")
+    .split(",")
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+}
+
+function readSlackTokenKind(accessToken: string, metadata: Record<string, unknown>): SlackOAuthTokenKind | undefined {
+  const rawTokenType = metadata.rawTokenType;
+  if (rawTokenType == "bot") {
+    return "bot";
+  }
+  if (rawTokenType == "user") {
+    return "user";
+  }
+  if (accessToken.startsWith("xoxb-") || accessToken.startsWith("xoxe.xoxb-")) {
+    return "bot";
+  }
+  if (accessToken.startsWith("xoxp-") || accessToken.startsWith("xoxe.xoxp-")) {
+    return "user";
+  }
+  return undefined;
+}
+
+function readSlackCredentialScopes(accessToken: string, metadata: Record<string, unknown>): string[] {
+  switch (readSlackTokenKind(accessToken, metadata)) {
+    case "user":
+      return uniqueSlackScopes(readSlackScopes(optionalRecord(metadata.authed_user)?.scope ?? metadata.scope));
+    case "bot":
+      return uniqueSlackScopes(readSlackScopes(metadata.scope));
+    default:
+      return [];
+  }
+}
+
+function uniqueSlackScopes(scopes: string[]): string[] {
+  return [...new Set(scopes)];
+}
+
+function normalizeScheduledPostAt(value: number | string | undefined, fallback: number): number {
+  if (value == null) {
+    return fallback;
+  }
+  const postAt = Number(value);
+  if (!Number.isInteger(postAt)) {
+    throw new ProviderRequestError(502, "slack schedule_message response is invalid: post_at");
+  }
+  return postAt;
+}
+
+function normalizeListedConversation(value: unknown): Record<string, unknown> {
+  const channel = optionalRecord(value);
+  if (!channel) {
+    throw slackResponseError("conversations.list channel");
+  }
+  requireSlackId(channel.id, "conversations.list channel id");
+  for (const field of ["is_im", "is_mpim", "is_private", "is_channel", "is_group"]) {
+    if (channel[field] !== undefined && typeof channel[field] !== "boolean") {
+      throw slackResponseError(`conversations.list ${field}`);
+    }
+  }
+  // Positive IM/MPIM/channel flags establish kind even when unrelated negative
+  // flags are absent. Privacy is required only to distinguish modern channels.
+  if (channel.is_im === true || channel.is_mpim === true) {
+    if (
+      (channel.is_im === true && (channel.is_mpim === true || channel.is_group === true)) ||
+      channel.is_channel === true ||
+      channel.is_private === false
+    ) {
+      throw slackResponseError("conversations.list conflicting direct message classification");
+    }
+  } else if (channel.is_channel === true) {
+    if (typeof channel.is_private !== "boolean" || channel.is_group === true) {
+      throw slackResponseError("conversations.list channel classification");
+    }
+  } else if (channel.is_group === true) {
+    // Legacy groups and MPIMs can both set is_group. Only is_mpim:false makes
+    // this unambiguously a private channel; no negative is_im flag is needed.
+    if (channel.is_mpim !== false || channel.is_private === false) {
+      throw slackResponseError("conversations.list ambiguous group classification");
+    }
+  } else {
+    throw slackResponseError("conversations.list channel classification");
+  }
+  return normalizeConversation(channel);
+}
+
+function normalizeConversationType(conversation: Record<string, unknown>): SlackNormalizedConversationType {
+  if (conversation.is_im === true) {
+    return "im";
+  }
+  if (conversation.is_mpim === true) {
+    return "mpim";
+  }
+  if (conversation.is_private === true || conversation.is_group === true) {
+    return "private_channel";
+  }
+  if (conversation.is_channel === true) {
+    return "public_channel";
+  }
+  return "unknown";
+}
+
+function normalizeConversation(conversation: Record<string, unknown>): Record<string, unknown> {
+  const topic = optionalRecord(conversation.topic);
+  const purpose = optionalRecord(conversation.purpose);
+
+  return compactObject({
+    channelId: String(conversation.id ?? ""),
+    name: typeof conversation.name === "string" ? conversation.name : null,
+    type: normalizeConversationType(conversation),
+    isArchived: typeof conversation.is_archived === "boolean" ? conversation.is_archived : null,
+    isPrivate: typeof conversation.is_private === "boolean" ? conversation.is_private : null,
+    isMember: typeof conversation.is_member === "boolean" ? conversation.is_member : null,
+    memberCount: typeof conversation.num_members === "number" ? conversation.num_members : undefined,
+    topic: typeof topic?.value === "string" ? topic.value : null,
+    purpose: typeof purpose?.value === "string" ? purpose.value : null,
+    userId: optionalString(conversation.user),
+    locale: optionalString(conversation.locale),
+    created: optionalInteger(conversation.created),
+    updated: optionalInteger(conversation.updated),
+    creatorId: optionalString(conversation.creator),
+    isShared: optionalBoolean(conversation.is_shared),
+    isExtShared: optionalBoolean(conversation.is_ext_shared),
+    isOrgShared: optionalBoolean(conversation.is_org_shared),
+    contextTeamId: optionalString(conversation.context_team_id),
+    lastRead: optionalString(conversation.last_read),
+    unreadCount: optionalInteger(conversation.unread_count),
+  });
+}
+
+/**
+ * Apply the shared `conversations.history` / `conversations.replies` time
+ * window. Bounds are passed through verbatim: they are Slack `ts` strings,
+ * and reformatting one (rounding, re-serializing as a number) would move the
+ * boundary Slack compares against.
+ */
+function applySlackHistoryWindow(url: URL, input: Record<string, unknown>): void {
+  if (input.oldest != null) {
+    url.searchParams.set("oldest", String(input.oldest));
+  }
+  if (input.latest != null) {
+    url.searchParams.set("latest", String(input.latest));
+  }
+  if (input.inclusive != null) {
+    url.searchParams.set("inclusive", String(input.inclusive));
+  }
+}
+
+/**
+ * Apply the shared `includeRaw` opt-in of `conversations.history` /
+ * `conversations.replies` and report whether it is on. Only a literal `true`
+ * opts in. Slack leaves message metadata out of both methods unless the
+ * request sets `include_all_metadata`, and `raw` promises the whole record, so
+ * opting in asks for it too.
+ */
+function applySlackIncludeRaw(url: URL, input: Record<string, unknown>): boolean {
+  const includeRaw = input.includeRaw === true;
+  if (includeRaw) {
+    url.searchParams.set("include_all_metadata", "true");
+  }
+  return includeRaw;
+}
+
+interface SlackMessagePagePayload extends SlackPayloadError {
+  messages?: unknown;
+  has_more?: unknown;
+}
+
+/**
+ * Read one `conversations.history` / `conversations.replies` page. A page whose
+ * list is missing or whose rows are not objects is rejected rather than
+ * flattened into an empty result, so a broken upstream response cannot pass
+ * for the documented end of a walk.
+ */
+function readSlackMessagePage(
+  payload: SlackMessagePagePayload,
+  method: string,
+  includeRaw = false,
+): Record<string, unknown> {
+  if (payload.has_more !== undefined && typeof payload.has_more !== "boolean") {
+    throw slackResponseError(`${method} has_more`);
+  }
+  return {
+    messages: requireSlackArray(payload.messages, `${method} messages`).map((message) => {
+      const record = optionalRecord(message);
+      if (!record) {
+        throw slackResponseError(`${method} message`);
+      }
+      return normalizeSlackMessage(record, includeRaw);
+    }),
+    hasMore: payload.has_more ?? false,
+    nextCursor: readSlackNextCursor(payload, method),
+  };
+}
+
+/**
+ * Read a page's `response_metadata.next_cursor`. Slack documents an absent,
+ * null or empty cursor as the last page, so those all read as `""`; a present
+ * cursor that is not a plain string is malformed, not evidence the walk ended.
+ */
+function readSlackNextCursor(payload: SlackPayloadError, method: string): string {
+  const metadata = optionalRecord(payload.response_metadata);
+  if (payload.response_metadata !== undefined && !metadata) {
+    throw slackResponseError(`${method} response_metadata`);
+  }
+  const cursor = metadata?.next_cursor;
+  if (cursor == null || cursor === "") {
+    return "";
+  }
+  return requireSlackId(cursor, `${method} next_cursor`);
+}
+
+function requireSlackArray(value: unknown, label: string): unknown[] {
+  if (!Array.isArray(value)) {
+    throw slackResponseError(label);
+  }
+  return value;
+}
+
+/**
+ * Require an upstream identifier exactly as Slack sent it. Whitespace is not
+ * normalized away: a padded or blank ID is a malformed response, and trimming
+ * it would let the wrong key reach a caller.
+ */
+function requireSlackId(value: unknown, label: string): string {
+  if (typeof value !== "string" || value === "" || value.trim() !== value) {
+    throw slackResponseError(label);
+  }
+  return value;
+}
+
+/**
+ * Normalize one `conversations.history` / `conversations.replies` message.
+ *
+ * `ts` and `text` keep their previous always-present shape (an absent text is
+ * `""`, not omitted) because consumers already read them unconditionally;
+ * every field added since is omitted when Slack does not send it, so a
+ * missing value stays distinguishable from an empty one. `userId` is the one
+ * exception kept for compatibility: it stays `""` on a message with no
+ * author, where `botId` / `username` carry the identity instead.
+ *
+ * `files`, `attachments`, `blocks` and `metadata` stay out of the row: they
+ * are unbounded nested payloads on a row read in bulk. With `includeRaw` the
+ * whole untouched record rides along under `raw` for a consumer that needs
+ * them, or any other field this normalizer does not model.
+ */
+function normalizeSlackMessage(message: Record<string, unknown>, includeRaw = false): Record<string, unknown> {
+  const edited = optionalRecord(message.edited) ?? {};
+  const reactions = Array.isArray(message.reactions) ? message.reactions : undefined;
+
+  return compactObject({
+    ts: requiredString(message.ts, "message ts", () => slackResponseError("conversations message ts")),
+    type: optionalString(message.type),
+    subtype: optionalString(message.subtype),
+    userId: optionalString(message.user) ?? "",
+    botId: optionalString(message.bot_id),
+    appId: optionalString(message.app_id),
+    username: optionalString(message.username),
+    teamId: optionalString(message.team),
+    clientMsgId: optionalString(message.client_msg_id),
+    text: typeof message.text === "string" ? message.text : "",
+    editedTs: optionalString(edited.ts),
+    editedUserId: optionalString(edited.user),
+    threadTs: optionalString(message.thread_ts),
+    parentUserId: optionalString(message.parent_user_id),
+    replyCount: optionalInteger(message.reply_count),
+    replyUsersCount: optionalInteger(message.reply_users_count),
+    replyUserIds: optionalStringArray(message.reply_users),
+    latestReply: optionalString(message.latest_reply),
+    isLocked: optionalBoolean(message.is_locked),
+    reactions: reactions?.map((reaction) => normalizeSlackReaction(optionalRecord(reaction) ?? {})),
+    raw: includeRaw ? message : undefined,
+  });
+}
+
+function normalizeSlackReaction(reaction: Record<string, unknown>): Record<string, unknown> {
+  return compactObject({
+    name: optionalString(reaction.name),
+    count: optionalInteger(reaction.count),
+    userIds: Array.isArray(reaction.users) ? reaction.users.map((user) => String(user)) : undefined,
+  });
+}
+
+/**
+ * Normalize one `reactions.list` item. A message item keeps its conversation,
+ * its permalink and the message as `normalizeSlackMessage` reads it, so the
+ * reactions ride on the message as they do on a history row. A file item
+ * keeps the file ID and the reactions on the file; a file comment item also
+ * keeps the comment ID, and the reactions are the comment's.
+ */
+function normalizeSlackReactionItem(item: Record<string, unknown>): Record<string, unknown> {
+  const type = requireSlackId(item.type, "reactions.list item type");
+  if (type === "message") {
+    const message = requiredResponseRecord(item.message, "reactions.list item message");
+    return compactObject({
+      type,
+      channelId: requireSlackId(item.channel, "reactions.list item channel"),
+      message: normalizeSlackMessage(message),
+      permalink: optionalString(message.permalink),
+    });
+  }
+  if (type !== "file" && type !== "file_comment") {
+    throw slackResponseError("reactions.list item type");
+  }
+
+  const file = requiredResponseRecord(item.file, "reactions.list item file");
+  const comment =
+    type === "file_comment" ? requiredResponseRecord(item.comment, "reactions.list item comment") : undefined;
+  const target = comment ?? file;
+  const reactions = Array.isArray(target.reactions) ? target.reactions : undefined;
+
+  return compactObject({
+    type,
+    fileId: requireSlackId(file.id, "reactions.list item file id"),
+    commentId: comment ? requireSlackId(comment.id, "reactions.list item comment id") : undefined,
+    reactions: reactions?.map((reaction) => normalizeSlackReaction(optionalRecord(reaction) ?? {})),
+  });
+}
+
+function normalizeSearchMessageMatch(match: Record<string, unknown>, includeRaw = false): Record<string, unknown> {
+  const channel = optionalRecord(match.channel) ?? {};
+
+  return compactObject({
+    matchId: optionalString(match.iid),
+    channelId: optionalString(channel.id),
+    channelName: typeof channel.name === "string" ? channel.name : null,
+    ts: optionalString(match.ts),
+    userId: optionalString(match.user),
+    username: optionalString(match.username),
+    text: typeof match.text === "string" ? match.text : "",
+    permalink: optionalString(match.permalink),
+    teamId: optionalString(match.team),
+    type: optionalString(match.type),
+    raw: includeRaw ? match : undefined,
+  });
+}
+
+function normalizeUser(user: Record<string, unknown>): Record<string, unknown> {
+  const profile = optionalRecord(user.profile) ?? {};
+
+  return compactObject({
+    userId: String(user.id ?? ""),
+    username: typeof user.name === "string" ? user.name : null,
+    realName: typeof profile.real_name === "string" ? profile.real_name : null,
+    displayName: typeof profile.display_name === "string" ? profile.display_name : null,
+    isBot: typeof user.is_bot === "boolean" ? user.is_bot : null,
+    isDeleted: typeof user.deleted === "boolean" ? user.deleted : null,
+    isAdmin: typeof user.is_admin === "boolean" ? user.is_admin : null,
+    isOwner: typeof user.is_owner === "boolean" ? user.is_owner : null,
+    locale: optionalString(user.locale),
+    email: optionalString(profile.email),
+    tz: optionalString(user.tz),
+    tzOffset: optionalInteger(user.tz_offset),
+    updated: optionalInteger(user.updated),
+    teamId: optionalString(user.team_id),
+    isRestricted: optionalBoolean(user.is_restricted),
+    isUltraRestricted: optionalBoolean(user.is_ultra_restricted),
+    isAppUser: optionalBoolean(user.is_app_user),
+  });
+}
+
+function normalizeFile(file: Record<string, unknown>): Record<string, unknown> {
+  return compactObject({
+    ...file,
+    fileId: optionalString(file.id),
+    name: optionalString(file.name),
+    title: optionalString(file.title),
+    mimetype: optionalString(file.mimetype),
+    urlPrivate: optionalString(file.url_private),
+  });
+}
+
+function slackApiUrl(method: string): URL {
+  return new URL(`${slackApiBaseUrl}/${method}`);
+}
+
+function slackHeaders(accessToken: string): Record<string, string> {
+  return {
+    authorization: `Bearer ${accessToken}`,
+    "content-type": "application/json",
+    "user-agent": providerUserAgent,
+  };
+}
+
+function assertSlackPayload(payload: SlackPayloadError): void {
+  if (payload.ok !== false) {
+    return;
+  }
+
+  const message = formatSlackPayloadError(payload);
+  switch (payload.error) {
+    case "not_authed":
+    case "invalid_auth":
+    case "token_revoked":
+      throw new ProviderRequestError(401, message, payload);
+    case "ratelimited":
+    case "rate_limited":
+      throw new ProviderRequestError(429, message, payload);
+    default:
+      throw new ProviderRequestError(400, message, payload);
+  }
+}
+
+function formatSlackPayloadError(payload: SlackPayloadError): string {
+  const error = payload.error ?? "unknown slack error";
+  const messages = payload.response_metadata?.messages;
+  if (!Array.isArray(messages)) {
+    return error;
+  }
+
+  const details = messages.filter((message) => typeof message === "string");
+  if (details.length === 0) {
+    return error;
+  }
+
+  return `${error}: ${details.join("; ")}`;
+}
+
+function slackHttpError(response: Response, payload: SlackPayloadError): ProviderRequestError {
+  const message = payload.error ? formatSlackPayloadError(payload) : `slack request failed with ${response.status}`;
+  // The action envelope carries provider details; retain pacing so callers
+  // can resume the same page without guessing when this workspace may retry.
+  return new ProviderRequestError(response.status, message, withRetryAfterSeconds(response, payload));
+}
+
+function slackResponseError(message: string): ProviderRequestError {
+  return new ProviderRequestError(502, `slack response is invalid: ${message}`);
+}
+
+function assertFetchableFileUrl(value: string): void {
+  assertPublicHttpUrl(value, {
+    fieldName: "fileUrl",
+    createError: (message) => new ProviderRequestError(400, message),
+  });
+}

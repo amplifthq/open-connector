@@ -1,7 +1,20 @@
+import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-runtime.ts";
 import type { DopplerMarketingAutomationActionName } from "./actions.ts";
 
-import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  optionalBooleanOrNull,
+  optionalRecord,
+  optionalString,
+  rawStringOrNull,
+  requiredString,
+} from "../../core/cast.ts";
+import {
+  createProviderTimeout,
+  isAbortLikeError,
+  ProviderRequestError,
+  providerUserAgent,
+  requiredResponseRecord,
+} from "../provider-runtime.ts";
 
 export interface DopplerMarketingAutomationCredentialCheck {
   providerAccountId?: string;
@@ -10,17 +23,7 @@ export interface DopplerMarketingAutomationCredentialCheck {
   providerMetadata: Record<string, unknown>;
 }
 
-interface ApiKeyProviderActionInput {
-  apiKey: string;
-  actionName: string;
-  input: Record<string, unknown>;
-  providerMetadata?: Record<string, unknown>;
-  values?: Record<string, string>;
-}
-
 export const dopplerMarketingAutomationApiBaseUrl = "https://restapi.fromdoppler.com";
-
-const requestTimeoutMs = 30_000;
 
 type RequestPhase = "validate" | "execute";
 type QueryValue = string | number | boolean | undefined;
@@ -35,10 +38,10 @@ interface DopplerMarketingRequest {
   phase: RequestPhase;
 }
 
-type DopplerMarketingActionHandler = (input: ApiKeyProviderActionInput, fetcher: typeof fetch) => Promise<unknown>;
+type DopplerMarketingActionHandler = (input: ApiKeyActionRequest, fetcher: typeof fetch) => Promise<unknown>;
 
-export const dopplerMarketingAutomationActionHandlers: Record<
-  DopplerMarketingAutomationActionName,
+export const dopplerMarketingAutomationActionHandlers: ProviderActionHandlers<
+  "doppler_marketing_automation",
   DopplerMarketingActionHandler
 > = {
   async list_lists(input, fetcher) {
@@ -60,7 +63,7 @@ export const dopplerMarketingAutomationActionHandlers: Record<
       fetcher,
       phase: "execute",
     });
-    const record = requireObject(payload, "Doppler list");
+    const record = requiredResponseRecord(payload, "Doppler list");
     return {
       list: normalizeList(record),
       data: record,
@@ -136,7 +139,7 @@ export const dopplerMarketingAutomationActionHandlers: Record<
       fetcher,
       phase: "execute",
     });
-    const record = requireObject(payload, "Doppler subscriber");
+    const record = requiredResponseRecord(payload, "Doppler subscriber");
     return {
       subscriber: normalizeSubscriber(record),
       data: record,
@@ -172,7 +175,7 @@ export const dopplerMarketingAutomationActionHandlers: Record<
     });
     return normalizeMessageResult(payload);
   },
-} satisfies Record<DopplerMarketingAutomationActionName, DopplerMarketingActionHandler>;
+};
 
 function readTrimmedInputString(value: unknown, fieldName: string): string {
   if (typeof value !== "string" || !value.trim()) {
@@ -217,7 +220,7 @@ export async function validateDopplerMarketingAutomationCredential(
 }
 
 export async function executeDopplerMarketingAutomationAction(
-  input: ApiKeyProviderActionInput & {
+  input: ApiKeyActionRequest & {
     actionName: DopplerMarketingAutomationActionName;
   },
   fetcher: typeof fetch,
@@ -230,7 +233,7 @@ export async function executeDopplerMarketingAutomationAction(
 }
 
 async function requestDopplerMarketingJson(input: DopplerMarketingRequest) {
-  const timeout = createProviderTimeout(undefined, requestTimeoutMs);
+  const timeout = createProviderTimeout(undefined);
   const url = buildDopplerMarketingUrl(input.path, input.query);
   const method = input.method ?? "GET";
 
@@ -303,7 +306,7 @@ function createDopplerMarketingError(status: number, statusText: string, payload
     return new ProviderRequestError(400, message);
   }
   if (phase === "execute" && (status === 401 || status === 403)) {
-    return new ProviderRequestError(409, message);
+    return new ProviderRequestError(401, message);
   }
   if (status >= 400 && status < 500) {
     return new ProviderRequestError(status, message);
@@ -326,7 +329,7 @@ function readErrorMessage(payload: unknown) {
 }
 
 function normalizeListCollection(payload: unknown) {
-  const record = requireObject(payload, "Doppler list collection");
+  const record = requiredResponseRecord(payload, "Doppler list collection");
   return {
     lists: requireObjectArray(record.items, "Doppler list collection items").map(normalizeList),
     ...normalizePagination(record),
@@ -335,7 +338,7 @@ function normalizeListCollection(payload: unknown) {
 }
 
 function normalizeSubscriberCollection(payload: unknown) {
-  const record = requireObject(payload, "Doppler subscriber collection");
+  const record = requiredResponseRecord(payload, "Doppler subscriber collection");
   return {
     subscribers: requireObjectArray(record.items, "Doppler subscriber collection items").map(normalizeSubscriber),
     ...normalizePagination(record),
@@ -357,13 +360,13 @@ function normalizeList(record: Record<string, unknown>) {
   return {
     listId: readRequiredInteger(record.listId, "listId"),
     name: readRequiredString(record.name, "name"),
-    currentStatus: readNullableString(record.currentStatus),
+    currentStatus: rawStringOrNull(record.currentStatus),
     subscribersCount: readNullableInteger(record.subscribersCount, "subscribersCount"),
-    creationDate: readNullableString(record.creationDate),
-    hasScheduledCampaigns: readNullableBoolean(record.hasScheduledCampaigns),
-    hasFormsAssociated: readNullableBoolean(record.hasFormsAssociated),
-    hasSegmentsAssociated: readNullableBoolean(record.hasSegmentsAssociated),
-    hasEventsAssociated: readNullableBoolean(record.hasEventsAssociated),
+    creationDate: rawStringOrNull(record.creationDate),
+    hasScheduledCampaigns: optionalBooleanOrNull(record.hasScheduledCampaigns),
+    hasFormsAssociated: optionalBooleanOrNull(record.hasFormsAssociated),
+    hasSegmentsAssociated: optionalBooleanOrNull(record.hasSegmentsAssociated),
+    hasEventsAssociated: optionalBooleanOrNull(record.hasEventsAssociated),
     data: record,
   };
 }
@@ -373,20 +376,20 @@ function normalizeSubscriber(record: Record<string, unknown>) {
     email: readRequiredString(record.email, "email"),
     fields: readOptionalObjectArray(record.fields),
     belongsToLists: readOptionalStringArray(record.belongsToLists),
-    status: readNullableString(record.status),
-    unsubscriptionDate: readNullableString(record.unsubscriptionDate),
-    canBeReactivated: readNullableBoolean(record.canBeReactivated),
-    isBeingReactivated: readNullableBoolean(record.isBeingReactivated),
-    unsubscriptionType: readNullableString(record.unsubscriptionType),
-    manualUnsubscriptionReason: readNullableString(record.manualUnsubscriptionReason),
-    unsubscriptionComment: readNullableString(record.unsubscriptionComment),
+    status: rawStringOrNull(record.status),
+    unsubscriptionDate: rawStringOrNull(record.unsubscriptionDate),
+    canBeReactivated: optionalBooleanOrNull(record.canBeReactivated),
+    isBeingReactivated: optionalBooleanOrNull(record.isBeingReactivated),
+    unsubscriptionType: rawStringOrNull(record.unsubscriptionType),
+    manualUnsubscriptionReason: rawStringOrNull(record.manualUnsubscriptionReason),
+    unsubscriptionComment: rawStringOrNull(record.unsubscriptionComment),
     score: readNullableInteger(record.score, "score"),
     data: record,
   };
 }
 
 function normalizeCreationResult(payload: unknown) {
-  const record = requireObject(payload, "Doppler creation result");
+  const record = requiredResponseRecord(payload, "Doppler creation result");
   const createdResourceId = record.createdResourceId;
   return {
     createdResourceId:
@@ -397,14 +400,14 @@ function normalizeCreationResult(payload: unknown) {
 }
 
 function normalizeMessageResult(payload: unknown) {
-  const record = requireObject(payload, "Doppler operation result");
+  const record = requiredResponseRecord(payload, "Doppler operation result");
   return {
     message: readRequiredString(record.message, "message"),
     data: record,
   };
 }
 
-function credentialContext(input: ApiKeyProviderActionInput) {
+function credentialContext(input: ApiKeyActionRequest) {
   return {
     apiKey: requiredString(input.apiKey, "apiKey", (message) => new ProviderRequestError(400, message)),
     accountEmail: requireAccountEmail(
@@ -436,19 +439,11 @@ function readListId(input: Record<string, unknown>) {
   return readRequiredInteger(input.listId, "listId");
 }
 
-function requireObject(value: unknown, label: string) {
-  const record = optionalRecord(value);
-  if (!record) {
-    throw new ProviderRequestError(502, `${label} must be an object`);
-  }
-  return record;
-}
-
 function requireObjectArray(value: unknown, label: string) {
   if (!Array.isArray(value)) {
     throw new ProviderRequestError(502, `${label} must be an array`);
   }
-  return value.map((item) => requireObject(item, label));
+  return value.map((item) => requiredResponseRecord(item, label));
 }
 
 function readOptionalObjectArray(value: unknown) {
@@ -491,16 +486,4 @@ function readNullableInteger(value: unknown, fieldName: string) {
     return null;
   }
   return readRequiredInteger(value, fieldName);
-}
-
-function readNullableString(value: unknown) {
-  return typeof value === "string" ? value : null;
-}
-
-function readNullableBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : null;
-}
-
-function isAbortLikeError(error: unknown) {
-  return error instanceof DOMException && error.name === "AbortError";
 }

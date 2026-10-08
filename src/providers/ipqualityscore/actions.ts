@@ -295,28 +295,30 @@ const urlOutputSchema = s.looseRequiredObject(
 export const ipqualityscoreActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "check_ip_reputation",
+    operationType: "read",
     description: "Check an IP address for proxy, VPN, Tor, bot, and abuse risk signals.",
     inputSchema: ipInputSchema,
     outputSchema: ipOutputSchema,
   }),
   defineProviderAction(service, {
     name: "validate_email",
+    operationType: "read",
     description: "Validate an email address and return deliverability and abuse risk signals.",
     inputSchema: emailInputSchema,
     outputSchema: emailOutputSchema,
   }),
   defineProviderAction(service, {
     name: "validate_phone",
+    operationType: "read",
     description: "Validate a phone number and return carrier, activity, and risk signals.",
     inputSchema: phoneInputSchema,
     outputSchema: phoneOutputSchema,
   }),
   defineProviderAction(service, {
     name: "scan_url",
+    operationType: "read",
     description: "Scan a URL or domain and return malware, phishing, and domain risk signals.",
     inputSchema: urlInputSchema,
     outputSchema: urlOutputSchema,
   }),
 ];
-
-export type IpqualityscoreActionName = "check_ip_reputation" | "validate_email" | "validate_phone" | "scan_url";

@@ -81,11 +81,10 @@ const newsFeedSchema = s.looseObject("The Google News feed object returned by Se
   ),
 });
 
-export type SerplyActionName = "google_search" | "google_news_search" | "google_video_search" | "google_scholar_search";
-
 export const serplyActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "google_search",
+    operationType: "read",
     description: "Search Google through Serply and return web search results in JSON format.",
     requiredScopes: [],
     inputSchema: searchLikeInputSchema,
@@ -93,6 +92,7 @@ export const serplyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "google_news_search",
+    operationType: "read",
     description: "Search Google News through Serply and return feed-style article results.",
     requiredScopes: [],
     inputSchema: searchLikeInputSchema,
@@ -110,6 +110,7 @@ export const serplyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "google_video_search",
+    operationType: "read",
     description: "Search Google Video through Serply and return video search results.",
     requiredScopes: [],
     inputSchema: searchLikeInputSchema,
@@ -117,6 +118,7 @@ export const serplyActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "google_scholar_search",
+    operationType: "read",
     description: "Search Google Scholar through Serply and return academic result entries.",
     requiredScopes: [],
     inputSchema: searchLikeInputSchema,

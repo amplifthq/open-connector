@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { DartActionName } from "./actions.ts";
 
 import { optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
 import {
@@ -15,7 +15,6 @@ export const dartApiBaseUrl = "https://app.dartai.com/api/v0/public";
 
 type DartRequestPhase = "validate" | "execute";
 
-const dartDefaultRequestTimeoutMs = 30_000;
 const listTaskQueryKeys = [
   "title",
   "ids",
@@ -49,7 +48,7 @@ const listTaskQueryKeys = [
   "offset",
 ];
 
-export const dartActionHandlers: Record<DartActionName, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const dartActionHandlers: ProviderActionHandlers<"dart", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   get_config(_input, context) {
     return requestDart({ path: "/config", method: "GET", context, phase: "execute" });
   },
@@ -179,7 +178,7 @@ async function requestDart(input: {
   }
 
   input.context.signal?.throwIfAborted();
-  const timeout = createProviderTimeout(input.context.signal, dartDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   init.signal = timeout.signal;
   try {
     const response = await input.context.fetcher(url, init);

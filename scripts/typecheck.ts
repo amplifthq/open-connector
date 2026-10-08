@@ -7,11 +7,9 @@ const tscBin = join(rootDir, "node_modules/typescript/bin/tsc");
 const buildInfoDir = join(rootDir, ".tmp/tsbuildinfo");
 const projectConfigs: TypecheckProject[] = [
   { name: "src", path: "src/tsconfig.json" },
-  { name: "scripts", path: "scripts/tsconfig.build.json" },
-  { name: "scripts-all", path: "scripts/tsconfig.json" },
+  { name: "scripts", path: "scripts/tsconfig.json" },
   { name: "examples", path: "examples/tsconfig.json" },
 ];
-const defaultProjectNames = ["src", "scripts"];
 
 interface TypecheckProject {
   name: string;
@@ -79,9 +77,12 @@ function typecheckProject(project: TypecheckProject): Promise<TypecheckResult> {
 }
 
 function selectProjects(names: string[]): TypecheckProject[] {
-  const selectedNames = names.length > 0 ? names : defaultProjectNames;
+  if (names.length === 0) {
+    return projectConfigs;
+  }
+
   const projectsByName = new Map(projectConfigs.map((project) => [project.name, project]));
-  return selectedNames.map((name) => {
+  return names.map((name) => {
     const project = projectsByName.get(name);
     if (!project) {
       throw new Error(`Unknown typecheck project: ${name}.`);

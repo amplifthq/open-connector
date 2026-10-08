@@ -1,3 +1,5 @@
+import type { TriggerKeySnapshot } from "../triggers/common/types.ts";
+import type { TriggerPermission } from "../triggers/metadata.ts";
 /**
  * JSON Schema object used for action input and output contracts.
  *
@@ -13,8 +15,22 @@ export type JsonSchema = {
  */
 export type AuthType = "no_auth" | "api_key" | "custom_credential" | "oauth2";
 
-/** User-visible side-effect category used by clients to make safe execution decisions. */
-export type ActionEffect = "read" | "write" | "destructive";
+/**
+ * Broad, task-oriented provider group calculated from catalog source metadata.
+ *
+ * Provider definitions do not need to repeat this field: the catalog builder
+ * adds it to runtime entries through the shared scenario resolver.
+ */
+export type ProviderScenario =
+  | "ai"
+  | "cross-border-ecommerce"
+  | "investment"
+  | "communication"
+  | "productivity"
+  | "marketing"
+  | "data-storage"
+  | "developer"
+  | "other";
 
 /**
  * A single credential field that users can configure for a provider.
@@ -52,6 +68,21 @@ export type OAuthClientConfigFieldDefinition = CredentialDefinition & {
 };
 
 /**
+ * Instructions for registering the OAuth app this provider needs.
+ *
+ * The local console shows these where users paste the client id and secret,
+ * because that is the moment they need them. Steps describe the provider's
+ * flow in this project's own words and link to the provider's own
+ * documentation; they never reproduce provider documentation or screenshots.
+ */
+export type OAuthClientSetupDefinition = {
+  /** Provider page where users register the OAuth app. */
+  docsUrl?: string;
+  /** Ordered setup steps, each a single self-contained sentence of plain text. */
+  steps: string[];
+};
+
+/**
  * API key connection configuration shown by the local console.
  */
 export type ApiKeyAuthDefinition = {
@@ -73,6 +104,10 @@ export type ApiKeyAuthDefinition = {
 export type CustomCredentialAuthDefinition = {
   /** Auth discriminator used by catalog clients and connection routes. */
   type: "custom_credential";
+  /** Optional display name for this auth mode in consoles, e.g. "Service Account". */
+  label?: string;
+  /** Optional help text describing when to use this auth mode. */
+  description?: string;
   /** Complete user-editable credential field list for this provider. */
   fields: CredentialDefinition[];
   /** Optional action used by future UI/CLI flows to verify credentials. */
@@ -99,8 +134,22 @@ export type OAuth2AuthDefinition = {
   tokenUrl: string;
   /** Provider token endpoint used to refresh an access token. Defaults to tokenUrl. */
   refreshTokenUrl?: string;
-  /** OAuth scopes joined with spaces into the authorization URL `scope` parameter. */
+  /**
+   * Provider token revocation endpoint (RFC 7009). When set, a disconnect that
+   * asks for it (`revoke: true`) posts the connection's refresh token (else its
+   * access token) there once the credential is deleted, so the grant ends at
+   * the provider as well as here. Inert otherwise.
+   */
+  revocationUrl?: string;
+  /** Default OAuth scopes when no requestedScopes or authorization options are selected. */
   scopes: string[];
+  /**
+   * Additional scopes available for explicit selection through requestedScopes or authorization
+   * options. requestedScopes replaces the default list; default scopes are not added automatically.
+   */
+  optionalScopes?: string[];
+  /** Selectable provider-native OAuth scopes for programmatic connections. */
+  authorizationOptions?: OAuthAuthorizationOption[];
   /** Separator used when joining OAuth scopes. Defaults to a space. */
   scopeSeparator?: " " | ",";
   /** How the runtime sends client credentials to the token endpoint. */
@@ -119,6 +168,8 @@ export type OAuth2AuthDefinition = {
       grantType?: string | false;
       code?: string;
       redirectUri?: string | false;
+      /** Provider-specific field name for forwarding the original OAuth state during code exchange. */
+      state?: string | false;
     };
     refresh?: {
       grantType?: string | false;
@@ -138,6 +189,8 @@ export type OAuth2AuthDefinition = {
   };
   /** Extra static authorization URL parameters, such as Google `access_type=offline`. */
   authorizationParams?: Record<string, string>;
+  /** Provider callback query parameters forwarded to token exchange and later token refresh. */
+  tokenRequestCallbackParameters?: string[];
   /** Provider-specific OAuth authorization request field names. */
   authorizationRequestFields?: {
     clientId?: string | false;
@@ -148,7 +201,19 @@ export type OAuth2AuthDefinition = {
   };
   /** Extra local OAuth app fields required before starting authorization. */
   clientConfigFields?: OAuthClientConfigFieldDefinition[];
+  /** How to register the provider OAuth app that supplies the client id and secret. */
+  clientSetup?: OAuthClientSetupDefinition;
 };
+
+export interface OAuthAuthorizationOption {
+  id: string;
+  label: string;
+  description: string;
+  required: boolean;
+  defaultSelected: boolean;
+  risk: "standard" | "sensitive" | "destructive";
+  requires?: string[];
+}
 
 /**
  * Provider authentication capabilities advertised in the public catalog.
@@ -158,6 +223,9 @@ export type ProviderAuthDefinition =
   | ApiKeyAuthDefinition
   | CustomCredentialAuthDefinition
   | OAuth2AuthDefinition;
+
+/** How an action affects provider state. */
+export type ActionOperationType = "read" | "write" | "destructive";
 
 /**
  * Public metadata and schema contract for one action.
@@ -174,8 +242,8 @@ export type ActionDefinition = {
   name: string;
   /** Human-readable action summary for catalogs, docs, and tool descriptions. */
   description: string;
-  /** Whether this action only reads data, writes data, or can perform destructive changes. */
-  effect?: ActionEffect;
+  /** Whether the action reads, changes, or destructively changes provider state. */
+  operationType: ActionOperationType;
   /** Provider-native OAuth scopes, permission names, or capability strings needed for this action. */
   requiredScopes: string[];
   /** Provider-native permissions or scopes users must grant. */
@@ -221,6 +289,8 @@ export type ProviderDefinition = {
   iconUrl?: string;
   /** Public action catalog for this provider. */
   actions: readonly ActionDefinition[];
+  triggers?: readonly TriggerKeySnapshot[];
+  triggerPermissions?: readonly TriggerPermission[];
 };
 
 export interface NativeHttpDefinition {
@@ -304,15 +374,19 @@ export interface TransitFileRead {
   mimeType: string;
 }
 
+/** A byte stream consumed with backpressure; failed or cancelled writes must leave no file behind. */
+export interface TransitFileStream {
+  body: ReadableStream<Uint8Array>;
+  name: string;
+  mimeType: string;
+  signal?: AbortSignal;
+}
+
 export interface TransitFileStore {
   readonly maxBytes: number;
-  create(file: File): Promise<{
-    fileId: string;
-    downloadUrl: string;
-    sizeBytes: number;
-    name: string;
-    mimeType: string;
-  }>;
+  create(file: File): Promise<TransitFileUpload>;
+  /** Available only on backends that can store unknown-length streams without buffering the file. */
+  createFromStream?(file: TransitFileStream): Promise<TransitFileUpload>;
   read(fileId: string): Promise<TransitFileRead>;
   delete(fileId: string): Promise<boolean>;
 }
@@ -343,6 +417,8 @@ export interface ExecutionContext {
   transitFiles?: TransitFileWriter;
   /** Optional cancellation signal propagated from the HTTP request or runner. */
   signal?: AbortSignal;
+  /** Host logger for provider diagnostics, absent when the host supplies none. */
+  logger?: RuntimeLogger;
 }
 
 /**

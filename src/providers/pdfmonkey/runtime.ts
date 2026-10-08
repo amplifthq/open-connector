@@ -1,6 +1,6 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { PdfmonkeyActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -14,7 +14,7 @@ import {
 } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
-const pdfmonkeyApiBaseUrl = "https://api.pdfmonkey.io";
+export const pdfmonkeyApiBaseUrl = "https://api.pdfmonkey.io";
 const currentUserPath = "/api/v1/current_user";
 const documentsPath = "/api/v1/documents";
 const documentCardsPath = "/api/v1/document_cards";
@@ -101,7 +101,7 @@ type PdfmonkeyDocumentTemplate = PdfmonkeyDocumentTemplateCard & {
   checksum: string | null;
 };
 
-export const pdfmonkeyActionHandlers: Record<PdfmonkeyActionName, PdfmonkeyActionHandler> = {
+export const pdfmonkeyActionHandlers: ProviderActionHandlers<"pdfmonkey", PdfmonkeyActionHandler> = {
   async get_current_user(_input, context) {
     const payload = await requestPdfmonkey({
       path: currentUserPath,

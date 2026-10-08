@@ -5,11 +5,12 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { LeexiActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import {
   compactObject,
+  looseArray,
   optionalBoolean,
   optionalBooleanOrNull,
   optionalInteger,
@@ -30,6 +31,7 @@ import {
   readProviderProxyErrorMessage,
   readProviderProxyResponse,
   requireApiKeyCredential,
+  requiredResponseRecord,
   toProviderProxyError,
 } from "../provider-runtime.ts";
 
@@ -37,7 +39,6 @@ const service = "leexi";
 const leexiApiBaseUrl = "https://public-api.leexi.ai/v1";
 const leexiRequestBaseUrl = "https://public-api.leexi.ai/v1/";
 const leexiValidationPath = "/users";
-const leexiDefaultTimeoutMs = 30_000;
 const leexiFetch = createProviderFetch({ skipDnsValidation: true });
 
 type LeexiRequestPhase = "validate" | "execute";
@@ -50,7 +51,7 @@ interface LeexiActionContext {
   signal?: AbortSignal;
 }
 
-export const leexiActionHandlers: Record<LeexiActionName, LeexiActionHandler> = {
+export const leexiActionHandlers: ProviderActionHandlers<"leexi", LeexiActionHandler> = {
   list_users(input, context) {
     return executeListUsers(input, context);
   },
@@ -142,7 +143,7 @@ async function validateLeexiCredential(context: LeexiActionContext): Promise<Cre
     context,
   });
 
-  const record = requireRecord(payload, "Leexi users response");
+  const record = requiredResponseRecord(payload, "Leexi users response");
   const users = requireArray(record.data, "Leexi users response data");
   const firstUser = optionalRecord(users[0]);
   const firstUserUuid = optionalString(firstUser?.uuid) ?? "leexi";
@@ -171,7 +172,7 @@ async function executeListUsers(input: Record<string, unknown>, context: LeexiAc
     path: "/users",
     query: buildPaginationQuery(input),
   });
-  const record = requireRecord(payload, "Leexi users response");
+  const record = requiredResponseRecord(payload, "Leexi users response");
   return {
     users: requireArray(record.data, "Leexi users response data").map((value) => normalizeUser(value)),
     pagination: normalizePagination(record.pagination),
@@ -184,7 +185,7 @@ async function executeListTeams(input: Record<string, unknown>, context: LeexiAc
     path: "/teams",
     query: buildPaginationQuery(input),
   });
-  const record = requireRecord(payload, "Leexi teams response");
+  const record = requiredResponseRecord(payload, "Leexi teams response");
   return {
     teams: requireArray(record.data, "Leexi teams response data").map((value) => normalizeTeam(value)),
     pagination: normalizePagination(record.pagination),
@@ -212,7 +213,7 @@ async function executeListCalls(input: Record<string, unknown>, context: LeexiAc
       ["customer_email_address", readStringArray(input.customerEmailAddresses)],
     ],
   });
-  const record = requireRecord(payload, "Leexi calls response");
+  const record = requiredResponseRecord(payload, "Leexi calls response");
   return {
     calls: requireArray(record.data, "Leexi calls response data").map((value) => normalizeCall(value)),
     pagination: normalizePagination(record.pagination),
@@ -225,7 +226,7 @@ async function executeGetCall(input: Record<string, unknown>, context: LeexiActi
     context,
     path: `/calls/${encodeURIComponent(uuid)}`,
   });
-  const record = requireRecord(payload, "Leexi call response");
+  const record = requiredResponseRecord(payload, "Leexi call response");
   return {
     call: normalizeCall(record.data),
   };
@@ -238,10 +239,10 @@ async function executeListCallNotes(input: Record<string, unknown>, context: Lee
     query: compactObject({
       ...buildPaginationQuery(input),
       call_uuid: requireUuidString(input.callUuid, "callUuid"),
-      prompt_uuid: optionalUuidString(input.promptUuid),
+      prompt_uuid: optionalString(input.promptUuid),
     }),
   });
-  const record = requireRecord(payload, "Leexi call notes response");
+  const record = requiredResponseRecord(payload, "Leexi call notes response");
   return {
     callNotes: requireArray(record.data, "Leexi call notes response data").map((value) => normalizeCallNote(value)),
     pagination: normalizePagination(record.pagination),
@@ -254,7 +255,7 @@ async function executeGetCallNote(input: Record<string, unknown>, context: Leexi
     context,
     path: `/call_notes/${encodeURIComponent(uuid)}`,
   });
-  const record = requireRecord(payload, "Leexi call note response");
+  const record = requiredResponseRecord(payload, "Leexi call note response");
   return {
     callNote: normalizeCallNote(record.data),
   };
@@ -296,7 +297,7 @@ async function requestLeexiJson(input: {
     }
   }
 
-  const timeout = createProviderTimeout(input.context.signal, leexiDefaultTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   let response: Response;
   try {
     response = await input.context.fetcher(url, {
@@ -336,7 +337,7 @@ function buildPaginationQuery(input: Record<string, unknown>): Record<string, st
 }
 
 function normalizePagination(value: unknown): Record<string, unknown> {
-  const record = requireRecord(value, "Leexi pagination");
+  const record = requiredResponseRecord(value, "Leexi pagination");
   return {
     page: readRequiredInteger(record.page, "pagination.page"),
     items: readRequiredInteger(record.items, "pagination.items"),
@@ -345,7 +346,7 @@ function normalizePagination(value: unknown): Record<string, unknown> {
 }
 
 function normalizeTeam(value: unknown): Record<string, unknown> {
-  const record = requireRecord(value, "Leexi team");
+  const record = requiredResponseRecord(value, "Leexi team");
   return {
     uuid: readRequiredString(record.uuid, "team.uuid"),
     name: readRequiredString(record.name, "team.name"),
@@ -357,7 +358,7 @@ function normalizeTeam(value: unknown): Record<string, unknown> {
 }
 
 function normalizeUser(value: unknown): Record<string, unknown> {
-  const record = requireRecord(value, "Leexi user");
+  const record = requiredResponseRecord(value, "Leexi user");
   return {
     uuid: readRequiredString(record.uuid, "user.uuid"),
     name: readRequiredString(record.name, "user.name"),
@@ -372,7 +373,7 @@ function normalizeUser(value: unknown): Record<string, unknown> {
 }
 
 function normalizeOwner(value: unknown): Record<string, unknown> {
-  const record = requireRecord(value, "Leexi owner");
+  const record = requiredResponseRecord(value, "Leexi owner");
   return {
     uuid: readRequiredString(record.uuid, "owner.uuid"),
     name: optionalStringOrNull(record.name),
@@ -382,7 +383,7 @@ function normalizeOwner(value: unknown): Record<string, unknown> {
 }
 
 function normalizeConversationType(value: unknown): Record<string, unknown> {
-  const record = requireRecord(value, "Leexi conversation type");
+  const record = requiredResponseRecord(value, "Leexi conversation type");
   return {
     uuid: optionalStringOrNull(record.uuid),
     slug: optionalStringOrNull(record.slug),
@@ -392,7 +393,7 @@ function normalizeConversationType(value: unknown): Record<string, unknown> {
 }
 
 function normalizeCall(value: unknown): Record<string, unknown> {
-  const record = requireRecord(value, "Leexi call");
+  const record = requiredResponseRecord(value, "Leexi call");
   return {
     uuid: readRequiredString(record.uuid, "call.uuid"),
     title: optionalStringOrNull(record.title),
@@ -413,7 +414,7 @@ function normalizeCall(value: unknown): Record<string, unknown> {
     simpleTranscript:
       optionalStringOrNull(record.simple_transcript) ?? optionalStringOrNull(record["simple_transcript:"]),
     owner: record.owner == null ? null : normalizeOwner(record.owner),
-    participatingUsers: readArray(record.participating_users).map((item) => normalizeOwner(item)),
+    participatingUsers: looseArray(record.participating_users).map((item) => normalizeOwner(item)),
     customerPhoneNumbers: readResponseStringArray(record.customer_phone_numbers),
     customerEmailAddresses: readResponseStringArray(record.customer_email_addresses),
     conversationType: record.conversation_type == null ? null : normalizeConversationType(record.conversation_type),
@@ -422,7 +423,7 @@ function normalizeCall(value: unknown): Record<string, unknown> {
 }
 
 function normalizeCallNotePrompt(value: unknown): Record<string, unknown> {
-  const record = requireRecord(value, "Leexi call note prompt");
+  const record = requiredResponseRecord(value, "Leexi call note prompt");
   return {
     uuid: readRequiredString(record.uuid, "prompt.uuid"),
     title: optionalStringOrNull(record.title),
@@ -432,7 +433,7 @@ function normalizeCallNotePrompt(value: unknown): Record<string, unknown> {
 }
 
 function normalizeCallNoteTranslation(value: unknown): Record<string, unknown> {
-  const record = requireRecord(value, "Leexi call note translation");
+  const record = requiredResponseRecord(value, "Leexi call note translation");
   return {
     uuid: readRequiredString(record.uuid, "translation.uuid"),
     locale: optionalStringOrNull(record.locale),
@@ -444,14 +445,14 @@ function normalizeCallNoteTranslation(value: unknown): Record<string, unknown> {
 }
 
 function normalizeCallNote(value: unknown): Record<string, unknown> {
-  const record = requireRecord(value, "Leexi call note");
+  const record = requiredResponseRecord(value, "Leexi call note");
   return {
     uuid: readRequiredString(record.uuid, "call_note.uuid"),
     createdAt: readRequiredString(record.created_at, "call_note.created_at"),
     updatedAt: readRequiredString(record.updated_at, "call_note.updated_at"),
     call: normalizeCall(record.call),
     prompt: record.prompt == null ? null : normalizeCallNotePrompt(record.prompt),
-    translations: readArray(record.translations).map((item) => normalizeCallNoteTranslation(item)),
+    translations: looseArray(record.translations).map((item) => normalizeCallNoteTranslation(item)),
     raw: record,
   };
 }
@@ -518,10 +519,6 @@ function requireUuidString(value: unknown, fieldName: string): string {
   return trimmed;
 }
 
-function optionalUuidString(value: unknown): string | undefined {
-  return optionalString(value);
-}
-
 function readStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
@@ -539,23 +536,11 @@ function readResponseStringArray(value: unknown): string[] {
   return value.map((item) => optionalString(item)).filter((item): item is string => Boolean(item));
 }
 
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
 function requireArray(value: unknown, label: string): unknown[] {
   if (!Array.isArray(value)) {
     throw new ProviderRequestError(502, `${label} must be an array`);
   }
   return value;
-}
-
-function requireRecord(value: unknown, label: string): Record<string, unknown> {
-  const record = optionalRecord(value);
-  if (!record) {
-    throw new ProviderRequestError(502, `${label} must be an object`);
-  }
-  return record;
 }
 
 function readRequiredString(value: unknown, fieldName: string): string {

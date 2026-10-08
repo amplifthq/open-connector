@@ -83,16 +83,10 @@ const websiteSchema = s.object(
   { optional: ["name", "domain", "logo", "verified", "institutional"] },
 );
 
-export type CrispActionName =
-  | "get_website"
-  | "list_conversations"
-  | "get_conversation"
-  | "list_conversation_messages"
-  | "send_text_message";
-
 export const crispActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_website",
+    operationType: "read",
     description: "Retrieve the Crisp website connected to the configured token.",
     requiredScopes: [],
     inputSchema: s.object("Input parameters for retrieving the Crisp website connected to this credential.", {}),
@@ -102,6 +96,7 @@ export const crispActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_conversations",
+    operationType: "read",
     description: "List conversations for the connected Crisp website.",
     requiredScopes: [],
     providerPermissions: ["website:conversation:sessions"],
@@ -138,6 +133,7 @@ export const crispActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_conversation",
+    operationType: "read",
     description: "Retrieve one Crisp conversation by session ID.",
     requiredScopes: [],
     providerPermissions: ["website:conversation:sessions"],
@@ -150,6 +146,7 @@ export const crispActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_conversation_messages",
+    operationType: "read",
     description: "List messages in a Crisp conversation.",
     requiredScopes: [],
     providerPermissions: ["website:conversation:messages"],
@@ -169,6 +166,7 @@ export const crispActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "send_text_message",
+    operationType: "write",
     description: "Send an operator text message to a Crisp conversation.",
     requiredScopes: [],
     providerPermissions: ["website:conversation:messages"],

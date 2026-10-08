@@ -1,7 +1,6 @@
 import type { ConnectionService } from "../../connection-service.ts";
 import type { ActionPolicySnapshot } from "../../core/action-policy.ts";
-import type { RuntimeConfigReader } from "../../core/types.ts";
-import type { Logger } from "../logger.ts";
+import type { RuntimeConfigReader, RuntimeLogger } from "../../core/types.ts";
 import type { LocalAuthOptions } from "./auth.ts";
 import type { Context } from "hono";
 
@@ -16,7 +15,7 @@ export interface GitUploadPackDependencies {
   auth: LocalAuthOptions;
   connections: ConnectionService;
   getPolicy: () => Promise<ActionPolicySnapshot>;
-  logger?: Logger;
+  logger?: RuntimeLogger;
   fetcher?: typeof fetch;
   runtimeConfig?: RuntimeConfigReader;
   /** The git-connections route accepts a Core-authorized connection. */

@@ -93,30 +93,24 @@ const conversationIdInputSchema = s.object("Input for retrieving a Dixa conversa
 
 const looseDixaDataSchema = s.looseObject("A Dixa response object.");
 
-export type DixaActionName =
-  | "list_agents"
-  | "get_agent"
-  | "list_presence"
-  | "list_end_users"
-  | "get_end_user"
-  | "get_conversation"
-  | "list_conversation_messages";
-
 export const dixaActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_agents",
+    operationType: "read",
     description: "List Dixa agents and admins with optional email or phone filtering.",
     inputSchema: userListFilterInputSchema,
     outputSchema: listUsersOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_agent",
+    operationType: "read",
     description: "Get one Dixa agent or admin by ID.",
     inputSchema: userIdInputSchema,
     outputSchema: singleUserOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_presence",
+    operationType: "read",
     description: "List presence status for Dixa agents and admins.",
     inputSchema: s.object("This action does not require input.", {}),
     outputSchema: s.object("Dixa presence status records.", {
@@ -126,18 +120,21 @@ export const dixaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_end_users",
+    operationType: "read",
     description: "List Dixa end users with optional email, phone, or external ID filtering.",
     inputSchema: endUserListFilterInputSchema,
     outputSchema: listUsersOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_end_user",
+    operationType: "read",
     description: "Get one Dixa end user by ID.",
     inputSchema: userIdInputSchema,
     outputSchema: singleUserOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_conversation",
+    operationType: "read",
     description: "Get one Dixa conversation by ID.",
     inputSchema: conversationIdInputSchema,
     outputSchema: s.object("A Dixa conversation response.", {
@@ -147,6 +144,7 @@ export const dixaActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_conversation_messages",
+    operationType: "read",
     description: "List all messages for a Dixa conversation from oldest to newest.",
     inputSchema: conversationIdInputSchema,
     outputSchema: s.object("Dixa conversation messages.", {

@@ -1,9 +1,14 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { YelpActionName } from "./actions.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerUserAgent,
+  ProviderRequestError,
+} from "../provider-runtime.ts";
 
 const service = "yelp";
 const yelpApiBaseUrl = "https://api.yelp.com";
@@ -12,7 +17,7 @@ const yelpValidationPath = "/v3/businesses/search";
 type YelpQueryValue = string | number | boolean | undefined;
 type YelpActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
-export const yelpActionHandlers: Record<YelpActionName, YelpActionHandler> = {
+export const yelpActionHandlers: ProviderActionHandlers<"yelp", YelpActionHandler> = {
   async search_businesses(input, context) {
     validateSearchInput(input);
     const payload = await requestYelpJson({
@@ -75,6 +80,18 @@ export const yelpActionHandlers: Record<YelpActionName, YelpActionHandler> = {
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, yelpActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: yelpApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) {
+      headers.set("accept", "application/json");
+    }
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {

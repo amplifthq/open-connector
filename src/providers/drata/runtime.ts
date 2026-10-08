@@ -1,7 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { DrataActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject } from "../../core/cast.ts";
+import { booleanString, compactObject } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 export const drataRegionBaseUrls = {
@@ -33,7 +33,7 @@ type DrataRequestOptions = {
   signal?: AbortSignal;
 };
 
-export const drataActionHandlers: Record<DrataActionName, DrataActionHandler> = {
+export const drataActionHandlers: ProviderActionHandlers<"drata", DrataActionHandler> = {
   get_company(_input, context) {
     return getCompany(context);
   },
@@ -57,15 +57,15 @@ export const drataActionHandlers: Record<DrataActionName, DrataActionHandler> = 
   list_controls(input, context) {
     const workspaceId = requireInteger(input.workspaceId, "workspaceId");
     return listRecords(`/workspaces/${workspaceId}/controls`, input, context, {
-      isMonitored: asOptionalBooleanString(input.isMonitored),
-      isReady: asOptionalBooleanString(input.isReady),
-      hasEvidence: asOptionalBooleanString(input.hasEvidence),
-      hasPolicy: asOptionalBooleanString(input.hasPolicy),
-      hasPassingTest: asOptionalBooleanString(input.hasPassingTest),
+      isMonitored: booleanString(input.isMonitored),
+      isReady: booleanString(input.isReady),
+      hasEvidence: booleanString(input.hasEvidence),
+      hasPolicy: booleanString(input.hasPolicy),
+      hasPassingTest: booleanString(input.hasPassingTest),
       ticketStatus: asOptionalString(input.ticketStatus),
       policyId: asOptionalIntegerString(input.policyId),
-      isEnabled: asOptionalBooleanString(input.isEnabled),
-      isArchived: asOptionalBooleanString(input.isArchived),
+      isEnabled: booleanString(input.isEnabled),
+      isArchived: booleanString(input.isArchived),
     });
   },
   get_control(input, context) {
@@ -248,7 +248,7 @@ function mapDrataError(response: Response, payload: unknown, mode: "validate" | 
     readNonEmptyString(payload, "error") ??
     `Drata API request failed with status ${response.status}`;
   if (response.status === 401 || response.status === 403) {
-    return new ProviderRequestError(mode === "validate" ? 400 : 409, message);
+    return new ProviderRequestError(mode === "validate" ? 400 : 401, message);
   }
 
   if (response.status === 400 || response.status === 404 || response.status === 412) {
@@ -277,7 +277,7 @@ function commonListQuery(input: Record<string, unknown>) {
     size: asOptionalIntegerString(input.size),
     sort: asOptionalString(input.sort),
     sortDir: asOptionalString(input.sortDir),
-    includeTotalCount: asOptionalBooleanString(input.includeTotalCount),
+    includeTotalCount: booleanString(input.includeTotalCount),
     "expand[]": asOptionalStringArray(input.expand),
   });
 }
@@ -351,10 +351,6 @@ function asOptionalStringArray(value: unknown) {
 
   const values = value.map((item) => (typeof item === "string" ? item.trim() : "")).filter((item) => item !== "");
   return values.length > 0 ? values : undefined;
-}
-
-function asOptionalBooleanString(value: unknown) {
-  return typeof value === "boolean" ? String(value) : undefined;
 }
 
 function asOptionalIntegerString(value: unknown) {

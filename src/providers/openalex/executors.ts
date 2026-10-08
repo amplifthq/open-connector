@@ -1,26 +1,25 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { OpenAlexActionName } from "./actions.ts";
 
-import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import { compactObject, optionalInteger, optionalRecord, optionalString, rawStringOrNull } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
   defineApiKeyProviderExecutors,
-  isAbortLikeError,
+  defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
+  runProviderRequest,
   setSearchParams,
 } from "../provider-runtime.ts";
 import { openalexApiBaseUrl, openalexEntityValues } from "./constants.ts";
 
 const service = "openalex";
-const openalexDefaultRequestTimeoutMs = 30_000;
 const openalexEntities = new Set(openalexEntityValues);
 
 type OpenAlexPhase = "validate" | "execute";
 type OpenAlexActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const openalexActionHandlers: Record<OpenAlexActionName, OpenAlexActionHandler> = {
+export const openalexActionHandlers: ProviderActionHandlers<"openalex", OpenAlexActionHandler> = {
   async list_entities(input, context) {
     const entity = readEntity(input.entity);
     const payload = await requestOpenAlexJson({
@@ -111,6 +110,16 @@ export const openalexActionHandlers: Record<OpenAlexActionName, OpenAlexActionHa
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, openalexActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: openalexApiBaseUrl,
+  auth: { type: "api_key_query", name: "api_key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestOpenAlexJson({
@@ -149,16 +158,14 @@ async function requestOpenAlexJson(input: {
   context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
   phase: OpenAlexPhase;
 }): Promise<Record<string, unknown>> {
-  const timeoutHandle = createProviderTimeout(input.context.signal, openalexDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "OpenAlex" }, async (signal) => {
     const response = await input.context.fetcher(buildOpenAlexUrl(input.path, input.apiKey, input.params), {
       method: "GET",
       headers: {
         accept: "application/json",
         "user-agent": providerUserAgent,
       },
-      signal: timeoutHandle.signal,
+      signal,
     });
     const payload = await readOpenAlexPayload(response);
 
@@ -167,22 +174,7 @@ async function requestOpenAlexJson(input: {
     }
 
     return requireRecord(payload, "OpenAlex returned an invalid payload");
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-
-    if (timeoutHandle.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "OpenAlex request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `OpenAlex request failed: ${error.message}` : "OpenAlex request failed",
-    );
-  } finally {
-    timeoutHandle.cleanup();
-  }
+  });
 }
 
 function buildOpenAlexUrl(path: string, apiKey: string, params: Record<string, string | undefined>): URL {
@@ -284,7 +276,7 @@ function normalizeMeta(value: unknown): Record<string, unknown> {
     dbResponseTimeMs: readNullableInteger(meta.db_response_time_ms),
     page: readNullableInteger(meta.page),
     perPage: readNullableInteger(meta.per_page),
-    nextCursor: readNullableString(meta.next_cursor),
+    nextCursor: rawStringOrNull(meta.next_cursor),
     groupsCount: readNullableInteger(meta.groups_count),
     raw: meta,
   };
@@ -292,25 +284,25 @@ function normalizeMeta(value: unknown): Record<string, unknown> {
 
 function normalizeEntitySummary(raw: Record<string, unknown>): Record<string, unknown> {
   return {
-    id: readNullableString(raw.id),
+    id: rawStringOrNull(raw.id),
     openalexId: extractOpenAlexShortId(raw.id),
-    displayName: readNullableString(raw.display_name) ?? readNullableString(raw.title),
+    displayName: rawStringOrNull(raw.display_name) ?? rawStringOrNull(raw.title),
     worksCount: readNullableInteger(raw.works_count),
     citedByCount: readNullableInteger(raw.cited_by_count),
-    homepageUrl: readNullableString(raw.homepage_url),
+    homepageUrl: rawStringOrNull(raw.homepage_url),
     raw,
   };
 }
 
 function normalizeWorkSummary(raw: Record<string, unknown>): Record<string, unknown> {
   return {
-    id: readNullableString(raw.id),
+    id: rawStringOrNull(raw.id),
     openalexId: extractOpenAlexShortId(raw.id),
-    doi: readNullableString(raw.doi),
-    title: readNullableString(raw.title) ?? readNullableString(raw.display_name),
+    doi: rawStringOrNull(raw.doi),
+    title: rawStringOrNull(raw.title) ?? rawStringOrNull(raw.display_name),
     publicationYear: readNullableInteger(raw.publication_year),
-    publicationDate: readNullableString(raw.publication_date),
-    type: readNullableString(raw.type),
+    publicationDate: rawStringOrNull(raw.publication_date),
+    type: rawStringOrNull(raw.type),
     citedByCount: readNullableInteger(raw.cited_by_count),
     openAccessUrl: readNestedNullableString(raw.open_access, "oa_url"),
     primaryLocationUrl: readNestedNullableString(raw.primary_location, "landing_page_url"),
@@ -320,8 +312,8 @@ function normalizeWorkSummary(raw: Record<string, unknown>): Record<string, unkn
 
 function normalizeGroup(raw: Record<string, unknown>): Record<string, unknown> {
   return {
-    key: readNullableString(raw.key),
-    keyDisplayName: readNullableString(raw.key_display_name),
+    key: rawStringOrNull(raw.key),
+    keyDisplayName: rawStringOrNull(raw.key_display_name),
     count: readNullableInteger(raw.count),
     raw,
   };
@@ -329,14 +321,14 @@ function normalizeGroup(raw: Record<string, unknown>): Record<string, unknown> {
 
 function normalizeAutocompleteItem(raw: Record<string, unknown>): Record<string, unknown> {
   return {
-    id: readNullableString(raw.id),
+    id: rawStringOrNull(raw.id),
     openalexId: extractOpenAlexShortId(raw.id),
-    displayName: readNullableString(raw.display_name),
-    hint: readNullableString(raw.hint),
-    entityType: readNullableString(raw.entity_type),
+    displayName: rawStringOrNull(raw.display_name),
+    hint: rawStringOrNull(raw.hint),
+    entityType: rawStringOrNull(raw.entity_type),
     citedByCount: readNullableInteger(raw.cited_by_count),
     worksCount: readNullableInteger(raw.works_count),
-    externalId: readNullableString(raw.external_id),
+    externalId: rawStringOrNull(raw.external_id),
     raw,
   };
 }
@@ -376,10 +368,6 @@ function readRequiredString(value: unknown, fieldName: string): string {
   return parsed;
 }
 
-function readNullableString(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
-
 function readOptionalIntegerString(value: unknown): string | undefined {
   const parsed = optionalInteger(value);
   return parsed === undefined ? undefined : String(parsed);
@@ -404,7 +392,7 @@ function readStringArrayParam(value: unknown): string | undefined {
 
 function readNestedNullableString(value: unknown, key: string): string | null {
   const record = optionalRecord(value);
-  return record ? readNullableString(record[key]) : null;
+  return record ? rawStringOrNull(record[key]) : null;
 }
 
 function normalizeOpenAlexId(value: string): string {
@@ -428,7 +416,7 @@ function trimUrlSuffix(value: string): string {
 }
 
 function extractOpenAlexShortId(value: unknown): string | null {
-  const id = readNullableString(value);
+  const id = rawStringOrNull(value);
   if (!id) {
     return null;
   }

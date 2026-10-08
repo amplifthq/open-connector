@@ -1,17 +1,24 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ContentstackContentDeliveryActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
-  isAbortLikeError,
+  compactObject,
+  looseArray,
+  optionalInteger,
+  optionalRecord,
+  optionalString,
+  requiredString,
+} from "../../core/cast.ts";
+import {
+  providerInputError,
   ProviderRequestError,
   providerUserAgent,
+  requiredInputString,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 const contentstackContentDeliveryApiBaseUrl = "https://cdn.contentstack.io/v3";
 const contentstackContentDeliveryRequestBaseUrl = `${contentstackContentDeliveryApiBaseUrl}/`;
-const contentstackContentDeliveryDefaultTimeoutMs = 30_000;
 
 type ContentstackPhase = "validate" | "execute";
 
@@ -28,8 +35,8 @@ type ContentstackActionHandler = (
   context: ContentstackContentDeliveryContext,
 ) => Promise<unknown>;
 
-export const contentstackContentDeliveryActionHandlers: Record<
-  ContentstackContentDeliveryActionName,
+export const contentstackContentDeliveryActionHandlers: ProviderActionHandlers<
+  "contentstack_content_delivery",
   ContentstackActionHandler
 > = {
   list_content_types(input, context) {
@@ -71,7 +78,7 @@ export async function validateContentstackContentDeliveryCredential(
     signal,
   });
   const record = requireRecord(payload, "Contentstack content types response");
-  const firstContentType = optionalRecord(readArray(record.content_types)[0]);
+  const firstContentType = optionalRecord(looseArray(record.content_types)[0]);
 
   return {
     profile: {
@@ -113,7 +120,7 @@ async function executeListContentTypes(
   });
   const record = requireRecord(payload, "Contentstack content types response");
   return {
-    contentTypes: readArray(record.content_types).map((value) => requireRecord(value, "Contentstack content type")),
+    contentTypes: looseArray(record.content_types).map((value) => requireRecord(value, "Contentstack content type")),
     count: optionalInteger(record.count) ?? null,
     raw: record,
   };
@@ -123,7 +130,7 @@ async function executeGetContentType(
   input: Record<string, unknown>,
   context: ContentstackContentDeliveryContext,
 ): Promise<Record<string, unknown>> {
-  const contentTypeUid = requireProviderString(input.contentTypeUid, "contentTypeUid");
+  const contentTypeUid = requiredInputString(input.contentTypeUid, "contentTypeUid");
   const payload = await requestContentstackJsonForAction({
     input,
     context,
@@ -144,7 +151,7 @@ async function executeListEntries(
   input: Record<string, unknown>,
   context: ContentstackContentDeliveryContext,
 ): Promise<Record<string, unknown>> {
-  const contentTypeUid = requireProviderString(input.contentTypeUid, "contentTypeUid");
+  const contentTypeUid = requiredInputString(input.contentTypeUid, "contentTypeUid");
   const payload = await requestContentstackJsonForAction({
     input,
     context,
@@ -170,7 +177,7 @@ async function executeListEntries(
   });
   const record = requireRecord(payload, "Contentstack entries response");
   return {
-    entries: readArray(record.entries).map((value) => requireRecord(value, "Contentstack entry")),
+    entries: looseArray(record.entries).map((value) => requireRecord(value, "Contentstack entry")),
     count: optionalInteger(record.count) ?? null,
     raw: record,
   };
@@ -180,8 +187,8 @@ async function executeGetEntry(
   input: Record<string, unknown>,
   context: ContentstackContentDeliveryContext,
 ): Promise<Record<string, unknown>> {
-  const contentTypeUid = requireProviderString(input.contentTypeUid, "contentTypeUid");
-  const entryUid = requireProviderString(input.entryUid, "entryUid");
+  const contentTypeUid = requiredInputString(input.contentTypeUid, "contentTypeUid");
+  const entryUid = requiredInputString(input.entryUid, "entryUid");
   const payload = await requestContentstackJsonForAction({
     input,
     context,
@@ -232,7 +239,7 @@ async function executeListAssets(
   });
   const record = requireRecord(payload, "Contentstack assets response");
   return {
-    assets: readArray(record.assets).map((value) => requireRecord(value, "Contentstack asset")),
+    assets: looseArray(record.assets).map((value) => requireRecord(value, "Contentstack asset")),
     count: optionalInteger(record.count) ?? null,
     raw: record,
   };
@@ -269,34 +276,18 @@ async function requestContentstackJson(input: {
   fetcher: typeof fetch;
   signal?: AbortSignal;
 }): Promise<Record<string, unknown>> {
-  const timeout = createProviderTimeout(input.signal, contentstackContentDeliveryDefaultTimeoutMs);
-  try {
+  return runProviderRequest({ signal: input.signal, label: "Contentstack Content Delivery" }, async (signal) => {
     const response = await input.fetcher(buildContentstackUrl(input.path, input.query, input.arrayQuery), {
       method: "GET",
       headers: buildContentstackHeaders(input.stackApiKey, input.deliveryToken, input.branch),
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readContentstackPayload(response);
     if (!response.ok) {
       throw createContentstackError(response.status, payload, input.phase);
     }
     return requireRecord(payload, "Contentstack response");
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Contentstack Content Delivery request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error
-        ? `Contentstack Content Delivery request failed: ${error.message}`
-        : "Contentstack Content Delivery request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildContentstackUrl(
@@ -415,10 +406,6 @@ function requireStoredDeliveryToken(input: ContentstackContentDeliveryContext): 
   throw new ProviderRequestError(400, "Contentstack Content Delivery credential is missing deliveryToken");
 }
 
-function requireProviderString(value: unknown, field: string): string {
-  return requiredString(value, field, providerInputError);
-}
-
 function requireRecord(value: unknown, label: string): Record<string, unknown> {
   const record = optionalRecord(value);
   if (!record) {
@@ -427,18 +414,10 @@ function requireRecord(value: unknown, label: string): Record<string, unknown> {
   return record;
 }
 
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
 function readStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
   }
   const values = value.map((item) => optionalString(item)).filter((item): item is string => Boolean(item));
   return values.length > 0 ? values : undefined;
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
 }

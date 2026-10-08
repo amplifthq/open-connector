@@ -66,21 +66,17 @@ const certificateInputSchema = s.object("Input for retrieving one EPC certificat
   certificateNumber: certificateNumberSchema,
 });
 
-export type EnergyPerformanceCertificatesActionName =
-  | "search_domestic_certificates"
-  | "get_certificate"
-  | "search_non_domestic_certificates"
-  | "search_display_certificates";
-
 export const energyPerformanceCertificatesActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "search_domestic_certificates",
+    operationType: "read",
     description: "Search domestic Energy Performance Certificates with supported query filters.",
     inputSchema: searchInputSchema,
     outputSchema: searchOutputSchema,
   }),
   defineProviderAction(service, {
     name: "get_certificate",
+    operationType: "read",
     description:
       "Get full details for one Energy Performance Certificate or Display Energy Certificate by certificate number.",
     inputSchema: certificateInputSchema,
@@ -88,12 +84,14 @@ export const energyPerformanceCertificatesActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_non_domestic_certificates",
+    operationType: "read",
     description: "Search non-domestic Energy Performance Certificates with supported query filters.",
     inputSchema: searchInputSchema,
     outputSchema: searchOutputSchema,
   }),
   defineProviderAction(service, {
     name: "search_display_certificates",
+    operationType: "read",
     description: "Search display Energy Performance Certificates for public buildings with supported query filters.",
     inputSchema: searchInputSchema,
     outputSchema: searchOutputSchema,

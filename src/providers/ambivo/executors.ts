@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { optionalRecord } from "../../core/cast.ts";
@@ -15,7 +16,6 @@ import {
 const service = "ambivo";
 const ambivoApiBaseUrl = "https://fapi.ambivo.com";
 const ambivoValidationPath = "/crm/leads";
-const ambivoRequestTimeoutMs = 30_000;
 const ambivoMaxResponseBytes = 10 * 1024 * 1024;
 
 interface AmbivoRequestOptions {
@@ -31,7 +31,7 @@ interface AmbivoRequestOptions {
 
 type AmbivoActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const ambivoActionHandlers: Record<string, AmbivoActionHandler> = {
+export const ambivoActionHandlers: ProviderActionHandlers<"ambivo", AmbivoActionHandler> = {
   list_leads(input, context) {
     return listPaginatedRecords(input, context, {
       path: "/crm/leads",
@@ -243,7 +243,7 @@ async function requestAmbivoJson(options: AmbivoRequestOptions) {
     headers["content-type"] = "application/json";
   }
 
-  const timeout = createProviderTimeout(options.signal, ambivoRequestTimeoutMs);
+  const timeout = createProviderTimeout(options.signal);
   try {
     const response = await options.fetcher(url, {
       method: options.method ?? "GET",

@@ -1,23 +1,17 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
-import type { BidsketchActionName } from "./actions.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  createProviderTimeout,
-  isAbortLikeError,
-  ProviderRequestError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
 
 export const bidsketchApiBaseUrl: string = "https://bidsketch.com/api/v1";
-const bidsketchRequestTimeoutMs = 30_000;
 const bidsketchValidationPath = "/proposals/stats.json";
 
 type BidsketchPhase = "validate" | "execute";
 type BidsketchActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
-export const bidsketchActionHandlers: Record<BidsketchActionName, BidsketchActionHandler> = {
+export const bidsketchActionHandlers: ProviderActionHandlers<"bidsketch", BidsketchActionHandler> = {
   async list_clients(input, context) {
     const payload = await requestBidsketchJson({
       path: "/clients.json",
@@ -131,13 +125,11 @@ async function requestBidsketchJson(input: {
   phase: BidsketchPhase;
   query?: Record<string, number | undefined>;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, bidsketchRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "BidSketch" }, async (signal) => {
     const response = await input.context.fetcher(buildBidsketchUrl(input.path, input.query), {
       method: "GET",
       headers: buildBidsketchHeaders(input.context.apiKey),
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readBidsketchJson(response);
 
@@ -146,22 +138,7 @@ async function requestBidsketchJson(input: {
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-
-    if (timeout.didTimeout() || isAbortLikeError(error) || isTimeoutLikeError(error)) {
-      throw new ProviderRequestError(504, "BidSketch request timed out");
-    }
-
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `BidSketch request failed: ${error.message}` : "BidSketch request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildPaginationQuery(input: Record<string, unknown>): Record<string, number | undefined> {
@@ -303,8 +280,4 @@ function readRequiredPositiveInteger(value: unknown, fieldName: string): number 
     throw new ProviderRequestError(400, `${fieldName} is required`);
   }
   return parsed;
-}
-
-function isTimeoutLikeError(error: unknown): boolean {
-  return error instanceof Error && error.name === "TimeoutError";
 }

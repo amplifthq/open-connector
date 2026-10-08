@@ -1,21 +1,26 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { CodegenActionName } from "./actions.ts";
 
-import { optionalInteger, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
+import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
-  createProviderTimeout,
   defineProviderExecutors,
-  isAbortLikeError,
+  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
   requireApiKeyCredential,
+  requiredResponseRecord,
+  runProviderRequest,
 } from "../provider-runtime.ts";
 
 const service = "codegen";
 const codegenApiBaseUrl = "https://api.codegen.com";
 const codegenValidationPath = "/v1/users/me";
-const codegenDefaultRequestTimeoutMs = 30_000;
 
 type CodegenPhase = "validate" | "execute";
 type CodegenActionContext = ApiKeyProviderContext & {
@@ -24,7 +29,7 @@ type CodegenActionContext = ApiKeyProviderContext & {
 };
 type CodegenActionHandler = (input: Record<string, unknown>, context: CodegenActionContext) => Promise<unknown>;
 
-export const codegenActionHandlers: Record<CodegenActionName, CodegenActionHandler> = {
+export const codegenActionHandlers: ProviderActionHandlers<"codegen", CodegenActionHandler> = {
   async get_current_user(_input, context) {
     const user = await requestCodegenJson({
       apiKey: context.apiKey,
@@ -34,7 +39,7 @@ export const codegenActionHandlers: Record<CodegenActionName, CodegenActionHandl
       context,
     });
     return {
-      user: requireProviderObject(user, "Codegen current user response"),
+      user: requiredResponseRecord(user, "Codegen current user response"),
     };
   },
   async list_organizations(input, context) {
@@ -96,7 +101,7 @@ export const codegenActionHandlers: Record<CodegenActionName, CodegenActionHandl
       context,
     });
     return {
-      agent_run: requireProviderObject(payload, "Codegen agent run response"),
+      agent_run: requiredResponseRecord(payload, "Codegen agent run response"),
     };
   },
 };
@@ -122,6 +127,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<CodegenActio
   fallbackMessage: "Codegen request failed",
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: codegenApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const apiKey = input.apiKey;
@@ -142,7 +157,7 @@ export const credentialValidators: CredentialValidators = {
       context,
     });
 
-    const user = requireProviderObject(userPayload, "Codegen current user response");
+    const user = requiredResponseRecord(userPayload, "Codegen current user response");
     const organization = await findCodegenOrganization({
       apiKey,
       organizationId,
@@ -208,7 +223,7 @@ async function findCodegenOrganization(input: {
 
 function readOrganizationPage(payload: unknown): { items: Array<Record<string, unknown>>; total: number } {
   const label = "Codegen organizations response";
-  const body = requireProviderObject(payload, label);
+  const body = requiredResponseRecord(payload, label);
   return {
     items: readPageItems(body, label),
     total: readRequiredInteger(body.total, `${label} total`),
@@ -222,9 +237,7 @@ async function requestCodegenJson(input: {
   phase: CodegenPhase;
   context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
 }): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, codegenDefaultRequestTimeoutMs);
-
-  try {
+  return runProviderRequest({ signal: input.context.signal, label: "Codegen" }, async (signal) => {
     const response = await input.context.fetcher(new URL(input.path, codegenApiBaseUrl), {
       method: input.method,
       headers: {
@@ -232,7 +245,7 @@ async function requestCodegenJson(input: {
         authorization: `Bearer ${input.apiKey}`,
         "user-agent": providerUserAgent,
       },
-      signal: timeout.signal,
+      signal,
     });
     const payload = await readCodegenPayload(response);
 
@@ -241,20 +254,7 @@ async function requestCodegenJson(input: {
     }
 
     return payload;
-  } catch (error) {
-    if (error instanceof ProviderRequestError) {
-      throw error;
-    }
-    if (timeout.didTimeout() || isAbortLikeError(error)) {
-      throw new ProviderRequestError(504, "Codegen request timed out");
-    }
-    throw new ProviderRequestError(
-      502,
-      error instanceof Error ? `Codegen request failed: ${error.message}` : "Codegen request failed",
-    );
-  } finally {
-    timeout.cleanup();
-  }
+  });
 }
 
 function buildPathWithQuery(path: string, input: Record<string, unknown>, allowedParams: readonly string[]): string {
@@ -269,7 +269,7 @@ function buildPathWithQuery(path: string, input: Record<string, unknown>, allowe
 }
 
 function normalizePage(payload: unknown, itemKey: string, label: string): Record<string, unknown> {
-  const body = requireProviderObject(payload, label);
+  const body = requiredResponseRecord(payload, label);
   return {
     [itemKey]: readPageItems(body, label),
     pagination: {
@@ -282,11 +282,11 @@ function normalizePage(payload: unknown, itemKey: string, label: string): Record
 }
 
 function readPageItems(payload: unknown, label: string): Array<Record<string, unknown>> {
-  const body = requireProviderObject(payload, label);
+  const body = requiredResponseRecord(payload, label);
   if (!Array.isArray(body.items)) {
     throw new ProviderRequestError(502, `${label} items is invalid`);
   }
-  return body.items.map((item, index) => requireProviderObject(item, `${label} item ${index + 1}`));
+  return body.items.map((item, index) => requiredResponseRecord(item, `${label} item ${index + 1}`));
 }
 
 async function readCodegenPayload(response: Response): Promise<unknown> {
@@ -368,8 +368,4 @@ function readRequiredInteger(value: unknown, fieldName: string): number {
     throw new ProviderRequestError(502, `${fieldName} is invalid`);
   }
   return value;
-}
-
-function requireProviderObject(value: unknown, label: string): Record<string, unknown> {
-  return requiredRecord(value, label, (message) => new ProviderRequestError(502, message));
 }

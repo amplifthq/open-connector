@@ -2,6 +2,7 @@ import type { ActionDefinition } from "../../core/types.ts";
 
 import { s } from "../../core/json-schema.ts";
 import { defineProviderAction } from "../../core/provider-definition.ts";
+import { bamboohrCompanyInfoScope, bamboohrEmployeeScope, bamboohrFieldScope } from "./constants.ts";
 
 const service = "bamboohr";
 
@@ -61,8 +62,9 @@ const companySchema = s.looseObject("BambooHR company profile information.", {
 export const bamboohrActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_company_information",
+    operationType: "read",
     description: "Retrieve basic BambooHR company profile information for the connected tenant.",
-    requiredScopes: [],
+    requiredScopes: [bamboohrCompanyInfoScope],
     inputSchema: s.object("No input is required for this BambooHR action.", {}),
     outputSchema: s.object("BambooHR company information output.", {
       company: companySchema,
@@ -71,8 +73,9 @@ export const bamboohrActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_fields",
+    operationType: "read",
     description: "List BambooHR employee fields available to the connected account.",
-    requiredScopes: [],
+    requiredScopes: [bamboohrEmployeeScope, bamboohrFieldScope],
     inputSchema: s.object("No input is required for this BambooHR action.", {}),
     outputSchema: s.object("BambooHR field list output.", {
       fields: s.array("BambooHR field definitions.", fieldSchema),
@@ -81,8 +84,9 @@ export const bamboohrActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_employees",
+    operationType: "read",
     description: "List BambooHR employees with optional additional field aliases and cursor paging.",
-    requiredScopes: [],
+    requiredScopes: [bamboohrEmployeeScope],
     inputSchema: s.object(
       "Input for listing BambooHR employees.",
       {
@@ -102,8 +106,9 @@ export const bamboohrActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_employee",
+    operationType: "read",
     description: "Retrieve one BambooHR employee by ID with optional field aliases.",
-    requiredScopes: [],
+    requiredScopes: [bamboohrEmployeeScope],
     inputSchema: s.object(
       "Input for retrieving one BambooHR employee.",
       {

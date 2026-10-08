@@ -177,19 +177,10 @@ const workflowListElementSchema = s.object(
   },
 );
 
-export type SeqeraActionName =
-  | "get_current_user"
-  | "list_user_workspaces"
-  | "get_workspace"
-  | "list_pipelines"
-  | "get_pipeline"
-  | "list_workflows"
-  | "get_workflow"
-  | "launch_workflow";
-
 export const seqeraActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_current_user",
+    operationType: "read",
     description: "Retrieve the current Seqera user profile and default workspace information.",
     inputSchema: s.actionInput({}, [], "No input is required."),
     outputSchema: s.object(
@@ -204,6 +195,7 @@ export const seqeraActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_user_workspaces",
+    operationType: "read",
     description: "List the workspaces and organizations visible to the current Seqera user.",
     inputSchema: s.actionInput(
       {
@@ -221,6 +213,7 @@ export const seqeraActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_workspace",
+    operationType: "read",
     description: "Retrieve one Seqera workspace by organization ID and workspace ID.",
     inputSchema: s.actionInput(
       {
@@ -234,6 +227,7 @@ export const seqeraActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_pipelines",
+    operationType: "read",
     description: "List Seqera pipelines in the current user context or a specific workspace.",
     inputSchema: s.actionInput(
       {
@@ -260,6 +254,7 @@ export const seqeraActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_pipeline",
+    operationType: "read",
     description: "Retrieve one Seqera pipeline by pipeline ID.",
     inputSchema: s.actionInput(
       {
@@ -275,6 +270,7 @@ export const seqeraActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_workflows",
+    operationType: "read",
     description: "List Seqera workflow runs in the current user context or a specific workspace.",
     inputSchema: s.actionInput(
       {
@@ -300,6 +296,7 @@ export const seqeraActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_workflow",
+    operationType: "read",
     description: "Retrieve one Seqera workflow run by workflow ID.",
     inputSchema: s.actionInput(
       {
@@ -348,6 +345,7 @@ export const seqeraActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "launch_workflow",
+    operationType: "write",
     description: "Launch a Seqera workflow from a pipeline repository or registered pipeline.",
     inputSchema: s.actionInput(
       {

@@ -1,4 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import {
@@ -11,7 +12,14 @@ import {
   requiredString,
 } from "../../core/cast.ts";
 import { queryParams } from "../../core/request.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  defineProviderProxy,
+  providerInputError,
+  ProviderRequestError,
+  providerResponseError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 const service = "coinranking";
 const coinrankingApiBaseUrl = "https://api.coinranking.com/v2";
@@ -19,7 +27,7 @@ const coinrankingApiBaseUrl = "https://api.coinranking.com/v2";
 type CoinrankingRequestPhase = "validate" | "execute";
 type CoinrankingActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const coinrankingActionHandlers: Record<string, CoinrankingActionHandler> = {
+export const coinrankingActionHandlers: ProviderActionHandlers<"coinranking", CoinrankingActionHandler> = {
   search_suggestions(input, context) {
     return searchSuggestions(input, context);
   },
@@ -41,6 +49,16 @@ export const coinrankingActionHandlers: Record<string, CoinrankingActionHandler>
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, coinrankingActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: coinrankingApiBaseUrl,
+  auth: { type: "api_key_header", name: "x-access-token" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -232,12 +250,4 @@ function buildCoinrankingError(
     return new ProviderRequestError(400, message, payload);
   }
   return new ProviderRequestError(httpStatus >= 400 ? httpStatus : 502, message, payload);
-}
-
-function providerInputError(message: string): ProviderRequestError {
-  return new ProviderRequestError(400, message);
-}
-
-function providerResponseError(message: string): ProviderRequestError {
-  return new ProviderRequestError(502, message);
 }

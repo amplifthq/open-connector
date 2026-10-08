@@ -1,6 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject, optionalString } from "../../core/cast.ts";
+import { compactObject, looseArray, optionalBoolean, optionalRawString, optionalString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
@@ -49,7 +50,7 @@ interface PosthogCurrentUser {
   organizations?: unknown;
 }
 
-export const posthogActionHandlers: Record<string, PosthogActionHandler> = {
+export const posthogActionHandlers: ProviderActionHandlers<"posthog", PosthogActionHandler> = {
   get_current_user(input, fetcher) {
     return posthogGetCurrentUser(input, fetcher);
   },
@@ -277,7 +278,7 @@ async function posthogListProjects(input: PosthogProviderActionInput, fetcher: t
     query: {
       limit: asNumber(input.input.limit),
       offset: asNumber(input.input.offset),
-      search: asString(input.input.search),
+      search: optionalRawString(input.input.search),
     },
   });
 }
@@ -440,19 +441,19 @@ async function posthogListPropertyDefinitions(input: PosthogProviderActionInput,
     mode: "execute",
     path: `/api/projects/${encodeURIComponent(projectId)}/property_definitions/`,
     query: compactObject({
-      event_names: asString(input.input.event_names),
-      exclude_core_properties: asBoolean(input.input.exclude_core_properties),
-      exclude_hidden: asBoolean(input.input.exclude_hidden),
-      excluded_properties: asString(input.input.excluded_properties),
+      event_names: optionalRawString(input.input.event_names),
+      exclude_core_properties: optionalBoolean(input.input.exclude_core_properties),
+      exclude_hidden: optionalBoolean(input.input.exclude_hidden),
+      excluded_properties: optionalRawString(input.input.excluded_properties),
       filter_by_event_names: asNullableBoolean(input.input.filter_by_event_names),
       group_type_index: asNumber(input.input.group_type_index),
       is_feature_flag: asNullableBoolean(input.input.is_feature_flag),
       is_numerical: asNullableBoolean(input.input.is_numerical),
       limit: asNumber(input.input.limit),
       offset: asNumber(input.input.offset),
-      properties: asString(input.input.properties),
-      search: asString(input.input.search),
-      type: asString(input.input.type),
+      properties: optionalRawString(input.input.properties),
+      search: optionalRawString(input.input.search),
+      type: optionalRawString(input.input.type),
       verified: asNullableBoolean(input.input.verified),
     }),
   });
@@ -537,7 +538,7 @@ async function posthogListAnnotations(input: PosthogProviderActionInput, fetcher
     query: compactObject({
       limit: asNumber(input.input.limit),
       offset: asNumber(input.input.offset),
-      search: asString(input.input.search),
+      search: optionalRawString(input.input.search),
     }),
   });
 
@@ -738,7 +739,7 @@ async function posthogGetCohortPersons(input: PosthogProviderActionInput, fetche
     mode: "execute",
     path: `/api/projects/${encodeURIComponent(projectId)}/cohorts/${encodeURIComponent(id)}/persons/`,
     query: compactObject({
-      format: asString(input.input.format),
+      format: optionalRawString(input.input.format),
       limit: asNumber(input.input.limit),
       offset: asNumber(input.input.offset),
     }),
@@ -748,7 +749,7 @@ async function posthogGetCohortPersons(input: PosthogProviderActionInput, fetche
   return {
     next: asNullableString(payload.next),
     previous: asNullableString(payload.previous),
-    results: normalizeUnknownArray(payload.results).map((item) => asLooseObject(item)),
+    results: looseArray(payload.results).map((item) => asLooseObject(item)),
     raw: payload,
   };
 }
@@ -781,11 +782,11 @@ async function posthogListInsights(input: PosthogProviderActionInput, fetcher: t
     mode: "execute",
     path: `/api/projects/${encodeURIComponent(projectId)}/insights/`,
     query: compactObject({
-      basic: asBoolean(input.input.basic),
+      basic: optionalBoolean(input.input.basic),
       limit: asNumber(input.input.limit),
       offset: asNumber(input.input.offset),
-      refresh: asString(input.input.refresh),
-      short_id: asString(input.input.short_id),
+      refresh: optionalRawString(input.input.refresh),
+      short_id: optionalRawString(input.input.short_id),
     }),
   });
 
@@ -793,7 +794,7 @@ async function posthogListInsights(input: PosthogProviderActionInput, fetcher: t
     count: asNumber(payload.count) ?? 0,
     next: asNullableString(payload.next),
     previous: asNullableString(payload.previous),
-    results: normalizeUnknownArray(payload.results).map((item) => mapInsight(item)),
+    results: looseArray(payload.results).map((item) => mapInsight(item)),
     raw: payload,
   };
 }
@@ -810,7 +811,7 @@ async function posthogGetInsight(input: PosthogProviderActionInput, fetcher: typ
     path: `/api/projects/${encodeURIComponent(projectId)}/insights/${encodeURIComponent(id)}/`,
     query: compactObject({
       from_dashboard: asNumber(input.input.from_dashboard),
-      refresh: asString(input.input.refresh),
+      refresh: optionalRawString(input.input.refresh),
     }),
     notFoundAsInvalidInput: true,
   });
@@ -841,7 +842,7 @@ async function posthogRunQuery(input: PosthogProviderActionInput, fetcher: typeo
   });
 
   return {
-    results: normalizeUnknownArray(payload.results),
+    results: looseArray(payload.results),
     columns: Array.isArray(payload.columns)
       ? payload.columns.filter((item): item is string => typeof item === "string")
       : undefined,
@@ -852,7 +853,7 @@ async function posthogRunQuery(input: PosthogProviderActionInput, fetcher: typeo
     query: asNullableObject(payload.query),
     error: payload.error,
     is_cached: asNullableBoolean(payload.is_cached),
-    timings: normalizeUnknownArray(payload.timings).map((item) => asLooseObject(item)),
+    timings: looseArray(payload.timings).map((item) => asLooseObject(item)),
     query_status: asNullableObject(payload.query_status),
     hogql: asNullableString(payload.hogql),
     cache_target_age: asNullableString(payload.cache_target_age),
@@ -967,7 +968,7 @@ async function posthogListDashboards(input: PosthogProviderActionInput, fetcher:
     query: compactObject({
       limit: asNumber(input.input.limit),
       offset: asNumber(input.input.offset),
-      search: asString(input.input.search),
+      search: optionalRawString(input.input.search),
     }),
   });
 
@@ -975,7 +976,7 @@ async function posthogListDashboards(input: PosthogProviderActionInput, fetcher:
     count: asNumber(payload.count) ?? 0,
     next: asNullableString(payload.next),
     previous: asNullableString(payload.previous),
-    results: normalizeUnknownArray(payload.results).map((item) => mapDashboardBasic(item)),
+    results: looseArray(payload.results).map((item) => mapDashboardBasic(item)),
     raw: payload,
   };
 }
@@ -1047,7 +1048,7 @@ async function posthogDeleteDashboard(input: PosthogProviderActionInput, fetcher
     path: `/api/environments/${encodeURIComponent(projectId)}/dashboards/${encodeURIComponent(id)}/`,
     body: compactObject({
       deleted: true,
-      delete_insights: asBoolean(input.input.delete_insights),
+      delete_insights: optionalBoolean(input.input.delete_insights),
     }),
     notFoundAsInvalidInput: true,
   });
@@ -1074,14 +1075,14 @@ async function posthogRunDashboardInsights(input: PosthogProviderActionInput, fe
     query: compactObject({
       filters_override: stringifyJsonQuery(input.input.filters_override),
       variables_override: stringifyJsonQuery(input.input.variables_override),
-      output_format: asString(input.input.output_format),
-      refresh: asString(input.input.refresh),
+      output_format: optionalRawString(input.input.output_format),
+      refresh: optionalRawString(input.input.refresh),
     }),
     notFoundAsInvalidInput: true,
   });
 
   return {
-    results: normalizeUnknownArray(payload.results),
+    results: looseArray(payload.results),
     raw: payload,
   };
 }
@@ -1164,7 +1165,7 @@ async function posthogListDashboardCollaborators(input: PosthogProviderActionInp
   });
 
   return {
-    results: normalizeUnknownArray(payload).map((item) => mapDashboardCollaborator(item)),
+    results: looseArray(payload).map((item) => mapDashboardCollaborator(item)),
     raw: payload,
   };
 }
@@ -1223,16 +1224,16 @@ async function posthogListFeatureFlags(input: PosthogProviderActionInput, fetche
     mode: "execute",
     path: `/api/projects/${encodeURIComponent(projectId)}/feature_flags/`,
     query: compactObject({
-      active: asString(input.input.active),
-      created_by_id: asString(input.input.created_by_id),
-      evaluation_runtime: asString(input.input.evaluation_runtime),
-      excluded_properties: asString(input.input.excluded_properties),
-      has_evaluation_contexts: asString(input.input.has_evaluation_contexts),
+      active: optionalRawString(input.input.active),
+      created_by_id: optionalRawString(input.input.created_by_id),
+      evaluation_runtime: optionalRawString(input.input.evaluation_runtime),
+      excluded_properties: optionalRawString(input.input.excluded_properties),
+      has_evaluation_contexts: optionalRawString(input.input.has_evaluation_contexts),
       limit: asNumber(input.input.limit),
       offset: asNumber(input.input.offset),
-      search: asString(input.input.search),
-      tags: asString(input.input.tags),
-      type: asString(input.input.type),
+      search: optionalRawString(input.input.search),
+      tags: optionalRawString(input.input.tags),
+      type: optionalRawString(input.input.type),
     }),
   });
 
@@ -1517,6 +1518,7 @@ function mapPosthogError(input: {
     return new ProviderRequestError(400, message);
   }
 
+  if ([400, 409, 422].includes(input.status)) return new ProviderRequestError(400, message, undefined, "invalid_input");
   return new ProviderRequestError(input.status >= 500 ? 502 : input.status, message);
 }
 
@@ -1596,7 +1598,7 @@ function extractCurrentOrganizationId(user: Record<string, unknown>) {
     return currentOrganizationId;
   }
 
-  const organizations = normalizeUnknownArray(user.organizations);
+  const organizations = looseArray(user.organizations);
   if (organizations.length === 1) {
     return optionalString(asNullableObject(organizations[0])?.id);
   }
@@ -1626,26 +1628,18 @@ function asNumber(value: unknown) {
   return typeof value === "number" ? value : undefined;
 }
 
-function asString(value: unknown) {
-  return typeof value === "string" ? value : undefined;
-}
-
-function asBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
-}
-
 function asNullableBoolean(value: unknown) {
   if (value === null) {
     return null;
   }
-  return asBoolean(value);
+  return optionalBoolean(value);
 }
 
 function asNullableString(value: unknown) {
   if (value === null) {
     return null;
   }
-  return asString(value);
+  return optionalRawString(value);
 }
 
 function asObject(value: unknown, fieldName: string) {
@@ -1658,13 +1652,13 @@ function asObject(value: unknown, fieldName: string) {
 function buildCohortWriteBody(input: Record<string, unknown>) {
   return compactObject({
     name: asNullableString(input.name),
-    description: asString(input.description),
+    description: optionalRawString(input.description),
     groups: input.groups,
-    deleted: asBoolean(input.deleted),
+    deleted: optionalBoolean(input.deleted),
     filters: asNullableObject(input.filters),
     query: input.query === null ? null : input.query,
-    is_static: asBoolean(input.is_static),
-    _create_in_folder: asString(input._create_in_folder),
+    is_static: optionalBoolean(input.is_static),
+    _create_in_folder: optionalRawString(input._create_in_folder),
     _create_static_person_ids: Array.isArray(input._create_static_person_ids)
       ? input._create_static_person_ids
       : undefined,
@@ -1673,15 +1667,15 @@ function buildCohortWriteBody(input: Record<string, unknown>) {
 
 function buildEventDefinitionWriteBody(input: Record<string, unknown>) {
   return compactObject({
-    name: asString(input.name),
+    name: optionalRawString(input.name),
     owner: asNullableNumber(input.owner),
     description: asNullableString(input.description),
     tags: Array.isArray(input.tags) ? input.tags : undefined,
-    verified: asBoolean(input.verified),
+    verified: optionalBoolean(input.verified),
     hidden: asNullableBoolean(input.hidden),
-    enforcement_mode: asString(input.enforcement_mode),
+    enforcement_mode: optionalRawString(input.enforcement_mode),
     primary_property: asNullableString(input.primary_property),
-    post_to_slack: asBoolean(input.post_to_slack),
+    post_to_slack: optionalBoolean(input.post_to_slack),
     default_columns: normalizeStringArrayOrUndefined(input.default_columns),
   });
 }
@@ -1690,7 +1684,7 @@ function buildPropertyDefinitionWriteBody(input: Record<string, unknown>) {
   return compactObject({
     description: asNullableString(input.description),
     tags: Array.isArray(input.tags) ? input.tags : undefined,
-    verified: asBoolean(input.verified),
+    verified: optionalBoolean(input.verified),
     hidden: asNullableBoolean(input.hidden),
     property_type: asNullableString(input.property_type),
   });
@@ -1699,7 +1693,7 @@ function buildPropertyDefinitionWriteBody(input: Record<string, unknown>) {
 function buildBulkUpdateTagsBody(input: Record<string, unknown>) {
   return {
     ids: normalizeNumberArray(input.ids),
-    action: asString(input.action),
+    action: optionalRawString(input.action),
     tags: normalizeStringArray(input.tags),
   };
 }
@@ -1708,11 +1702,11 @@ function buildAnnotationWriteBody(input: Record<string, unknown>) {
   return compactObject({
     content: asNullableString(input.content),
     date_marker: asNullableString(input.date_marker),
-    creation_type: asString(input.creation_type),
+    creation_type: optionalRawString(input.creation_type),
     dashboard_item: asNullableNumber(input.dashboard_item),
     dashboard_id: asNullableNumber(input.dashboard_id),
-    deleted: asBoolean(input.deleted),
-    scope: asString(input.scope),
+    deleted: optionalBoolean(input.deleted),
+    scope: optionalRawString(input.scope),
   });
 }
 
@@ -1733,27 +1727,27 @@ function buildInsightWriteBody(input: Record<string, unknown>) {
 function buildDashboardWriteBody(input: Record<string, unknown>) {
   return compactObject({
     name: asNullableString(input.name),
-    description: asString(input.description),
-    pinned: asBoolean(input.pinned),
-    deleted: asBoolean(input.deleted),
+    description: optionalRawString(input.description),
+    pinned: optionalBoolean(input.pinned),
+    deleted: optionalBoolean(input.deleted),
     breakdown_colors: input.breakdown_colors,
     data_color_theme_id: asNullableNumber(input.data_color_theme_id),
     tags: Array.isArray(input.tags) ? input.tags : undefined,
     restriction_level: asNumber(input.restriction_level),
     quick_filter_ids: Array.isArray(input.quick_filter_ids) ? input.quick_filter_ids : undefined,
-    use_template: asString(input.use_template),
+    use_template: optionalRawString(input.use_template),
     use_dashboard: asNullableNumber(input.use_dashboard),
-    delete_insights: asBoolean(input.delete_insights),
-    _create_in_folder: asString(input._create_in_folder),
+    delete_insights: optionalBoolean(input.delete_insights),
+    _create_in_folder: optionalRawString(input._create_in_folder),
   });
 }
 
 function buildFeatureFlagWriteBody(input: Record<string, unknown>) {
   return compactObject({
-    key: asString(input.key),
-    name: asString(input.name),
+    key: optionalRawString(input.key),
+    name: optionalRawString(input.name),
     filters: asNullableObject(input.filters),
-    active: asBoolean(input.active),
+    active: optionalBoolean(input.active),
     tags: normalizeStringArrayOrUndefined(input.tags),
     evaluation_contexts: normalizeStringArrayOrUndefined(input.evaluation_contexts),
   });
@@ -1771,10 +1765,6 @@ function asNullableObject(value: unknown) {
 
 function asLooseObject(value: unknown) {
   return asNullableObject(value) ?? {};
-}
-
-function normalizeUnknownArray(value: unknown) {
-  return Array.isArray(value) ? value : [];
 }
 
 function normalizeUnknownString(value: unknown) {
@@ -1819,14 +1809,14 @@ function mapInsight(value: unknown) {
   const payload = asLooseObject(value);
   return {
     id: requireInsightId(payload),
-    short_id: asString(payload.short_id),
+    short_id: optionalRawString(payload.short_id),
     name: asNullableString(payload.name),
     derived_name: asNullableString(payload.derived_name),
     query: asNullableObject(payload.query),
     order: asNumber(payload.order),
-    deleted: asBoolean(payload.deleted),
-    dashboards: normalizeUnknownArray(payload.dashboards),
-    dashboard_tiles: normalizeUnknownArray(payload.dashboard_tiles).map((item) => asLooseObject(item)),
+    deleted: optionalBoolean(payload.deleted),
+    dashboards: looseArray(payload.dashboards),
+    dashboard_tiles: looseArray(payload.dashboard_tiles).map((item) => asLooseObject(item)),
     last_refresh: asNullableString(payload.last_refresh),
     cache_target_age: asNullableString(payload.cache_target_age),
     next_allowed_client_refresh: asNullableString(payload.next_allowed_client_refresh),
@@ -1838,22 +1828,22 @@ function mapInsight(value: unknown) {
     created_at: asNullableString(payload.created_at),
     created_by: asNullableObject(payload.created_by),
     description: asNullableString(payload.description),
-    updated_at: asString(payload.updated_at),
-    tags: normalizeUnknownArray(payload.tags),
-    favorited: asBoolean(payload.favorited),
-    last_modified_at: asString(payload.last_modified_at),
+    updated_at: optionalRawString(payload.updated_at),
+    tags: looseArray(payload.tags),
+    favorited: optionalBoolean(payload.favorited),
+    last_modified_at: optionalRawString(payload.last_modified_at),
     last_modified_by: asNullableObject(payload.last_modified_by),
-    is_sample: asBoolean(payload.is_sample),
+    is_sample: optionalBoolean(payload.is_sample),
     effective_restriction_level: asNumber(payload.effective_restriction_level),
     effective_privilege_level: asNumber(payload.effective_privilege_level),
     user_access_level: asNullableString(payload.user_access_level),
     timezone: asNullableString(payload.timezone),
-    is_cached: asBoolean(payload.is_cached),
+    is_cached: optionalBoolean(payload.is_cached),
     query_status: asNullableObject(payload.query_status),
     hogql: asNullableString(payload.hogql),
     types: Array.isArray(payload.types) ? payload.types : undefined,
     resolved_date_range: asNullableObject(payload.resolved_date_range),
-    alerts: normalizeUnknownArray(payload.alerts),
+    alerts: looseArray(payload.alerts),
     last_viewed_at: asNullableString(payload.last_viewed_at),
     raw: payload,
   };
@@ -1864,21 +1854,21 @@ function mapDashboardBasic(value: unknown) {
   return {
     id: requireDashboardId(payload),
     name: asNullableString(payload.name),
-    description: asString(payload.description),
-    pinned: asBoolean(payload.pinned),
-    created_at: asString(payload.created_at),
+    description: optionalRawString(payload.description),
+    pinned: optionalBoolean(payload.pinned),
+    created_at: optionalRawString(payload.created_at),
     created_by: asNullableObject(payload.created_by),
     last_accessed_at: asNullableString(payload.last_accessed_at),
     last_viewed_at: asNullableString(payload.last_viewed_at),
-    is_shared: asBoolean(payload.is_shared),
-    deleted: asBoolean(payload.deleted),
-    creation_mode: asString(payload.creation_mode),
-    tags: normalizeUnknownArray(payload.tags),
+    is_shared: optionalBoolean(payload.is_shared),
+    deleted: optionalBoolean(payload.deleted),
+    creation_mode: optionalRawString(payload.creation_mode),
+    tags: looseArray(payload.tags),
     restriction_level: asNumber(payload.restriction_level),
     effective_restriction_level: asNumber(payload.effective_restriction_level),
     effective_privilege_level: asNumber(payload.effective_privilege_level),
     user_access_level: asNullableString(payload.user_access_level),
-    access_control_version: asString(payload.access_control_version),
+    access_control_version: optionalRawString(payload.access_control_version),
     last_refresh: asNullableString(payload.last_refresh),
     team_id: asNumber(payload.team_id),
   };
@@ -1903,7 +1893,7 @@ function mapDashboard(value: unknown) {
 }
 
 function mapAnnotationList(payload: Record<string, unknown>) {
-  const results = normalizeUnknownArray(payload.results).map((item) => mapAnnotation(item));
+  const results = looseArray(payload.results).map((item) => mapAnnotation(item));
   return {
     count: asNumber(payload.count) ?? results.length,
     next: asNullableString(payload.next),
@@ -1919,7 +1909,7 @@ function mapAnnotation(value: unknown) {
     id: requireNumericId(payload, "annotation"),
     content: asNullableString(payload.content),
     date_marker: asNullableString(payload.date_marker),
-    creation_type: asString(payload.creation_type),
+    creation_type: optionalRawString(payload.creation_type),
     dashboard_item: asNullableNumber(payload.dashboard_item),
     dashboard_id: asNullableNumber(payload.dashboard_id),
     dashboard_name: asNullableString(payload.dashboard_name),
@@ -1928,17 +1918,17 @@ function mapAnnotation(value: unknown) {
     insight_derived_name: asNullableString(payload.insight_derived_name),
     created_by: asNullableObject(payload.created_by),
     created_at: asNullableString(payload.created_at),
-    updated_at: asString(payload.updated_at),
-    deleted: asBoolean(payload.deleted),
-    scope: asString(payload.scope),
+    updated_at: optionalRawString(payload.updated_at),
+    deleted: optionalBoolean(payload.deleted),
+    scope: optionalRawString(payload.scope),
     raw: payload,
   };
 }
 
 function mapBulkUpdateTags(payload: Record<string, unknown>) {
   return {
-    updated: normalizeUnknownArray(payload.updated),
-    skipped: normalizeUnknownArray(payload.skipped),
+    updated: looseArray(payload.updated),
+    skipped: looseArray(payload.skipped),
     raw: payload,
   };
 }
@@ -1946,18 +1936,18 @@ function mapBulkUpdateTags(payload: Record<string, unknown>) {
 function mapDashboardCollaborator(value: unknown) {
   const payload = asLooseObject(value);
   return {
-    id: asString(payload.id),
+    id: optionalRawString(payload.id),
     dashboard_id: asNumber(payload.dashboard_id),
     user: asNullableObject(payload.user) ?? {},
     level: asNumber(payload.level),
-    added_at: asString(payload.added_at),
-    updated_at: asString(payload.updated_at),
+    added_at: optionalRawString(payload.added_at),
+    updated_at: optionalRawString(payload.updated_at),
     raw: payload,
   };
 }
 
 function mapFeatureFlagList(payload: Record<string, unknown>) {
-  const results = normalizeUnknownArray(payload.results).map((item) => mapFeatureFlag(item));
+  const results = looseArray(payload.results).map((item) => mapFeatureFlag(item));
   return {
     count: asNumber(payload.count) ?? results.length,
     next: asNullableString(payload.next),
@@ -1971,11 +1961,11 @@ function mapFeatureFlag(value: unknown) {
   const payload = asLooseObject(value);
   return {
     id: requireFeatureFlagId(payload),
-    key: asString(payload.key),
-    name: asString(payload.name),
-    active: asBoolean(payload.active),
+    key: optionalRawString(payload.key),
+    name: optionalRawString(payload.name),
+    active: optionalBoolean(payload.active),
     filters: asNullableObject(payload.filters) ?? {},
-    deleted: asBoolean(payload.deleted),
+    deleted: optionalBoolean(payload.deleted),
     created_at: asNullableString(payload.created_at),
     updated_at: asNullableString(payload.updated_at),
     created_by: asNullableObject(payload.created_by),
@@ -1983,7 +1973,7 @@ function mapFeatureFlag(value: unknown) {
     version: asNumber(payload.version),
     ensure_experience_continuity: asNullableBoolean(payload.ensure_experience_continuity),
     experiment_set: normalizeNumberArray(payload.experiment_set),
-    experiment_set_metadata: normalizeUnknownArray(payload.experiment_set_metadata).map((item) => asLooseObject(item)),
+    experiment_set_metadata: looseArray(payload.experiment_set_metadata).map((item) => asLooseObject(item)),
     surveys: asNullableObject(payload.surveys),
     features: asNullableObject(payload.features),
     rollback_conditions: payload.rollback_conditions === null ? null : payload.rollback_conditions,
@@ -1995,7 +1985,7 @@ function mapFeatureFlag(value: unknown) {
     last_called_at: asNullableString(payload.last_called_at),
     user_access_level: asNullableString(payload.user_access_level),
     rollout_percentage: asNullableNumber(payload.rollout_percentage),
-    tags: normalizeUnknownArray(payload.tags),
+    tags: looseArray(payload.tags),
     evaluation_contexts: normalizeStringArray(payload.evaluation_contexts),
     usage_dashboard: asNumber(payload.usage_dashboard),
     analytics_dashboards: normalizeNumberArray(payload.analytics_dashboards),
@@ -2009,8 +1999,8 @@ function mapFeatureFlag(value: unknown) {
 
 function mapFeatureFlagStatus(payload: Record<string, unknown>) {
   return {
-    status: asString(payload.status),
-    reason: asString(payload.reason),
+    status: optionalRawString(payload.status),
+    reason: optionalRawString(payload.reason),
     active: asNullableBoolean(payload.active),
     deleted: asNullableBoolean(payload.deleted),
     last_called_at: asNullableString(payload.last_called_at),
@@ -2021,7 +2011,7 @@ function mapFeatureFlagStatus(payload: Record<string, unknown>) {
 
 function mapDependentFlags(payload: unknown) {
   return {
-    results: normalizeUnknownArray(payload).map((item) => mapDependentFlag(item)),
+    results: looseArray(payload).map((item) => mapDependentFlag(item)),
     raw: Array.isArray(payload) ? payload : {},
   };
 }
@@ -2030,14 +2020,14 @@ function mapDependentFlag(value: unknown) {
   const payload = asLooseObject(value);
   return {
     id: requireFeatureFlagId(payload),
-    key: asString(payload.key),
-    name: asString(payload.name),
+    key: optionalRawString(payload.key),
+    name: optionalRawString(payload.name),
   };
 }
 
 function mapFeatureFlagLocalEvaluation(payload: Record<string, unknown>) {
   return {
-    flags: normalizeUnknownArray(payload.flags).map((item) => mapMinimalFeatureFlag(item)),
+    flags: looseArray(payload.flags).map((item) => mapMinimalFeatureFlag(item)),
     group_type_mapping: asNullableObject(payload.group_type_mapping) ?? {},
     cohorts: asNullableObject(payload.cohorts) ?? {},
     raw: payload,
@@ -2049,11 +2039,11 @@ function mapMinimalFeatureFlag(value: unknown) {
   return {
     id: requireFeatureFlagId(payload),
     team_id: asNumber(payload.team_id),
-    name: asString(payload.name),
-    key: asString(payload.key),
+    name: optionalRawString(payload.name),
+    key: optionalRawString(payload.key),
     filters: asNullableObject(payload.filters) ?? {},
-    deleted: asBoolean(payload.deleted),
-    active: asBoolean(payload.active),
+    deleted: optionalBoolean(payload.deleted),
+    active: optionalBoolean(payload.active),
     ensure_experience_continuity: asNullableBoolean(payload.ensure_experience_continuity),
     version: asNumber(payload.version),
     evaluation_runtime: asNullableString(payload.evaluation_runtime),
@@ -2099,7 +2089,7 @@ function mapQueryStatus(payload: Record<string, unknown>) {
   return {
     id: optionalString(payload.id) ?? normalizeUnknownString(payload.query_id),
     query_status: asNullableObject(payload.query_status) ?? payload,
-    complete: asBoolean(payload.complete),
+    complete: optionalBoolean(payload.complete),
     results: Array.isArray(payload.results) ? payload.results : undefined,
     error: payload.error,
     raw: payload,
@@ -2107,7 +2097,7 @@ function mapQueryStatus(payload: Record<string, unknown>) {
 }
 
 function normalizeStringArray(value: unknown) {
-  return normalizeUnknownArray(value).filter((item): item is string => typeof item === "string");
+  return looseArray(value).filter((item): item is string => typeof item === "string");
 }
 
 function normalizeStringArrayOrUndefined(value: unknown) {
@@ -2115,7 +2105,7 @@ function normalizeStringArrayOrUndefined(value: unknown) {
 }
 
 function normalizeNumberArray(value: unknown) {
-  return normalizeUnknownArray(value).filter((item): item is number => typeof item === "number");
+  return looseArray(value).filter((item): item is number => typeof item === "number");
 }
 
 function joinStringArray(value: unknown) {

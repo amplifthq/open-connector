@@ -1,4 +1,5 @@
 import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -13,7 +14,6 @@ import {
 const service = "simplybook_me";
 const simplybookMeApiBaseUrl = "https://user-api.simplybook.me";
 const simplybookMeLoginUrl = `${simplybookMeApiBaseUrl}/login`;
-const simplybookMeDefaultRequestTimeoutMs = 30_000;
 
 interface SimplybookMeContext {
   companyLogin: string;
@@ -39,7 +39,7 @@ interface JsonRpcErrorPayload {
 
 type SimplybookMeActionHandler = (input: Record<string, unknown>, context: SimplybookMeContext) => Promise<unknown>;
 
-export const simplybookMeActionHandlers: Record<string, SimplybookMeActionHandler> = {
+export const simplybookMeActionHandlers: ProviderActionHandlers<"simplybook_me", SimplybookMeActionHandler> = {
   async get_company_info(_input, context) {
     const company = await callPublicMethod(context, "getCompanyInfo", []);
     return { company: requireObjectPayload(company, "SimplyBook.me company info response") };
@@ -151,7 +151,7 @@ function callPublicMethod(context: SimplybookMeContext, method: string, params: 
 }
 
 async function callJsonRpc(input: JsonRpcRequestInput): Promise<unknown> {
-  const timeout = createProviderTimeout(input.signal, simplybookMeDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const response = await input.fetcher(input.url, {
       method: "POST",

@@ -30,32 +30,17 @@ const incrementalPlanInputSchema = s.object(
   { optional: ["last_knowledge_of_server"] },
 );
 
-export type YnabActionName =
-  | "get_user"
-  | "list_plans"
-  | "get_plan"
-  | "get_plan_settings"
-  | "list_accounts"
-  | "get_account"
-  | "list_categories"
-  | "get_category"
-  | "get_month_category"
-  | "list_months"
-  | "get_month"
-  | "list_payees"
-  | "get_payee"
-  | "list_transactions"
-  | "get_transaction";
-
 export const ynabActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_user",
+    operationType: "read",
     description: "Retrieve the authenticated YNAB user.",
     inputSchema: emptyInputSchema,
     outputSchema: ynabDataSchema("YNAB authenticated user response.", { user: ynabObjectSchema }),
   }),
   defineProviderAction(service, {
     name: "list_plans",
+    operationType: "read",
     description: "List YNAB plans with summary information.",
     inputSchema: s.object(
       "Input parameters for listing YNAB plans.",
@@ -68,18 +53,21 @@ export const ynabActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_plan",
+    operationType: "read",
     description: "Retrieve a single YNAB plan with related entities.",
     inputSchema: incrementalPlanInputSchema,
     outputSchema: ynabDataSchema("YNAB plan response.", { plan: ynabObjectSchema }),
   }),
   defineProviderAction(service, {
     name: "get_plan_settings",
+    operationType: "read",
     description: "Retrieve settings for a YNAB plan.",
     inputSchema: planInputSchema,
     outputSchema: ynabDataSchema("YNAB plan settings response.", { settings: ynabObjectSchema }),
   }),
   defineProviderAction(service, {
     name: "list_accounts",
+    operationType: "read",
     description: "List accounts for a YNAB plan.",
     inputSchema: incrementalPlanInputSchema,
     outputSchema: ynabDataSchema("YNAB accounts response.", {
@@ -88,6 +76,7 @@ export const ynabActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_account",
+    operationType: "read",
     description: "Retrieve a single YNAB account.",
     inputSchema: s.object("Input parameters for retrieving a YNAB account.", {
       plan_id: planIdSchema,
@@ -97,6 +86,7 @@ export const ynabActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_categories",
+    operationType: "read",
     description: "List categories grouped by category group for a YNAB plan.",
     inputSchema: incrementalPlanInputSchema,
     outputSchema: ynabDataSchema("YNAB categories response.", {
@@ -105,6 +95,7 @@ export const ynabActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_category",
+    operationType: "read",
     description: "Retrieve a single YNAB category.",
     inputSchema: s.object("Input parameters for retrieving a YNAB category.", {
       plan_id: planIdSchema,
@@ -114,6 +105,7 @@ export const ynabActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_month_category",
+    operationType: "read",
     description: "Retrieve a YNAB category for a specific plan month.",
     inputSchema: s.object("Input parameters for retrieving a YNAB category in a specific month.", {
       plan_id: planIdSchema,
@@ -124,6 +116,7 @@ export const ynabActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_months",
+    operationType: "read",
     description: "List months for a YNAB plan.",
     inputSchema: incrementalPlanInputSchema,
     outputSchema: ynabDataSchema("YNAB months response.", {
@@ -132,6 +125,7 @@ export const ynabActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_month",
+    operationType: "read",
     description: "Retrieve a single YNAB plan month.",
     inputSchema: s.object("Input parameters for retrieving a YNAB month.", {
       plan_id: planIdSchema,
@@ -141,6 +135,7 @@ export const ynabActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_payees",
+    operationType: "read",
     description: "List payees for a YNAB plan.",
     inputSchema: incrementalPlanInputSchema,
     outputSchema: ynabDataSchema("YNAB payees response.", {
@@ -149,6 +144,7 @@ export const ynabActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_payee",
+    operationType: "read",
     description: "Retrieve a single YNAB payee.",
     inputSchema: s.object("Input parameters for retrieving a YNAB payee.", {
       plan_id: planIdSchema,
@@ -158,6 +154,7 @@ export const ynabActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_transactions",
+    operationType: "read",
     description: "List YNAB plan transactions.",
     inputSchema: s.object(
       "Input parameters for listing YNAB transactions.",
@@ -176,6 +173,7 @@ export const ynabActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_transaction",
+    operationType: "read",
     description: "Retrieve a single YNAB transaction.",
     inputSchema: s.object("Input parameters for retrieving a YNAB transaction.", {
       plan_id: planIdSchema,

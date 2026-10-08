@@ -4,6 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -18,7 +19,6 @@ import {
 
 const service = "demio";
 const demioApiBaseUrl = "https://my.demio.com/api/v1";
-const demioRequestTimeoutMs = 30_000;
 const demioMaxResponseBytes = 10 * 1024 * 1024;
 
 type DemioRequestPhase = "validate" | "execute";
@@ -31,7 +31,7 @@ interface DemioContext {
 }
 type DemioActionHandler = (input: Record<string, unknown>, context: DemioContext) => Promise<unknown>;
 
-export const demioActionHandlers: Record<string, DemioActionHandler> = {
+export const demioActionHandlers: ProviderActionHandlers<"demio", DemioActionHandler> = {
   list_events(input, context) {
     return requestDemioAction(context, {
       method: "GET",
@@ -172,7 +172,7 @@ async function requestDemioJson(input: {
     }
   }
 
-  const timeout = createProviderTimeout(input.signal, demioRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     const response = await input.fetcher(url, {
       method: input.method,

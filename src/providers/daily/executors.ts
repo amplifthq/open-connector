@@ -1,4 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import {
@@ -16,17 +17,17 @@ import {
   providerUserAgent,
   ProviderRequestError,
   readProviderJsonBody,
+  requiredResponseRecord,
 } from "../provider-runtime.ts";
 
 const service = "daily";
 const dailyApiBaseUrl = "https://api.daily.co/v1";
-const requestTimeoutMs = 30_000;
 
 type DailyRequestPhase = "validate" | "execute";
 
 type DailyActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const dailyActionHandlers: Record<string, DailyActionHandler> = {
+export const dailyActionHandlers: ProviderActionHandlers<"daily", DailyActionHandler> = {
   async get_domain_config(_input, context) {
     return {
       domain: await dailyRequestObject({ method: "GET", path: "/" }, context, "execute"),
@@ -187,7 +188,7 @@ async function dailyRequestObject(
     }
   }
 
-  const timeout = createProviderTimeout(context.signal, requestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   let response: Response;
   try {
     response = await context.fetcher(url, {
@@ -204,7 +205,7 @@ async function dailyRequestObject(
     if (!response.ok) {
       throw createDailyError(response, payload, phase);
     }
-    return readDailyObject(payload, "Daily response");
+    return requiredResponseRecord(payload, "Daily response");
   } catch (error) {
     if (error instanceof ProviderRequestError) {
       throw error;
@@ -262,17 +263,9 @@ function createDailyError(response: Response, payload: unknown, phase: DailyRequ
   return new ProviderRequestError(response.status || 502, message);
 }
 
-function readDailyObject(value: unknown, fieldName: string): Record<string, unknown> {
-  const object = optionalRecord(value);
-  if (!object) {
-    throw new ProviderRequestError(502, `${fieldName} must be an object`);
-  }
-  return object;
-}
-
 function readDailyArray(value: unknown, fieldName: string): Array<Record<string, unknown>> {
   if (!Array.isArray(value)) {
     throw new ProviderRequestError(502, `${fieldName} must be an array`);
   }
-  return value.map((item, index) => readDailyObject(item, `${fieldName}[${index}]`));
+  return value.map((item, index) => requiredResponseRecord(item, `${fieldName}[${index}]`));
 }

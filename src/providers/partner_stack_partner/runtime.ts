@@ -1,6 +1,6 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
-import type { PartnerStackPartnerActionName } from "./actions.ts";
 
 import {
   compactObject,
@@ -10,7 +10,14 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  defineApiKeyProviderExecutors,
+  isAbortLikeError,
+  providerInputError,
+  ProviderRequestError,
+  providerResponseError,
+  providerUserAgent,
+} from "../provider-runtime.ts";
 
 export const partnerStackPartnerApiBaseUrl = "https://api.partnerstack.com/api/v2/";
 const partnerStackPartnerValidationPath = "/api/v2/marketplace/programs";
@@ -21,8 +28,8 @@ type PartnerStackPartnerActionHandler = (
   context: PartnerStackPartnerContext,
 ) => Promise<unknown>;
 
-export const partnerStackPartnerActionHandlers: Record<
-  PartnerStackPartnerActionName,
+export const partnerStackPartnerActionHandlers: ProviderActionHandlers<
+  "partner_stack_partner",
   PartnerStackPartnerActionHandler
 > = {
   list_marketplace_programs(input, context) {
@@ -280,13 +287,6 @@ function createPartnerStackTransportError(error: unknown) {
   return new ProviderRequestError(502, message);
 }
 
-function isAbortLikeError(error: unknown) {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  return error.name === "AbortError" || error.name === "TimeoutError";
-}
-
 function extractErrorMessage(payload: unknown): string | undefined {
   if (typeof payload === "string") {
     return payload;
@@ -313,7 +313,7 @@ function normalizeEnvelope(payload: unknown, label: string) {
     status:
       typeof record.status === "number"
         ? record.status
-        : optionalIntegerLike(record.status, "status", providerOutputError),
+        : optionalIntegerLike(record.status, "status", providerResponseError),
   };
 }
 
@@ -335,14 +335,14 @@ function normalizeMarketplaceProgram(value: unknown) {
   const record = normalizeObject(value, "PartnerStack marketplace program");
   return {
     ...record,
-    id: optionalIntegerLike(record.id, "id", providerOutputError),
+    id: optionalIntegerLike(record.id, "id", providerResponseError),
     key: optionalString(record.key) ?? "",
     name: optionalString(record.name) ?? "",
     website: nullableValue(record.website),
     category: normalizeNullableStringArray(record.category),
     country: nullableValue(record.country),
     description: nullableValue(record.description),
-    created_at: optionalIntegerLike(record.created_at, "created_at", providerOutputError),
+    created_at: optionalIntegerLike(record.created_at, "created_at", providerResponseError),
     has_sub_id: optionalBoolean(record.has_sub_id),
     logo: nullableValue(record.logo),
     raw: record,
@@ -354,8 +354,8 @@ function normalizePartnership(value: unknown) {
   return {
     ...record,
     key: optionalString(record.key) ?? "",
-    created_at: optionalIntegerLike(record.created_at, "created_at", providerOutputError),
-    updated_at: optionalIntegerLike(record.updated_at, "updated_at", providerOutputError),
+    created_at: optionalIntegerLike(record.created_at, "created_at", providerResponseError),
+    updated_at: optionalIntegerLike(record.updated_at, "updated_at", providerResponseError),
     claimed: optionalBoolean(record.claimed),
     company: normalizeOptionalCompany(record.company),
     has_sub_id: normalizeNullableBoolean(record.has_sub_id),
@@ -368,8 +368,8 @@ function normalizeReward(value: unknown) {
   return {
     ...record,
     key: optionalString(record.key) ?? "",
-    created_at: optionalIntegerLike(record.created_at, "created_at", providerOutputError),
-    updated_at: optionalIntegerLike(record.updated_at, "updated_at", providerOutputError),
+    created_at: optionalIntegerLike(record.created_at, "created_at", providerResponseError),
+    updated_at: optionalIntegerLike(record.updated_at, "updated_at", providerResponseError),
     amount: normalizeNullableInteger(record.amount),
     amount_usd: normalizeNullableInteger(record.amount_usd),
     currency: nullableValue(record.currency),
@@ -385,8 +385,8 @@ function normalizePayout(value: unknown) {
   return {
     ...record,
     key: optionalString(record.key) ?? "",
-    created_at: optionalIntegerLike(record.created_at, "created_at", providerOutputError),
-    updated_at: optionalIntegerLike(record.updated_at, "updated_at", providerOutputError),
+    created_at: optionalIntegerLike(record.created_at, "created_at", providerResponseError),
+    updated_at: optionalIntegerLike(record.updated_at, "updated_at", providerResponseError),
     amount: normalizeNullableInteger(record.amount),
     amount_usd: normalizeNullableInteger(record.amount_usd),
     currency: nullableValue(record.currency),
@@ -403,7 +403,7 @@ function normalizeOptionalCompany(value: unknown) {
   const record = value as Record<string, unknown>;
   return {
     ...record,
-    id: optionalIntegerLike(record.id, "id", providerOutputError),
+    id: optionalIntegerLike(record.id, "id", providerResponseError),
     key: optionalString(record.key),
     name: optionalString(record.name),
   };
@@ -424,7 +424,7 @@ function normalizeOptionalProvider(value: unknown) {
 
 function normalizeObject(value: unknown, label: string) {
   try {
-    return requiredRecord(value, label, providerOutputError);
+    return requiredRecord(value, label, providerResponseError);
   } catch (error) {
     if (error instanceof ProviderRequestError) {
       throw error;
@@ -461,7 +461,7 @@ function normalizeNullableInteger(value: unknown) {
   if (value === null) {
     return null;
   }
-  return optionalIntegerLike(value, "integer", providerOutputError);
+  return optionalIntegerLike(value, "integer", providerResponseError);
 }
 
 function normalizeNullableBoolean(value: unknown) {
@@ -495,12 +495,4 @@ function buildPath(pathname: string, query: Record<string, unknown>) {
     url.searchParams.set(key, String(value));
   }
   return `${url.pathname}${url.search}`;
-}
-
-function providerInputError(message: string) {
-  return new ProviderRequestError(400, message);
-}
-
-function providerOutputError(message: string) {
-  return new ProviderRequestError(502, message);
 }

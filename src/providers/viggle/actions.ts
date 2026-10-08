@@ -221,28 +221,17 @@ const renderJobSchema = s.object(
   },
 );
 
-export type ViggleActionName =
-  | "get_credit_balance"
-  | "create_character"
-  | "list_characters"
-  | "get_character"
-  | "delete_character"
-  | "import_template"
-  | "list_scenes"
-  | "get_scene"
-  | "delete_scene"
-  | "create_render_job"
-  | "get_render_job_status";
-
 export const viggleActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_credit_balance",
+    operationType: "read",
     description: "Get the current Viggle credit balance for the authenticated account.",
     inputSchema: s.object("No input is required for this action.", {}),
     outputSchema: s.object("The Viggle credit balance wrapper.", { credit_balance: creditBalanceSchema }),
   }),
   defineProviderAction(service, {
     name: "create_character",
+    operationType: "write",
     description:
       "Create a reusable Viggle character from a publicly accessible image URL and return the preprocessing handle.",
     inputSchema: s.object(
@@ -259,6 +248,7 @@ export const viggleActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_characters",
+    operationType: "read",
     description: "List Viggle characters for the authenticated account.",
     inputSchema: s.object(
       "Input parameters for listing Viggle characters.",
@@ -272,6 +262,7 @@ export const viggleActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_character",
+    operationType: "read",
     description: "Get a Viggle character by ID, including preprocessing status.",
     inputSchema: s.object("Input parameters for retrieving a Viggle character.", {
       character_id: s.nonEmptyString("The character identifier returned by Viggle."),
@@ -280,6 +271,7 @@ export const viggleActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_character",
+    operationType: "destructive",
     description: "Soft-delete a Viggle character by ID.",
     inputSchema: s.object("Input parameters for deleting a Viggle character.", {
       character_id: s.nonEmptyString("The character identifier to delete."),
@@ -288,6 +280,7 @@ export const viggleActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "import_template",
+    operationType: "write",
     description: "Import a Viggle template as a reusable scene.",
     inputSchema: s.object(
       "Input parameters for importing a Viggle template.",
@@ -302,6 +295,7 @@ export const viggleActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_scenes",
+    operationType: "read",
     description: "List Viggle scenes for the authenticated account.",
     inputSchema: s.object(
       "Input parameters for listing Viggle scenes.",
@@ -315,6 +309,7 @@ export const viggleActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_scene",
+    operationType: "read",
     description: "Get a Viggle scene by ID, including preprocessing status.",
     inputSchema: s.object("Input parameters for retrieving a Viggle scene.", {
       scene_id: s.nonEmptyString("The scene identifier returned by Viggle."),
@@ -323,6 +318,7 @@ export const viggleActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_scene",
+    operationType: "destructive",
     description: "Soft-delete a Viggle scene by ID.",
     inputSchema: s.object("Input parameters for deleting a Viggle scene.", {
       scene_id: s.nonEmptyString("The scene identifier to delete."),
@@ -331,6 +327,7 @@ export const viggleActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_render_job",
+    operationType: "write",
     description: "Create a Viggle render job from URL inputs or preprocessed character and scene IDs.",
     inputSchema: s.object(
       "Input parameters for creating a Viggle render job.",
@@ -360,6 +357,7 @@ export const viggleActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_render_job_status",
+    operationType: "read",
     description: "Get a Viggle render job status and return the video URL when rendering is complete.",
     inputSchema: s.object("Input parameters for retrieving a Viggle render job status.", {
       job_id: s.nonEmptyString("The render job identifier returned by Viggle."),

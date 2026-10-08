@@ -5,9 +5,16 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { LessonspaceActionName } from "./actions.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject, optionalInteger, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
+import {
+  booleanString,
+  compactObject,
+  optionalInteger,
+  optionalRecord,
+  optionalString,
+  requiredRecord,
+} from "../../core/cast.ts";
 import {
   createProviderTimeout,
   defineProviderExecutors,
@@ -21,7 +28,6 @@ import {
 const service = "lessonspace";
 const lessonspaceApiBaseUrl = "https://api.thelessonspace.com/v2";
 const lessonspaceValidationPath = "/hello/";
-const lessonspaceDefaultRequestTimeoutMs = 30_000;
 
 type LessonspacePhase = "validate" | "execute";
 type LessonspaceActionHandler = (input: Record<string, unknown>, context: LessonspaceContext) => Promise<unknown>;
@@ -42,7 +48,7 @@ interface LessonspaceRequestInput {
   phase: LessonspacePhase;
 }
 
-export const lessonspaceActionHandlers: Record<LessonspaceActionName, LessonspaceActionHandler> = {
+export const lessonspaceActionHandlers: ProviderActionHandlers<"lessonspace", LessonspaceActionHandler> = {
   list_organisation_sessions(input, context) {
     return listOrganisationSessions(input, context);
   },
@@ -127,7 +133,7 @@ async function listOrganisationSessions(input: Record<string, unknown>, context:
     query: compactObject({
       search: optionalString(input.search),
       page: stringifyOptionalInteger(input.page),
-      include_single_user: stringifyOptionalBoolean(input.include_single_user),
+      include_single_user: booleanString(input.include_single_user),
       duration_min: stringifyOptionalInteger(input.duration_min),
       duration_max: stringifyOptionalInteger(input.duration_max),
       start_time_after: optionalString(input.start_time_after),
@@ -137,7 +143,7 @@ async function listOrganisationSessions(input: Record<string, unknown>, context:
       date_after: optionalString(input.date_after),
       date_before: optionalString(input.date_before),
       launch_id: optionalString(input.launch_id),
-      in_progress_only: stringifyOptionalBoolean(input.in_progress_only),
+      in_progress_only: booleanString(input.in_progress_only),
       tags: stringifyOptionalObject(input.tags),
       user_external_id: optionalString(input.user_external_id),
       user_name: optionalString(input.user_name),
@@ -247,7 +253,7 @@ function buildLaunchBody(input: Record<string, unknown>): Record<string, unknown
 async function lessonspaceRequestJson(
   input: LessonspaceRequestInput & { context: LessonspaceContext },
 ): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, lessonspaceDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
 
   try {
     const headers: Record<string, string> = {
@@ -437,10 +443,6 @@ function readOptionalStringList(value: unknown): string[] | undefined {
     return undefined;
   }
   return value.map((item) => optionalString(item)).filter((item): item is string => item !== undefined);
-}
-
-function stringifyOptionalBoolean(value: unknown): string | undefined {
-  return typeof value === "boolean" ? String(value) : undefined;
 }
 
 function stringifyOptionalInteger(value: unknown): string | undefined {

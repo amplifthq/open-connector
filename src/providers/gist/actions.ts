@@ -6,7 +6,7 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 const service = "gist";
 
 export const gistRequiredScopes: string[] = ["gist"];
-export const gistOAuthScopes: string[] = ["read:user", ...gistRequiredScopes];
+export const gistOAuthScopes: string[] = [...gistRequiredScopes];
 
 const rawObjectSchema = s.looseObject("A GitHub API object.");
 const nullableString = s.nullable(s.string());
@@ -187,6 +187,7 @@ function deletedOutput(description: string): JsonSchema {
 export const gistActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_my_gists",
+    operationType: "read",
     description: "List gists visible to the authenticated GitHub user.",
     requiredScopes: gistRequiredScopes,
     inputSchema: listGistsInputSchema,
@@ -197,6 +198,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_gist",
+    operationType: "write",
     description: "Create a new GitHub gist.",
     requiredScopes: gistRequiredScopes,
     inputSchema: s.object(
@@ -214,6 +216,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_public_gists",
+    operationType: "read",
     description: "List recent public GitHub gists.",
     requiredScopes: [],
     inputSchema: listGistsInputSchema,
@@ -221,6 +224,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_starred_gists",
+    operationType: "read",
     description: "List gists starred by the authenticated GitHub user.",
     requiredScopes: gistRequiredScopes,
     inputSchema: listGistsInputSchema,
@@ -231,6 +235,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_gist",
+    operationType: "read",
     description: "Get a GitHub gist by id.",
     requiredScopes: [],
     inputSchema: gistIdWithOptionalMediaTypeSchema,
@@ -238,6 +243,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_gist",
+    operationType: "write",
     description: "Update a GitHub gist description or files.",
     requiredScopes: gistRequiredScopes,
     inputSchema: s.object(
@@ -256,6 +262,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_gist",
+    operationType: "destructive",
     description: "Delete a GitHub gist.",
     requiredScopes: gistRequiredScopes,
     inputSchema: s.object("The input payload for deleting a gist.", {
@@ -265,6 +272,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_gist_commits",
+    operationType: "read",
     description: "List commit history for a GitHub gist.",
     requiredScopes: [],
     inputSchema: idWithPaginationInput(
@@ -280,6 +288,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_gist_forks",
+    operationType: "read",
     description: "List forks for a GitHub gist.",
     requiredScopes: [],
     inputSchema: idWithPaginationInput(
@@ -295,6 +304,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "fork_gist",
+    operationType: "write",
     description: "Fork a GitHub gist.",
     requiredScopes: gistRequiredScopes,
     inputSchema: s.object("The input payload for forking a gist.", {
@@ -304,6 +314,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "check_gist_starred",
+    operationType: "read",
     description: "Check whether the authenticated GitHub user has starred a gist.",
     requiredScopes: gistRequiredScopes,
     inputSchema: s.object("The input payload for checking gist star state.", {
@@ -318,6 +329,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "star_gist",
+    operationType: "write",
     description: "Star a GitHub gist.",
     requiredScopes: gistRequiredScopes,
     inputSchema: s.object("The input payload for starring a gist.", {
@@ -332,6 +344,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "unstar_gist",
+    operationType: "destructive",
     description: "Unstar a GitHub gist.",
     requiredScopes: gistRequiredScopes,
     inputSchema: s.object("The input payload for unstarring a gist.", {
@@ -346,6 +359,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_gist_revision",
+    operationType: "read",
     description: "Get a specific revision of a GitHub gist.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -361,6 +375,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_user_gists",
+    operationType: "read",
     description: "List public gists for a GitHub user.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -379,6 +394,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "list_gist_comments",
+    operationType: "read",
     description: "List comments for a GitHub gist.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -399,6 +415,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_gist_comment",
+    operationType: "write",
     description: "Create a comment on a GitHub gist.",
     requiredScopes: gistRequiredScopes,
     inputSchema: s.object(
@@ -414,6 +431,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_gist_comment",
+    operationType: "read",
     description: "Get a GitHub gist comment by id.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -429,6 +447,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "update_gist_comment",
+    operationType: "write",
     description: "Update a GitHub gist comment.",
     requiredScopes: gistRequiredScopes,
     inputSchema: s.object(
@@ -445,6 +464,7 @@ export const gistActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "delete_gist_comment",
+    operationType: "destructive",
     description: "Delete a GitHub gist comment.",
     requiredScopes: gistRequiredScopes,
     inputSchema: s.object("The input payload for deleting a gist comment.", {
@@ -454,25 +474,3 @@ export const gistActions: ActionDefinition[] = [
     outputSchema: deletedOutput("The output payload for deleting a gist comment."),
   }),
 ];
-
-export type GistActionName =
-  | "list_my_gists"
-  | "create_gist"
-  | "list_public_gists"
-  | "list_starred_gists"
-  | "get_gist"
-  | "update_gist"
-  | "delete_gist"
-  | "list_gist_commits"
-  | "list_gist_forks"
-  | "fork_gist"
-  | "check_gist_starred"
-  | "star_gist"
-  | "unstar_gist"
-  | "get_gist_revision"
-  | "list_user_gists"
-  | "list_gist_comments"
-  | "create_gist_comment"
-  | "get_gist_comment"
-  | "update_gist_comment"
-  | "delete_gist_comment";
