@@ -4,7 +4,7 @@ import type { PollDefinition } from "../../triggers/common/poll.ts";
 import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { OAuthProviderContext } from "../provider-runtime.ts";
 
-import { compactObject, requiredRecord } from "../../core/cast.ts";
+import { compactObject, optionalString, requiredRecord } from "../../core/cast.ts";
 import {
   defineOAuthProviderExecutors,
   defineProviderProxy,
@@ -475,14 +475,14 @@ function buildMailboxSettingsPayload(input: Record<string, unknown>) {
       input.automaticRepliesSetting && typeof input.automaticRepliesSetting === "object"
         ? buildAutomaticRepliesSettingPayload(asObject(input.automaticRepliesSetting))
         : undefined,
-    dateFormat: typeof input.dateFormat === "string" ? input.dateFormat : undefined,
+    dateFormat: optionalString(input.dateFormat),
     delegateMeetingMessageDeliveryOptions:
       typeof input.delegateMeetingMessageDeliveryOptions === "string"
         ? input.delegateMeetingMessageDeliveryOptions
         : undefined,
     language:
       input.language && typeof input.language === "object" ? buildLanguagePayload(asObject(input.language)) : undefined,
-    timeFormat: typeof input.timeFormat === "string" ? input.timeFormat : undefined,
+    timeFormat: optionalString(input.timeFormat),
     timeZone: typeof input.timeZone === "string" ? input.timeZone : undefined,
     workingHours:
       input.workingHours && typeof input.workingHours === "object"

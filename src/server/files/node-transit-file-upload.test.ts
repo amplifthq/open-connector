@@ -66,6 +66,29 @@ describe("createNodeTransitFileUpload", () => {
     );
   });
 
+  it("accepts a file exactly at the byte limit", async () => {
+    const { service, tempDir } = await createService({ maxBytes: 4 });
+    const upload = createNodeTransitFileUpload({ transitFiles: service, tempDir });
+
+    const result = await upload(fileRequest("abcd", "exact.bin"));
+
+    expect(result).toMatchObject({ sizeBytes: 4, name: "exact.bin" });
+    await expect(service.read(result.fileId).then((stored) => stored.file.text())).resolves.toBe("abcd");
+    await expect(readdir(tempDir)).resolves.toEqual([]);
+  });
+
+  it("rejects a file that exceeds a fractional byte limit instead of truncating it", async () => {
+    const { root, service, tempDir } = await createService({ maxBytes: 4.5 });
+    const upload = createNodeTransitFileUpload({ transitFiles: service, tempDir });
+
+    await expect(upload(fileRequest("0123456789", "large.bin"))).rejects.toMatchObject({
+      status: 413,
+      code: "file_too_large",
+    });
+    await expect(readdir(tempDir)).resolves.toEqual([]);
+    await expect(readdir(join(root, "files"))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("rejects an oversized stream and removes the partial temporary file", async () => {
     const { service, tempDir } = await createService({ maxBytes: 4 });
     const upload = createNodeTransitFileUpload({ transitFiles: service, tempDir });
