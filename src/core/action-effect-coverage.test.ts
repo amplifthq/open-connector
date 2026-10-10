@@ -62,7 +62,7 @@ describe("OpenMeld action metadata compatibility", () => {
     const executors = service === "aws_s3" ? s3Executors : ossExecutors;
     const result = await executeAction(
       action,
-      executors[action.id],
+      executors[`${service}.generate_presigned_url`],
       {
         objectKey: "never-created-audit-object",
         method,
