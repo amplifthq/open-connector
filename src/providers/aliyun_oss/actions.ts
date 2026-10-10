@@ -224,8 +224,9 @@ export const aliyunOssActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "generate_presigned_url",
-    operationType: "read",
-    description: "Generate a pre-signed OSS URL for reading, uploading, or deleting one object.",
+    operationType: "destructive",
+    description:
+      "Generate a pre-signed OSS URL that grants its holder GET, PUT, or DELETE access to one object using the connected identity's permissions. PUT can overwrite an existing object. The URL does not require separate Alibaba Cloud credentials.",
     inputSchema: s.object(
       "The input payload for this action.",
       {
