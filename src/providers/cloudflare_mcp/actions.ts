@@ -47,9 +47,9 @@ export const cloudflareMcpActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "execute",
-    operationType: "write",
+    operationType: "destructive",
     description:
-      "Run sandboxed JavaScript on Cloudflare's official MCP server to call Cloudflare API endpoints discovered with `search`.",
+      "Run sandboxed JavaScript on Cloudflare's official MCP server to read, create, update, or delete resources through API endpoints discovered with `search`. Calls use the connected identity's permissions and can delete resources.",
     requiredScopes: [],
     providerPermissions: [],
     inputSchema: s.object(

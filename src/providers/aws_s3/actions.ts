@@ -228,8 +228,9 @@ export const awsActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "generate_presigned_url",
-    operationType: "read",
-    description: "Generate a pre-signed S3 URL for reading, uploading, or deleting one object.",
+    operationType: "destructive",
+    description:
+      "Generate a pre-signed S3 URL that grants its holder GET, PUT, or DELETE access to one object using the connected identity's permissions. PUT can overwrite an existing object. The URL does not require separate AWS credentials.",
     inputSchema: s.object(
       "The input payload for this action.",
       {

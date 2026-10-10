@@ -2895,7 +2895,8 @@ describe("ConnectServer", () => {
 
     const providers = await app.request("/v1/providers");
     expect(providers.status).toBe(200);
-    expect(providers.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate");
+    expect(providers.headers.get("cache-control")).toBe("no-store");
+    expect(providers.headers.get("cloudflare-cdn-cache-control")).toBeNull();
     await expect(providers.json()).resolves.toMatchObject({
       success: true,
       data: [
@@ -2909,6 +2910,8 @@ describe("ConnectServer", () => {
     });
 
     const connectionCatalog = await app.request("/v1/providers?includeConnectionAuth=true");
+    expect(connectionCatalog.headers.get("cache-control")).toBe("no-store");
+    expect(connectionCatalog.headers.get("cloudflare-cdn-cache-control")).toBeNull();
     const connectionMetadata = await connectionCatalog.json();
     expect(connectionMetadata).toMatchObject({
       data: [
@@ -2924,7 +2927,8 @@ describe("ConnectServer", () => {
     expect(JSON.stringify(connectionMetadata)).not.toContain("example-key");
     const actionServices = await app.request("/v1/actions");
     expect(actionServices.status).toBe(200);
-    expect(actionServices.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate");
+    expect(actionServices.headers.get("cache-control")).toBe("no-store");
+    expect(actionServices.headers.get("cloudflare-cdn-cache-control")).toBeNull();
     await expect(actionServices.json()).resolves.toMatchObject({
       success: true,
       data: [{ service: "example" }],
@@ -2932,7 +2936,8 @@ describe("ConnectServer", () => {
 
     const actions = await app.request("/v1/actions?service=example");
     expect(actions.status).toBe(200);
-    expect(actions.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate");
+    expect(actions.headers.get("cache-control")).toBe("no-store");
+    expect(actions.headers.get("cloudflare-cdn-cache-control")).toBeNull();
     await expect(actions.json()).resolves.toMatchObject({
       success: true,
       data: [
@@ -3007,7 +3012,8 @@ describe("ConnectServer", () => {
 
     const action = await app.request("/v1/actions/example.echo");
     expect(action.status).toBe(200);
-    expect(action.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate");
+    expect(action.headers.get("cache-control")).toBe("no-store");
+    expect(action.headers.get("cloudflare-cdn-cache-control")).toBeNull();
     await expect(action.json()).resolves.toMatchObject({
       success: true,
       meta: {},

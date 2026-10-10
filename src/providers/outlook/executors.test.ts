@@ -6,6 +6,13 @@ import { setDefaultGuardedFetchDnsLookup } from "../../core/guarded-fetch.ts";
 import { provider } from "./definition.ts";
 import { executors, outlookJsonRequest } from "./executors.ts";
 
+beforeEach(() => setDefaultGuardedFetchDnsLookup(null));
+
+afterEach(() => {
+  setDefaultGuardedFetchDnsLookup(undefined);
+  vi.unstubAllGlobals();
+});
+
 // The allowlist runs before any fetch, so whether the fetcher was
 // called tells which side of it a URL landed on.
 function recordingFetcher(calls: string[]): typeof fetch {
@@ -115,13 +122,6 @@ const credential: Extract<ResolvedCredential, { authType: "oauth2" }> = {
 };
 
 describe("outlook list_messages delta", () => {
-  beforeEach(() => setDefaultGuardedFetchDnsLookup(null));
-
-  afterEach(() => {
-    setDefaultGuardedFetchDnsLookup(undefined);
-    vi.unstubAllGlobals();
-  });
-
   it("lists a folder through messages/delta and returns the deltaLink with raw rows", async () => {
     const deltaLink =
       "https://graph.microsoft.com/v1.0/me/mailFolders('AQMkADAwATM3ZmYtRFRM')/messages/delta?%24deltatoken=RFRM9";
@@ -229,6 +229,69 @@ describe("outlook list_messages delta", () => {
 
     expect(result).toEqual({ ok: true, output: { messages: [{ id: "msg-1" }], nextLink: null, deltaLink: null } });
     expect(request?.url).toBe("https://graph.microsoft.com/v1.0/me/messages?%24top=1");
+  });
+
+  it("drops empty dateFormat and timeFormat from mailbox settings updates", async () => {
+    let request: Request | undefined;
+    let body: unknown;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      request = input instanceof Request ? input : new Request(input, init);
+      body = JSON.parse(await request.clone().text());
+      return Response.json({ timeZone: "India Standard Time" });
+    });
+
+    await execute("update_mailbox_settings", { dateFormat: "", timeFormat: "", timeZone: "India Standard Time" });
+
+    expect(request?.method).toBe("PATCH");
+    expect(body).toEqual({ timeZone: "India Standard Time" });
+  });
+
+  it("keeps non-empty dateFormat and timeFormat in mailbox settings updates", async () => {
+    let body: unknown;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      body = JSON.parse(await request.text());
+      return Response.json({});
+    });
+
+    await execute("update_mailbox_settings", { dateFormat: "dd/MM/yyyy", timeFormat: "HH:mm" });
+
+    expect(body).toEqual({ dateFormat: "dd/MM/yyyy", timeFormat: "HH:mm" });
+  });
+});
+
+describe("outlook update_mailbox_settings", () => {
+  it("drops empty dateFormat and timeFormat instead of forwarding them to Graph", async () => {
+    let request: Request | undefined;
+    let body: unknown;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      request = input instanceof Request ? input : new Request(input, init);
+      body = await request.clone().json();
+      return Response.json({ timeZone: "India Standard Time" });
+    });
+
+    const result = await execute("update_mailbox_settings", {
+      dateFormat: "",
+      timeFormat: "  ",
+      timeZone: "India Standard Time",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(request?.method).toBe("PATCH");
+    expect(body).toEqual({ timeZone: "India Standard Time" });
+  });
+
+  it("still forwards non-empty formats", async () => {
+    let body: unknown;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      body = await request.clone().json();
+      return Response.json({});
+    });
+
+    await execute("update_mailbox_settings", { dateFormat: "dd-MM-yyyy", timeFormat: "HH:mm" });
+
+    expect(body).toEqual({ dateFormat: "dd-MM-yyyy", timeFormat: "HH:mm" });
   });
 });
 
