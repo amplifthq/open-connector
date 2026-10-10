@@ -7,13 +7,14 @@ import { provider as aliyunOss } from "../providers/aliyun_oss/definition.ts";
 import { executors as ossExecutors } from "../providers/aliyun_oss/executors.ts";
 import { provider as awsS3 } from "../providers/aws_s3/definition.ts";
 import { executors as s3Executors } from "../providers/aws_s3/executors.ts";
+import { provider as cloudflareMcp } from "../providers/cloudflare_mcp/definition.ts";
 import { provider as github } from "../providers/github/definition.ts";
 import { provider as gmail } from "../providers/gmail/definition.ts";
 import { serializeRuntimeAction } from "../server/api/runtime-api.ts";
 import { executeAction } from "./execution.ts";
 
 describe("OpenMeld action metadata compatibility", () => {
-  const catalog = createCatalogStore([github, gmail, awsS3, aliyunOss, aliyunAck]);
+  const catalog = createCatalogStore([github, gmail, awsS3, aliyunOss, aliyunAck, cloudflareMcp]);
   afterEach(() => vi.unstubAllGlobals());
   it.each([
     ["gmail.fetch_emails", "read"],
@@ -25,6 +26,7 @@ describe("OpenMeld action metadata compatibility", () => {
     ["aws_s3.generate_presigned_url", "destructive"],
     ["aliyun_oss.generate_presigned_url", "destructive"],
     ["aliyun_ack.get_temporary_kubeconfig", "destructive"],
+    ["cloudflare_mcp.execute", "destructive"],
   ] as const)("reports %s as %s through both client contracts", (actionId, effect) => {
     const action = catalog.actionsById.get(actionId);
     if (!action) throw new Error(`Missing action ${actionId}`);
