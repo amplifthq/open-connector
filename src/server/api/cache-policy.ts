@@ -36,14 +36,13 @@ function isCatalogResponse(method: string, path: string): boolean {
     return false;
   }
 
+  // Runtime catalogs depend on mutable configuration and access policy.
+  // Only static catalogs can use the shared edge cache.
   return (
     path === "/api/providers" ||
     /^\/api\/providers\/[^/]+$/.test(path) ||
     path === "/api/actions" ||
-    (path !== "/api/actions/search" && /^\/api\/actions\/[^/]+$/.test(path)) ||
-    path === "/v1/providers" ||
-    path === "/v1/actions" ||
-    (path !== "/v1/actions/search" && /^\/v1\/actions\/[^/]+$/.test(path))
+    (path !== "/api/actions/search" && /^\/api\/actions\/[^/]+$/.test(path))
   );
 }
 
