@@ -215,3 +215,13 @@ when new requests are created.
 A saved `requestedScopes` list replaces provider defaults. Updating a provider does not add newly declared default scopes to that list. In the console OAuth app settings, review **Custom permissions**, then select **Restore provider defaults** to remove the override without changing the client ID, secret or redirect URI. Reconnect affected accounts after this change.
 
 Administrators can also call `DELETE /api/oauth/configs/{service}/scopes` with the normal console authentication. The response contains the redacted OAuth configuration and effective scopes. This changes future consent requests; it does not refresh or broaden existing tokens.
+
+### Cloudflare reconnect acceptance
+
+After deploying updated provider definitions, check each OAuth app's `effectiveScopes` before reconnecting. Worker, R2 and DNS need `user-details.read`; Browser Run needs `memberships.read`. All four need `offline_access`, their resource scopes, and a Cloudflare client that permits the Refresh Token grant. Restore outdated saved scope overrides before starting a new authorization.
+
+Reconnect the existing connection through the product entry point. Confirm the callback completes, the existing connection ID is retained, and the saved credential has a refresh token and expiry. Check secret presence through authorized diagnostics without displaying token values. A connected badge alone does not establish renewal.
+
+Use the reconnected identity for a real operation: Worker `list_worker_scripts`, R2 `list_buckets`, DNS `list_zones`, and Browser Run `list_accounts` followed by rendering a public page. Supply the intended account ID for account-scoped operations. An unrelated personal connection does not validate an organization connection.
+
+After the access token reaches its refresh window, repeat the operation without manual reconnection. Confirm the expiry advances, the refreshed credential persists, and a later request uses it successfully. Repeat across a second expiry to catch lost refresh-token rotation. Do not change production expiry timestamps to substitute for this check. The local `cloudflare-lifecycle.test.ts` exercises the same lifecycle with simulated vendor responses and SQL storage; it does not certify the live Cloudflare grant or a deployed runtime.
