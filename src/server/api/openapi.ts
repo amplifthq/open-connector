@@ -368,6 +368,20 @@ export function createOpenApiDocument(
       items: { $ref: "#/components/schemas/OAuthClientConfigSummary" },
     }),
     "/api/oauth/configs/{service}": createOAuthConfigPath(),
+    "/api/oauth/configs/{service}/scopes": {
+      parameters: [{ name: "service", in: "path", required: true, schema: { type: "string" } }],
+      delete: {
+        tags: ["OAuth"],
+        summary: "Restore provider default OAuth scopes without changing the client credentials.",
+        description:
+          "Removes the saved scope override. Existing connections must reconnect to receive the default permissions.",
+        responses: {
+          200: jsonResponse({ $ref: "#/components/schemas/OAuthClientConfigSummary" }),
+          400: jsonResponse({ $ref: "#/components/schemas/ErrorResponse" }),
+          404: jsonResponse({ $ref: "#/components/schemas/ErrorResponse" }),
+        },
+      },
+    },
     "/api/oauth/authorizations": createOAuthAuthorizationPath(),
     "/api/runtime-tokens": createRuntimeTokensPath(),
     "/api/runtime-tokens/{id}": createRuntimeTokenPath(),

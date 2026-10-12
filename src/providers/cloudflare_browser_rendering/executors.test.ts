@@ -199,3 +199,38 @@ describe("Cloudflare Browser Run OAuth", () => {
     });
   });
 });
+
+describe("Cloudflare Browser Run API token validation", () => {
+  it.each([
+    ["cfut_user", "/user/tokens/verify"],
+    ["legacy-user-token", "/user/tokens/verify"],
+    ["cfat_account", "/accounts/account-1/tokens/verify"],
+  ])("validates %s against its token owner", async (apiKey, endpoint) => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ success: true, result: { id: "token-id", status: "active" } }));
+    await credentialValidators.apiKey!({ apiKey, values: { accountId: "account-1" } }, { fetcher });
+    expect(fetcher.mock.calls[0]?.[0]).toBe(`https://api.cloudflare.com/client/v4${endpoint}`);
+  });
+  it("tries the account endpoint for an ambiguous legacy token only after unauthorized", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ success: false, errors: [{ message: "Invalid token" }] }, { status: 401 }))
+      .mockResolvedValueOnce(Response.json({ success: true, result: { id: "token-id", status: "active" } }));
+    await credentialValidators.apiKey!(
+      { apiKey: "legacy-account-token", values: { accountId: "account-1" } },
+      { fetcher },
+    );
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "https://api.cloudflare.com/client/v4/user/tokens/verify",
+      "https://api.cloudflare.com/client/v4/accounts/account-1/tokens/verify",
+    ]);
+  });
+  it("does not retry a service failure against another token endpoint", async () => {
+    const fetcher = vi.fn(async () => Response.json({ success: false }, { status: 503 }));
+    await expect(
+      credentialValidators.apiKey!({ apiKey: "legacy-token", values: { accountId: "account-1" } }, { fetcher }),
+    ).rejects.toThrow();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});

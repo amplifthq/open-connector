@@ -94,6 +94,17 @@ export function OAuthAppForm(props: OAuthAppFormProps): ReactNode {
     }
   }
 
+  async function resetScopes(): Promise<void> {
+    setStatus(t("providers.oauthClientSettings.saving"));
+    try {
+      await apiDelete(`/api/oauth/configs/${props.provider.service}/scopes`);
+      setStatus(t("providers.oauthClientSettings.saved"));
+      props.onRefresh();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : t("providers.oauthClientSettings.failed"));
+    }
+  }
+
   async function reset(): Promise<void> {
     setStatus(t("providers.oauthClientSettings.resetting"));
     try {
@@ -140,6 +151,16 @@ export function OAuthAppForm(props: OAuthAppFormProps): ReactNode {
           onChange={(value) => setExtraValues((previous) => ({ ...previous, [field.key]: value }))}
         />
       ))}
+      {configured && props.config?.requestedScopes ? (
+        <div className="field">
+          <span>{t("providers.oauthClientSettings.scopeOverride")}</span>
+          <code>{props.config.requestedScopes.join(" ")}</code>
+          <small>{t("providers.oauthClientSettings.scopeResetHint")}</small>
+          <Button type="button" variant="outline" onClick={() => void resetScopes()}>
+            {t("providers.oauthClientSettings.resetScopes")}
+          </Button>
+        </div>
+      ) : null}
       <div className="button-row">
         <Button type="submit">
           <Settings size={16} />

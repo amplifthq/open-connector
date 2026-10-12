@@ -78,6 +78,7 @@ export const provider: ProviderDefinition = {
       refreshTokenUrl: "https://dash.cloudflare.com/oauth2/token",
       scopes: [
         "offline_access",
+        "user-details.read",
         "workers-scripts.read",
         "workers-scripts.write",
         "workers-ci.read",

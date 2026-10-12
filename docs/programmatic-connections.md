@@ -53,6 +53,15 @@ Omit `requestedScopes` to request every default scope and no optional scopes. Wh
 each must appear in the provider's `scopes` or `optionalScopes`. Include any identity scopes
 needed by the provider's credential validator; defaults are not added automatically.
 
+For Cloudflare Worker, R2, and DNS, include `user-details.read` as well as the service's
+resource scopes. Connection validation calls Cloudflare's
+[`GET /user`](https://developers.cloudflare.com/api/resources/user/methods/get/), which requires
+User Details Read independently of resource access. Enable that permission on the Cloudflare
+OAuth client too. Enable the Refresh Token grant and request `offline_access` for renewal.
+Existing client configs with an explicit `requestedScopes` list must add `user-details.read`;
+updating provider defaults does not change those lists. Reconnect existing credentials after
+updating the client and its requested scopes.
+
 For example, a Google Calendar OAuth client config for editing events, listing calendars, and
 querying availability can use:
 
@@ -200,3 +209,19 @@ A connection write and its successful request result commit together. D1 uses tr
 [`batch()`](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch) for these writes;
 SQLite and PostgreSQL use their native transactions. Expired retained records are cleaned up
 when new requests are created.
+
+### Restore saved OAuth scope defaults
+
+A saved `requestedScopes` list replaces provider defaults. Updating a provider does not add newly declared default scopes to that list. In the console OAuth app settings, review **Custom permissions**, then select **Restore provider defaults** to remove the override without changing the client ID, secret or redirect URI. Reconnect affected accounts after this change.
+
+Administrators can also call `DELETE /api/oauth/configs/{service}/scopes` with the normal console authentication. The response contains the redacted OAuth configuration and effective scopes. This changes future consent requests; it does not refresh or broaden existing tokens.
+
+### Cloudflare reconnect acceptance
+
+After deploying updated provider definitions, check each OAuth app's `effectiveScopes` before reconnecting. Worker, R2 and DNS need `user-details.read`; Browser Run needs `memberships.read`. All four need `offline_access`, their resource scopes, and a Cloudflare client that permits the Refresh Token grant. Restore outdated saved scope overrides before starting a new authorization.
+
+Reconnect the existing connection through the product entry point. Confirm the callback completes, the existing connection ID is retained, and the saved credential has a refresh token and expiry. Check secret presence through authorized diagnostics without displaying token values. A connected badge alone does not establish renewal.
+
+Use the reconnected identity for a real operation: Worker `list_worker_scripts`, R2 `list_buckets`, DNS `list_zones`, and Browser Run `list_accounts` followed by rendering a public page. Supply the intended account ID for account-scoped operations. An unrelated personal connection does not validate an organization connection.
+
+After the access token reaches its refresh window, repeat the operation without manual reconnection. Confirm the expiry advances, the refreshed credential persists, and a later request uses it successfully. Repeat across a second expiry to catch lost refresh-token rotation. Do not change production expiry timestamps to substitute for this check. The local `cloudflare-lifecycle.test.ts` exercises the same lifecycle with simulated vendor responses and SQL storage; it does not certify the live Cloudflare grant or a deployed runtime.

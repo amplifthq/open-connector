@@ -19,7 +19,7 @@ export const provider: ProviderDefinition = {
           secret: false,
           placeholder: "you@example.com",
           description:
-            "Email address for legacy Global API Key authentication. Leave blank when using a cfut_ User API Token with Email Routing permissions.",
+            "Email address for legacy Global API Key authentication. Leave blank when using a User API Token, including older tokens without a prefix.",
         },
         {
           key: "apiKey",
@@ -29,7 +29,7 @@ export const provider: ProviderDefinition = {
           secret: true,
           placeholder: "cloudflare_global_api_key",
           description:
-            "Use a cfut_ User API Token with Email Routing Rules/Addresses permissions, or a Global API Key (cfk_ or legacy format) with the account email. Cloudflare cfat_ Account API Tokens are not accepted by the Email Routing API: https://developers.cloudflare.com/fundamentals/api/reference/permissions/.",
+            "Use a User API Token with Email Routing Rules/Addresses permissions (cfut_ or older unprefixed format), or a Global API Key (cfk_ or legacy format) with the account email. Cloudflare cfat_ Account API Tokens are not accepted by the Email Routing API: https://developers.cloudflare.com/fundamentals/api/reference/permissions/.",
         },
         {
           key: "accountId",

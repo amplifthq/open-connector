@@ -111,15 +111,35 @@ export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const apiToken = input.apiKey;
     const accountId = requireAccountId(input.values);
-    const validationEndpoint = `/accounts/${encodeURIComponent(accountId)}/tokens/verify`;
-    const envelope = await cloudflareRequestEnvelope(
-      apiToken,
-      {
-        path: validationEndpoint,
-      },
-      { fetcher, signal },
-      "validate",
-    );
+    const accountEndpoint = `/accounts/${encodeURIComponent(accountId)}/tokens/verify`;
+    const accountToken = apiToken.startsWith("cfat_") || apiToken.startsWith("cfpat_");
+    let validationEndpoint = accountToken ? accountEndpoint : "/user/tokens/verify";
+    let envelope: CloudflareEnvelope;
+    try {
+      envelope = await cloudflareRequestEnvelope(
+        apiToken,
+        { path: validationEndpoint },
+        { fetcher, signal },
+        "validate",
+      );
+    } catch (error) {
+      // Legacy user and account tokens have the same unprefixed format.
+      if (
+        accountToken ||
+        apiToken.startsWith("cfut_") ||
+        apiToken.startsWith("cfk_") ||
+        !(error instanceof ProviderRequestError) ||
+        error.status !== 401
+      )
+        throw error;
+      validationEndpoint = accountEndpoint;
+      envelope = await cloudflareRequestEnvelope(
+        apiToken,
+        { path: validationEndpoint },
+        { fetcher, signal },
+        "validate",
+      );
+    }
     const verification = readObject(envelope.result, "cloudflare token verification");
     const tokenId = optionalString(verification.id);
     const tokenStatus = optionalString(verification.status);
@@ -543,20 +563,17 @@ function normalizeCloudflareError(
 ): ProviderRequestError {
   const message = readCloudflareErrorMessage(envelope, response.status);
 
-  if (response.status === 429) {
-    return new ProviderRequestError(429, message, envelope);
+  if (response.status === 429 || response.status === 401) {
+    return new ProviderRequestError(response.status, message, envelope);
   }
 
   if (phase === "validate") {
-    if ([400, 401, 403, 404].includes(response.status)) {
+    if ([400, 403, 404].includes(response.status)) {
       return new ProviderRequestError(400, message, envelope);
     }
     return new ProviderRequestError(response.status || 502, message, envelope);
   }
 
-  if (response.status === 401) {
-    return new ProviderRequestError(401, message, envelope);
-  }
   if (response.status === 400 || response.status === 404) {
     return new ProviderRequestError(400, message, envelope);
   }

@@ -79,9 +79,12 @@ export async function validateCloudflareEmailRoutingCredential(
       "Cloudflare Email Routing does not accept cfat_ Account API Tokens; use a cfut_ User API Token with Email Routing permissions, or a Global API Key with the account email.",
     );
   }
-  if (apiKey.startsWith("cfut_")) {
+  if (usesUserToken(apiKey, values.email)) {
     const envelope = await requestCloudflare({ apiKey, fetcher, signal }, { path: "/user/tokens/verify" }, "validate");
     const verification = readObject(envelope.result, "cloudflare token verification");
+    if (optionalString(verification.status) !== "active") {
+      throw new ProviderRequestError(401, "Cloudflare API token is not active. Connect with an active User API Token.");
+    }
     return {
       profile: { accountId: optionalString(verification.id), displayName: "Cloudflare Email Routing User API Token" },
       grantedScopes: [],
@@ -237,7 +240,7 @@ async function requestCloudflare(
 
 function buildHeaders(context: { email?: string; apiKey: string }, hasBody: boolean): Record<string, string> {
   let headers: Record<string, string>;
-  if (context.apiKey.startsWith("cfut_")) {
+  if (usesUserToken(context.apiKey, context.email)) {
     headers = {
       accept: "application/json",
       authorization: `Bearer ${context.apiKey}`,
@@ -368,4 +371,9 @@ function requireInputString(value: unknown, field: string): string {
   const text = optionalString(value);
   if (!text) throw new ProviderRequestError(400, `${field} is required`);
   return text;
+}
+
+// An email explicitly selects legacy Global API Key auth for unprefixed credentials.
+function usesUserToken(apiKey: string, email?: string): boolean {
+  return apiKey.startsWith("cfut_") || (!apiKey.startsWith("cfk_") && !optionalString(email));
 }

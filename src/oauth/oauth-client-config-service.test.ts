@@ -6,6 +6,31 @@ import { createCatalogStore } from "../catalog-store.ts";
 import { OAuthClientConfigService } from "./oauth-client-config-service.ts";
 
 describe("OAuthClientConfigService", () => {
+  it("restores current defaults while preserving credentials and the redirect", async () => {
+    const store = new MemoryOAuthClientConfigStore();
+    const service = new OAuthClientConfigService({
+      catalog: createCatalogStore([oauthProvider("example")]),
+      origin: "https://runtime.example",
+      store,
+    });
+    const saved = {
+      service: "example",
+      clientId: "client",
+      clientSecret: "keep-secret",
+      requestedScopes: ["read"],
+      redirectUri: "https://callback.example/oauth",
+      extra: {},
+      secretExtra: {},
+    };
+    await store.set(saved);
+    const result = await service.resetRequestedScopes("example");
+    expect(result.effectiveScopes).toEqual(["read", "write"]);
+    expect(result.requestedScopes).toBeNull();
+    expect(await store.get("example")).toEqual({ ...saved, requestedScopes: undefined });
+    expect(JSON.stringify(result)).not.toContain("keep-secret");
+    await expect(service.resetRequestedScopes("missing")).rejects.toThrow();
+  });
+
   it("lists configured OAuth clients before unconfigured OAuth providers", async () => {
     const store = new MemoryOAuthClientConfigStore();
     await store.set({
