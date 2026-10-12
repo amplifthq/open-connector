@@ -157,11 +157,14 @@ describe("Cloudflare Browser Run OAuth", () => {
     );
   });
 
-  it("recovers a newly refreshed OAuth token rejected before rendering", async () => {
+  it.each([401, 403])("recovers a newly refreshed OAuth token rejected with native HTTP %i", async (status) => {
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(
-        Response.json({ success: false, errors: [{ code: 10000, message: "Authentication error" }] }, { status: 403 }),
+        Response.json(
+          { result: null, success: false, errors: [{ code: 10000, message: "Authentication error" }], messages: [] },
+          { status },
+        ),
       )
       .mockResolvedValueOnce(Response.json({ success: true, result: "# OpenMeld" }));
     vi.stubGlobal("fetch", fetch);
@@ -193,7 +196,7 @@ describe("Cloudflare Browser Run OAuth", () => {
     [oauthCredential({ accountId: "account-1", refreshedAt: new Date().toISOString() }), 403, "Permission denied"],
     [oauthCredential({ accountId: "account-1", refreshedAt: new Date().toISOString() }), 429, "Rate limit exceeded"],
   ])("does not replay an unrelated or established credential failure (%#)", async (credential, status, message) => {
-    const fetch = vi.fn(async () => Response.json({ success: false, errors: [{ message }] }, { status }));
+    const fetch = vi.fn(async () => Response.json({ success: false, errors: [{ code: 10000, message }] }, { status }));
     vi.stubGlobal("fetch", fetch);
     const result = await executors["cloudflare_browser_rendering.get_markdown"]!(
       { url: "https://openmeld.ai" },
@@ -205,7 +208,7 @@ describe("Cloudflare Browser Run OAuth", () => {
 
   it("keeps the original authentication failure after bounded attempts", async () => {
     const envelope = { success: false, errors: [{ code: 10000, message: "Authentication error" }] };
-    const fetch = vi.fn(async () => Response.json(envelope, { status: 403 }));
+    const fetch = vi.fn(async () => Response.json(envelope, { status: 401 }));
     vi.stubGlobal("fetch", fetch);
     const result = await executors["cloudflare_browser_rendering.get_markdown"]!(
       { url: "https://openmeld.ai" },
@@ -216,17 +219,36 @@ describe("Cloudflare Browser Run OAuth", () => {
       error: {
         code: "authorization_failed",
         message: "Authentication error",
-        details: { status: 403, details: envelope },
+        details: { status: 401, details: envelope },
       },
     });
     expect(fetch).toHaveBeenCalledTimes(3);
   });
 
+  it.each([undefined, 10001])(
+    "does not retry HTTP 401 without Cloudflare authentication code 10000 (%s)",
+    async (code) => {
+      const fetch = vi.fn(async () =>
+        Response.json({ success: false, errors: [{ code, message: "Authentication error" }] }, { status: 401 }),
+      );
+      vi.stubGlobal("fetch", fetch);
+      const result = await executors["cloudflare_browser_rendering.get_markdown"]!(
+        { url: "https://openmeld.ai" },
+        executionContext(oauthCredential({ accountId: "account-1", refreshedAt: new Date().toISOString() })),
+      );
+      expect(result).toMatchObject({ ok: false, error: { code: "authorization_failed" } });
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("does not send another rendering request after cancellation", async () => {
     const controller = new AbortController();
     const fetch = vi.fn(async () => {
       controller.abort();
-      return Response.json({ success: false, errors: [{ message: "Authentication error" }] }, { status: 403 });
+      return Response.json(
+        { success: false, errors: [{ code: 10000, message: "Authentication error" }] },
+        { status: 401 },
+      );
     });
     vi.stubGlobal("fetch", fetch);
     const result = await executors["cloudflare_browser_rendering.get_markdown"]!(

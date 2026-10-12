@@ -10,6 +10,7 @@ import type { ProviderFetch } from "../provider-runtime.ts";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   compactObject,
+  looseArray,
   optionalBoolean,
   optionalInteger,
   optionalNumber,
@@ -404,19 +405,31 @@ async function runQuickAction(
       const refreshedAt = Date.parse(optionalString(context.metadata.refreshedAt) ?? "");
       const refreshAgeMs = Date.now() - refreshedAt;
       const retryDelay = retryDelays[attempt];
+      // The runtime maps authorization_failed to HTTP 403. At this boundary,
+      // match Cloudflare's native response (observed as HTTP 401 / code 10000).
+      const authenticationRejection =
+        error instanceof ProviderRequestError &&
+        [401, 403].includes(error.status) &&
+        error.message === "Authentication error" &&
+        looseArray(optionalRecord(error.details)?.errors).some((item) => optionalRecord(item)?.code === 10000);
       if (
         retryDelay === undefined ||
         context.authType !== "oauth2" ||
         !Number.isFinite(refreshAgeMs) ||
         refreshAgeMs < 0 ||
         refreshAgeMs > 120_000 ||
-        !(error instanceof ProviderRequestError) ||
-        error.status !== 403 ||
-        error.message !== "Authentication error"
+        !authenticationRejection
       )
         throw error;
       context.logger?.warn(
-        { service, attempt: attempt + 1, refreshAgeMs, delayMs: retryDelay },
+        {
+          service,
+          attempt: attempt + 1,
+          refreshAgeMs,
+          delayMs: retryDelay,
+          cloudflareStatus: error.status,
+          cloudflareErrorCode: 10000,
+        },
         "cloudflare.browser_run.fresh_token_auth_retry",
       );
       await delay(retryDelay, undefined, { signal: context.signal });
