@@ -156,6 +156,89 @@ describe("Cloudflare Browser Run OAuth", () => {
       expect.objectContaining({ headers: expect.objectContaining({ authorization: "Bearer api-key-token" }) }),
     );
   });
+
+  it("recovers a newly refreshed OAuth token rejected before rendering", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ success: false, errors: [{ code: 10000, message: "Authentication error" }] }, { status: 403 }),
+      )
+      .mockResolvedValueOnce(Response.json({ success: true, result: "# OpenMeld" }));
+    vi.stubGlobal("fetch", fetch);
+    const logger = { error: vi.fn(), info: vi.fn(), warn: vi.fn() };
+    const credential = oauthCredential({ accountId: "account-1", refreshedAt: new Date().toISOString() });
+    const result = await executors["cloudflare_browser_rendering.get_markdown"]!(
+      { url: "https://openmeld.ai" },
+      { ...executionContext(credential), logger },
+    );
+    expect(result).toEqual({ ok: true, output: { markdown: "# OpenMeld" } });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    for (const [, init] of fetch.mock.calls) expect(init.headers.authorization).toBe("Bearer oauth-access-token");
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ service: "cloudflare_browser_rendering", attempt: 1 }),
+      "cloudflare.browser_run.fresh_token_auth_retry",
+    );
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain("oauth-access-token");
+  });
+
+  it.each([
+    [oauthCredential({ accountId: "account-1" }), 403, "Authentication error"],
+    [
+      oauthCredential({ accountId: "account-1", refreshedAt: new Date(Date.now() - 180_000).toISOString() }),
+      403,
+      "Authentication error",
+    ],
+    [oauthCredential({ accountId: "account-1", refreshedAt: "invalid" }), 403, "Authentication error"],
+    [apiKeyCredential(), 403, "Authentication error"],
+    [oauthCredential({ accountId: "account-1", refreshedAt: new Date().toISOString() }), 403, "Permission denied"],
+    [oauthCredential({ accountId: "account-1", refreshedAt: new Date().toISOString() }), 429, "Rate limit exceeded"],
+  ])("does not replay an unrelated or established credential failure (%#)", async (credential, status, message) => {
+    const fetch = vi.fn(async () => Response.json({ success: false, errors: [{ message }] }, { status }));
+    vi.stubGlobal("fetch", fetch);
+    const result = await executors["cloudflare_browser_rendering.get_markdown"]!(
+      { url: "https://openmeld.ai" },
+      executionContext(credential),
+    );
+    expect(result).toMatchObject({ ok: false, error: { message } });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the original authentication failure after bounded attempts", async () => {
+    const envelope = { success: false, errors: [{ code: 10000, message: "Authentication error" }] };
+    const fetch = vi.fn(async () => Response.json(envelope, { status: 403 }));
+    vi.stubGlobal("fetch", fetch);
+    const result = await executors["cloudflare_browser_rendering.get_markdown"]!(
+      { url: "https://openmeld.ai" },
+      executionContext(oauthCredential({ accountId: "account-1", refreshedAt: new Date().toISOString() })),
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: "authorization_failed",
+        message: "Authentication error",
+        details: { status: 403, details: envelope },
+      },
+    });
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not send another rendering request after cancellation", async () => {
+    const controller = new AbortController();
+    const fetch = vi.fn(async () => {
+      controller.abort();
+      return Response.json({ success: false, errors: [{ message: "Authentication error" }] }, { status: 403 });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const result = await executors["cloudflare_browser_rendering.get_markdown"]!(
+      { url: "https://openmeld.ai" },
+      {
+        ...executionContext(oauthCredential({ accountId: "account-1", refreshedAt: new Date().toISOString() })),
+        signal: controller.signal,
+      },
+    );
+    expect(result.ok).toBe(false);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
   it("requires an explicit accessible account when OAuth can reach more than one", async () => {
     const fetch = vi.fn(async () => Response.json({ success: true, result: "# OpenMeld" }));
     vi.stubGlobal("fetch", fetch);

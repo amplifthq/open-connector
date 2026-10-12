@@ -1,7 +1,13 @@
-import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+  RuntimeLogger,
+} from "../../core/types.ts";
 import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
+import { setTimeout as delay } from "node:timers/promises";
 import {
   compactObject,
   optionalBoolean,
@@ -41,6 +47,7 @@ interface CloudflareBrowserRenderingContext {
   metadata: Record<string, unknown>;
   fetcher: ProviderFetch;
   signal?: AbortSignal;
+  logger?: RuntimeLogger;
 }
 
 type CloudflareBrowserRenderingActionHandler = (
@@ -85,6 +92,7 @@ export const executors: ProviderExecutors = defineProviderExecutors<CloudflareBr
         metadata: credential.metadata,
         fetcher,
         signal: context.signal,
+        logger: context.logger,
       };
     }
     if (credential?.authType === "oauth2") {
@@ -95,6 +103,7 @@ export const executors: ProviderExecutors = defineProviderExecutors<CloudflareBr
         metadata: credential.metadata,
         fetcher,
         signal: context.signal,
+        logger: context.logger,
       };
     }
     throw new ProviderRequestError(401, "Connect Cloudflare Browser Run first.");
@@ -374,19 +383,45 @@ async function runQuickAction(
 
   const accountId = resolveAccountId(input, context);
 
-  return cloudflareRequestEnvelope(
-    context.accessToken,
-    {
-      method: "POST",
-      path: `/accounts/${encodeURIComponent(accountId)}/browser-rendering/${endpoint}`,
-      query: compactObject({
-        cacheTTL: optionalNumber(input.cacheTtl),
-      }),
-      body,
-    },
-    context,
-    "execute",
-  );
+  const request = {
+    method: "POST",
+    path: `/accounts/${encodeURIComponent(accountId)}/browser-rendering/${endpoint}`,
+    query: compactObject({
+      cacheTTL: optionalNumber(input.cacheTtl),
+    }),
+    body,
+  } as const;
+
+  // Production OAuth renewal can succeed before Browser Run accepts the new
+  // bearer token. Retry only its explicit authentication rejection, with the
+  // same token and only during the first two minutes after a recorded refresh.
+  // An auth rejection happens before rendering; do not replay other failures.
+  const retryDelays = [1000, 3000];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await cloudflareRequestEnvelope(context.accessToken, request, context, "execute");
+    } catch (error) {
+      const refreshedAt = Date.parse(optionalString(context.metadata.refreshedAt) ?? "");
+      const refreshAgeMs = Date.now() - refreshedAt;
+      const retryDelay = retryDelays[attempt];
+      if (
+        retryDelay === undefined ||
+        context.authType !== "oauth2" ||
+        !Number.isFinite(refreshAgeMs) ||
+        refreshAgeMs < 0 ||
+        refreshAgeMs > 120_000 ||
+        !(error instanceof ProviderRequestError) ||
+        error.status !== 403 ||
+        error.message !== "Authentication error"
+      )
+        throw error;
+      context.logger?.warn(
+        { service, attempt: attempt + 1, refreshAgeMs, delayMs: retryDelay },
+        "cloudflare.browser_run.fresh_token_auth_retry",
+      );
+      await delay(retryDelay, undefined, { signal: context.signal });
+    }
+  }
 }
 
 function resolveAccountId(input: Record<string, unknown>, context: CloudflareBrowserRenderingContext): string {
