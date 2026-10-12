@@ -209,3 +209,9 @@ A connection write and its successful request result commit together. D1 uses tr
 [`batch()`](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch) for these writes;
 SQLite and PostgreSQL use their native transactions. Expired retained records are cleaned up
 when new requests are created.
+
+### Restore saved OAuth scope defaults
+
+A saved `requestedScopes` list replaces provider defaults. Updating a provider does not add newly declared default scopes to that list. In the console OAuth app settings, review **Custom permissions**, then select **Restore provider defaults** to remove the override without changing the client ID, secret or redirect URI. Reconnect affected accounts after this change.
+
+Administrators can also call `DELETE /api/oauth/configs/{service}/scopes` with the normal console authentication. The response contains the redacted OAuth configuration and effective scopes. This changes future consent requests; it does not refresh or broaden existing tokens.

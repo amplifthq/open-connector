@@ -6,8 +6,9 @@ import type { Client } from "@modelcontextprotocol/client";
 import { UnauthorizedError } from "@modelcontextprotocol/client";
 import { SdkHttpError } from "@modelcontextprotocol/client";
 import { ProtocolError } from "@modelcontextprotocol/client";
-import { createHash } from "node:crypto";
+import { optionalString } from "../../core/cast.ts";
 import { withMcpClient } from "../mcp-client.ts";
+import { requiredResponseRecord } from "../provider-runtime.ts";
 import {
   defineBearerProviderExecutors,
   defineProviderProxy,
@@ -65,15 +66,20 @@ async function validateCloudflareMcpCredential(accessToken: string, fetcher: typ
   if (!tools.some((tool) => supportedToolNames.has(tool.name))) {
     throw new ProviderRequestError(502, "Cloudflare MCP did not advertise any supported tools");
   }
-  const tokenHash = createHash("sha256").update(accessToken).digest("hex").slice(0, 16);
+  const identity = requiredResponseRecord(
+    await callCloudflareMcpTool({ accessToken, fetcher, signal }, "whoami", {}),
+    "Cloudflare MCP identity",
+  );
+  const accountId = optionalString(identity.id);
+  if (!accountId || !/^(user|account):.+/.test(accountId)) {
+    throw new ProviderRequestError(502, "Cloudflare MCP returned no stable account identity");
+  }
   return {
     profile: {
-      accountId: `cloudflare:mcp:${tokenHash}`,
-      displayName: `Cloudflare MCP · ${tokenHash.slice(-6)}`,
+      accountId,
+      displayName: optionalString(identity.email) ?? optionalString(identity.name) ?? accountId,
     },
-    metadata: {
-      mcpEndpoint: cloudflareMcpEndpoint,
-    },
+    metadata: { mcpEndpoint: cloudflareMcpEndpoint },
   };
 }
 

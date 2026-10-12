@@ -126,6 +126,15 @@ export class OAuthClientConfigService {
     return this.toSummary(input.service, this.getOAuthDefinition(input.service), config);
   }
 
+  /** Restore provider defaults without exposing or replacing the saved client secret. */
+  async resetRequestedScopes(service: string): Promise<OAuthClientConfigSummary> {
+    const config = await this.getConfig(service);
+    if (!config) throw new OAuthClientConfigError("invalid_input", `Configure an OAuth client for ${service} first.`);
+    const updated = { ...config, requestedScopes: undefined };
+    await this.store.set(updated);
+    return this.toSummary(service, this.getOAuthDefinition(service), updated);
+  }
+
   normalizeConfig(service: string, input: OAuthClientConfigInput): OAuthClientConfig {
     const auth = this.getOAuthDefinition(service);
     const clientId = input.clientId.trim();

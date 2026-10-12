@@ -468,6 +468,12 @@ export class ConnectServer {
     }
     app.get("/api/oauth/configs", (context) => this.listOAuthConfigs(context));
     app.put("/api/oauth/configs/:service", (context) => this.upsertOAuthConfig(context, context.req.param("service")));
+    app.delete("/api/oauth/configs/:service/scopes", (context) =>
+      this.writeOAuthResult(
+        context,
+        this.options.oauthClientConfigs.resetRequestedScopes(context.req.param("service")),
+      ),
+    );
     app.delete("/api/oauth/configs/:service", (context) =>
       this.deleteOAuthConfig(context, context.req.param("service")),
     );

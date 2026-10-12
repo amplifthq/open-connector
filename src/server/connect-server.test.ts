@@ -277,6 +277,21 @@ describe("ConnectServer", () => {
     expect(await response.json()).toMatchObject({ authorizationUrl: expect.stringContaining("client_id=client") });
   });
 
+  it("restores OAuth scopes through the console without resubmitting secrets", async () => {
+    const app = createTestServer([oauthProvider]).createApp();
+    const configured = await app.request("/api/oauth/configs/oauth_example", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientId: "client", clientSecret: "saved-secret", requestedScopes: ["read"] }),
+    });
+    expect(configured.status).toBe(200);
+    const response = await app.request("/api/oauth/configs/oauth_example/scopes", { method: "DELETE" });
+    expect(response.status).toBe(200);
+    const summary = await response.json();
+    expect(summary).toMatchObject({ configured: true, clientId: "client", requestedScopes: null });
+    expect(JSON.stringify(summary)).not.toContain("saved-secret");
+  });
+
   it("starts console OAuth with a connection-scoped client", async () => {
     const app = createTestServer([oauthProvider], {
       allowedCustomOAuth: ["oauth_example"],
