@@ -15,6 +15,9 @@ import type { ProviderOAuthRuntime } from "./oauth-token.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createCatalogStore } from "../catalog-store.ts";
 import { ConnectionService } from "../connection-service.ts";
+import { provider as dnsProvider } from "../providers/cloudflare_dns/definition.ts";
+import { provider as r2Provider } from "../providers/cloudflare_r2/definition.ts";
+import { provider as workerProvider } from "../providers/cloudflare_worker/definition.ts";
 import { provider as slackProvider } from "../providers/slack/definition.ts";
 import { provider as slackbotProvider } from "../providers/slackbot/definition.ts";
 import { provider as tencentDocsProvider } from "../providers/tencent_docs/definition.ts";
@@ -282,6 +285,25 @@ describe("OAuthFlowService", () => {
       connectionName: "work",
     });
   });
+
+  // Cloudflare GET /user requires User Details Read (or Write), independently
+  // of the Workers, R2, and DNS permissions used by their actions.
+  it.each([workerProvider, r2Provider, dnsProvider])(
+    "requests the identity permission required to verify $service OAuth credentials",
+    async (provider) => {
+      const services = createServices([{ ...provider, actions: [] }]);
+      await services.clientConfigs.upsertConfig({
+        service: provider.service,
+        clientId: "client-id",
+        clientSecret: "client-secret",
+      });
+      const started = await services.flow.startAuthorization({ service: provider.service });
+      const scopes = new URL(started.authorizationUrl).searchParams.get("scope")?.split(" ");
+      expect(scopes).toContain("user-details.read");
+      expect(scopes).toContain("offline_access");
+      expect(scopes).not.toContain("user-details.write");
+    },
+  );
 
   it.each(["authorization", "connection request"])("preserves Tencent Docs scope=all for %s", async (entry) => {
     const services = createServices([{ ...tencentDocsProvider, actions: [] }]);

@@ -53,6 +53,15 @@ Omit `requestedScopes` to request every default scope and no optional scopes. Wh
 each must appear in the provider's `scopes` or `optionalScopes`. Include any identity scopes
 needed by the provider's credential validator; defaults are not added automatically.
 
+For Cloudflare Worker, R2, and DNS, include `user-details.read` as well as the service's
+resource scopes. Connection validation calls Cloudflare's
+[`GET /user`](https://developers.cloudflare.com/api/resources/user/methods/get/), which requires
+User Details Read independently of resource access. Enable that permission on the Cloudflare
+OAuth client too. Enable the Refresh Token grant and request `offline_access` for renewal.
+Existing client configs with an explicit `requestedScopes` list must add `user-details.read`;
+updating provider defaults does not change those lists. Reconnect existing credentials after
+updating the client and its requested scopes.
+
 For example, a Google Calendar OAuth client config for editing events, listing calendars, and
 querying availability can use:
 
